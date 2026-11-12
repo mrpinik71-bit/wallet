@@ -40,11 +40,6 @@ export default function PhraseInput({
               </button>
             ))}
           </div>
-          <p className="mt-1.5 text-[10px] text-muted-foreground/60">
-            Every line is scanned with its first {words} words — a line that already holds a full 12–24 word phrase is
-            checked whole as well. Numbering, labels and commas around a phrase are ignored, and a phrase written across several
-            lines is joined back together.
-          </p>
         </div>
 
         <div className="relative mt-4">
