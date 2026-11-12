@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { ShieldCheck } from "lucide-react";
 import BrandMark from "@/components/wallet/BrandMark";
 import VaultBackdrop from "@/components/wallet/VaultBackdrop";
 import ScanWorkspace from "@/components/wallet/scan/ScanWorkspace";
@@ -27,12 +26,6 @@ export default function WalletSetup() {
             <ScanWorkspace />
           </div>
 
-          <div className="mt-6 flex items-start gap-2.5 rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-3.5">
-            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={1.9} />
-            <p className="text-[10.5px] leading-relaxed text-muted-foreground/80">
-              Helix never sees your phrase, balances or PIN. No accounts, no email, no tracking.
-            </p>
-          </div>
         </motion.div>
       </div>
     </div>

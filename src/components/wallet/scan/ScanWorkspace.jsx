@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ShieldCheck, X } from "lucide-react";
+import { X } from "lucide-react";
 import FundedExport from "@/components/wallet/scan/FundedExport";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
 import ScanProgress from "@/components/wallet/scan/ScanProgress";
@@ -444,13 +444,6 @@ export default function ScanWorkspace() {
         </div>
       ) : null}
 
-      <div className="mt-6 flex items-start gap-2.5 rounded-[18px] border border-foreground/[0.06] bg-foreground/[0.02] p-3.5">
-        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={1.9} />
-        <p className="text-[10px] leading-relaxed text-muted-foreground/75">
-          Derivation happens in this browser. Only public addresses are queried against the chains, and the phrases are
-          never stored or sent anywhere.
-        </p>
-      </div>
     </div>
   );
 }
