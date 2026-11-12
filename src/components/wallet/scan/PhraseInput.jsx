@@ -23,8 +23,7 @@ export default function PhraseInput({
     <section className="lux noise relative overflow-hidden p-5">
       <div className="relative">
         <div>
-          <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-muted-foreground/60">Phrase length</p>
-          <div className="mt-2 flex gap-1.5">
+          <div className="flex gap-1.5">
             {SIZES.map((size) => (
               <button
                 key={size}
