@@ -3,36 +3,42 @@ import { ChevronDown, History, ScanLine, Wallet } from "lucide-react";
 
 export default function HomeHeader({ address }) {
   return (
-    <div className="flex items-center justify-between">
-      <Link
-        to="/wallet"
-        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/80 py-1 pl-1 pr-3 transition-colors hover:border-border"
-      >
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-primary/35 to-primary/5 ring-1 ring-inset ring-primary/25">
-          <Wallet className="h-3.5 w-3.5 text-primary" strokeWidth={1.9} />
+    <header className="flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 ring-1 ring-inset ring-primary/25">
+          <Wallet className="h-4 w-4 text-primary" strokeWidth={1.9} />
+          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
         </span>
-        <span className="text-[12px] font-medium tracking-tight">Wallet 1</span>
-        <ChevronDown className="h-3 w-3 text-muted-foreground" strokeWidth={2.2} />
-      </Link>
+        <div className="leading-none">
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">Portfolio</p>
+          <Link
+            to="/wallet"
+            className="mt-1.5 inline-flex items-center gap-1 font-heading text-[15px] font-semibold tracking-tight transition-colors hover:text-primary"
+          >
+            Main wallet
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.2} />
+          </Link>
+        </div>
+      </div>
 
       <div className="flex items-center gap-2">
         <Link
           to="/activity"
           aria-label="Transaction history"
-          className="grid h-9 w-9 place-items-center rounded-full border border-border/70 bg-card/80 text-muted-foreground transition-colors hover:text-foreground"
+          className="grid h-10 w-10 place-items-center rounded-2xl border border-border/70 bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:text-foreground"
         >
-          <History className="h-[15px] w-[15px]" strokeWidth={1.75} />
+          <History className="h-4 w-4" strokeWidth={1.75} />
         </Link>
         <Link
           to="/send"
           search={{ scan: "1" }}
           aria-label="Scan a QR code"
-          className="grid h-9 w-9 place-items-center rounded-full border border-border/70 bg-card/80 text-muted-foreground transition-colors hover:text-foreground"
+          className="grid h-10 w-10 place-items-center rounded-2xl border border-border/70 bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:text-foreground"
         >
-          <ScanLine className="h-[15px] w-[15px]" strokeWidth={1.75} />
+          <ScanLine className="h-4 w-4" strokeWidth={1.75} />
         </Link>
       </div>
       {address ? <span className="sr-only">Primary address {address}</span> : null}
-    </div>
+    </header>
   );
 }

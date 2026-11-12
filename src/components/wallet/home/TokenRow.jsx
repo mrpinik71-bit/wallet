@@ -11,28 +11,34 @@ function compactAmount(value) {
 
 export default function TokenRow({ item }) {
   const up = item.change24h >= 0;
+  const empty = item.value === 0;
 
   return (
     <Link
       to="/receive"
       search={{ coin: item.id }}
-      className="flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-secondary/40"
+      className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/30"
     >
       <CoinAvatar symbol={item.symbol} color={item.color} logo={item.logo} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium leading-tight">{item.name}</p>
-        <p className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground tabular">
-          {compactAmount(item.balance)} {item.symbol}
+        <p className="truncate text-[13.5px] font-medium leading-tight">{item.name}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+          <span className="truncate tabular">{compactAmount(item.balance)}</span>
+          <span className="rounded bg-secondary/80 px-1 py-px text-[9px] font-semibold uppercase tracking-wide">
+            {item.symbol}
+          </span>
         </p>
       </div>
       <div className="shrink-0 text-right">
-        <p className="text-[13px] font-medium leading-tight tabular">{formatUsd(item.value)}</p>
+        <p className={`text-[13.5px] font-semibold leading-tight tabular ${empty ? "text-muted-foreground" : ""}`}>
+          {formatUsd(item.value)}
+        </p>
         <p
-          className={`mt-0.5 text-[11px] leading-tight tabular ${
-            item.value === 0 ? "text-muted-foreground" : up ? "text-primary" : "text-destructive"
+          className={`mt-1 inline-flex items-center rounded px-1 py-px text-[10.5px] font-medium leading-tight tabular ${
+            empty ? "text-muted-foreground" : up ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
           }`}
         >
-          {item.value === 0 ? "—" : formatPct(item.change24h)}
+          {empty ? "—" : formatPct(item.change24h)}
         </p>
       </div>
     </Link>

@@ -4,12 +4,20 @@ import TokenRow from "@/components/wallet/home/TokenRow";
 
 export default function TokensList({ holdings, loading, onRefresh }) {
   const empty = !loading && holdings.length === 0;
+  const owned = holdings.filter((item) => item.value > 0).length;
 
   return (
-    <section className="mt-7">
-      <div className="flex items-center justify-between px-1">
-        <h2 className="font-heading text-[15px] font-semibold tracking-tight">Tokens</h2>
-        <div className="flex items-center gap-1.5">
+    <section className="mt-6">
+      <div className="flex items-center justify-between px-0.5">
+        <div className="flex items-center gap-2">
+          <h2 className="font-heading text-[15px] font-semibold tracking-tight">Assets</h2>
+          {!loading && holdings.length > 0 ? (
+            <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular">
+              {holdings.length}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onRefresh}
@@ -20,7 +28,7 @@ export default function TokensList({ holdings, loading, onRefresh }) {
           </button>
           <Link
             to="/markets"
-            className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-card/80 py-1 pl-2.5 pr-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-card/60 py-1 pl-2.5 pr-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             Markets
             <ChevronRight className="h-3 w-3" />
@@ -29,9 +37,9 @@ export default function TokensList({ holdings, loading, onRefresh }) {
       </div>
 
       {loading && holdings.length === 0 ? (
-        <div className="mt-3 overflow-hidden rounded-2xl border border-border/70 bg-card/60">
+        <div className="mt-3 overflow-hidden rounded-[22px] border border-border/70 bg-card/50">
           {[0, 1, 2, 3].map((row) => (
-            <div key={row} className="flex items-center gap-3 px-3.5 py-3">
+            <div key={row} className="flex items-center gap-3 border-b border-border/40 px-4 py-3.5 last:border-0">
               <div className="h-9 w-9 animate-pulse rounded-full bg-secondary/70" />
               <div className="flex-1 space-y-2">
                 <div className="h-2.5 w-24 animate-pulse rounded-full bg-secondary/70" />
@@ -44,9 +52,9 @@ export default function TokensList({ holdings, loading, onRefresh }) {
       ) : null}
 
       {!loading && holdings.length > 0 ? (
-        <ul className="mt-3 overflow-hidden rounded-2xl border border-border/70 bg-card/60">
+        <ul className="mt-3 divide-y divide-border/40 overflow-hidden rounded-[22px] border border-border/70 bg-card/50 backdrop-blur">
           {holdings.map((item) => (
-            <li key={item.id} className="border-b border-border/40 last:border-0">
+            <li key={item.id}>
               <TokenRow item={item} />
             </li>
           ))}
@@ -54,8 +62,8 @@ export default function TokensList({ holdings, loading, onRefresh }) {
       ) : null}
 
       {empty ? (
-        <div className="mt-3 rounded-2xl border border-border/70 bg-card/60 px-5 py-7 text-center">
-          <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
+        <div className="mt-3 rounded-[22px] border border-border/70 bg-card/50 px-5 py-7 text-center">
+          <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-secondary/70 text-muted-foreground">
             <Wallet className="h-4 w-4" strokeWidth={1.75} />
           </span>
           <p className="mt-3 text-[13px] font-medium">No balances yet</p>
@@ -64,11 +72,17 @@ export default function TokensList({ holdings, loading, onRefresh }) {
           </p>
           <Link
             to="/receive"
-            className="mt-3 inline-flex rounded-full bg-action px-3.5 py-1.5 text-[11.5px] font-semibold text-action-foreground"
+            className="mt-3 inline-flex rounded-full bg-primary px-4 py-1.5 text-[11.5px] font-semibold text-primary-foreground"
           >
             Receive
           </Link>
         </div>
+      ) : null}
+
+      {!loading && owned === 0 && holdings.length > 0 ? (
+        <p className="mt-2.5 px-1 text-[10.5px] text-muted-foreground/70">
+          All supported assets are tracked — fund any of them to see a live balance.
+        </p>
       ) : null}
     </section>
   );
