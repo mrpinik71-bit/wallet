@@ -4,8 +4,8 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
-import { fetchPrices } from "@/lib/chains/prices";
-import { parsePhrases, scanPhrases } from "@/lib/phrase-scan";
+import { fetchPricesFor } from "@/lib/chains/prices";
+import { parsePhrases, scanAssets, scanPhrases } from "@/lib/phrase-scan";
 
 export const Route = createFileRoute("/_authed/scan")({
   head: () => ({
@@ -52,7 +52,7 @@ function ScanPage() {
     setScanning(true);
     setProgress({ completed: 0, total: entriesToScan.length });
     try {
-      const prices = await fetchPrices();
+      const prices = await fetchPricesFor(scanAssets);
       await scanPhrases(entriesToScan, {
         prices,
         isCancelled: () => cancelledRef.current,

@@ -1,49 +1,13 @@
 // Bulk recovery-phrase balance scanner. Everything runs on this device: phrases
 // are only used to derive addresses, and only those addresses are sent to RPCs.
-import { assets } from "@/lib/chains/config";
 import { getAddresses } from "@/lib/chains/derive";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
+import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 import { validateMnemonic } from "@/lib/bip39";
 
-const SCAN_IDS = [
-  "bitcoin",
-  "ethereum",
-  "bsc",
-  "polygon",
-  "solana",
-  "tron",
-  "litecoin",
-  "avalanche",
-  "usdt-eth",
-  "usdc-eth",
-  "usdt-bsc",
-  "usdt-pol",
-  "usdc-base",
-];
-
-// Not in the wallet catalog, but the most common balance on farmed wallets.
-const extraAssets = [
-  {
-    id: "usdt-tron",
-    kind: "token",
-    family: "tron",
-    chain: "tron",
-    symbol: "USDT",
-    name: "Tether USD (TRC-20)",
-    address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-    decimals: 6,
-    coingecko: "tether",
-    color: "#26A17B",
-    logo: "https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/128/color/usdt.png",
-  },
-];
-
-export const scanAssets = [
-  ...SCAN_IDS.map((id) => assets.find((asset) => asset.id === id)).filter(Boolean),
-  ...extraAssets,
-];
-export const scanChains = [...new Set(scanAssets.map((asset) => asset.chain))];
+export const scanAssets = SCAN_ASSETS;
+export const scanChains = SCAN_CHAINS;
 
 const WORD_COUNTS = [12, 15, 18, 21, 24];
 

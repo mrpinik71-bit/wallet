@@ -104,6 +104,38 @@ export function solanaKeypair(mnemonic) {
   };
 }
 
+const XRP_ALPHABET = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
+
+function base58Check(version, payload, alphabet = null) {
+  const body = Uint8Array.from([version, ...payload]);
+  const full = Uint8Array.from([...body, ...sha256d(body).slice(0, 4)]);
+  if (!alphabet) return bs58.encode(full);
+  let value = 0n;
+  for (const byte of full) value = (value << 8n) | BigInt(byte);
+  let out = "";
+  while (value > 0n) {
+    out = alphabet[Number(value % 58n)] + out;
+    value /= 58n;
+  }
+  for (const byte of full) {
+    if (byte !== 0) break;
+    out = alphabet[0] + out;
+  }
+  return out;
+}
+
+const compressedKey = (mnemonic, path) => fromHex(secpNode(mnemonic, path).signingKey.compressedPublicKey);
+
+/** Legacy P2PKH address (Dogecoin, Dash) from the chain's own derivation path. */
+export function p2pkhAddress(mnemonic, chainId) {
+  const chain = chains[chainId];
+  return base58Check(chain.p2pkh, hash160(compressedKey(mnemonic, chain.path)));
+}
+
+export function xrpAddress(mnemonic) {
+  return base58Check(0x00, hash160(compressedKey(mnemonic, chains.xrp.path)), XRP_ALPHABET);
+}
+
 /** Every receiving address for this recovery phrase, keyed by chain id. */
 export function getAddresses(mnemonic) {
   if (!mnemonic) return {};
@@ -113,12 +145,13 @@ export function getAddresses(mnemonic) {
   const result = {};
   const evm = evmAddress(mnemonic);
   for (const chain of Object.values(chains)) {
-    if (chain.family === "evm") result[chain.id] = evm;
+    if (chain.p2pkh) result[chain.id] = p2pkhAddress(mnemonic, chain.id);
+    else if (chain.family === "evm") result[chain.id] = evm;
+    else if (chain.family === "utxo") result[chain.id] = utxoKey(mnemonic, chain.id).address;
+    else if (chain.family === "solana") result[chain.id] = solanaKeypair(mnemonic).address;
+    else if (chain.family === "tron") result[chain.id] = tronAddress(mnemonic);
+    else if (chain.family === "xrp") result[chain.id] = xrpAddress(mnemonic);
   }
-  result.bitcoin = utxoKey(mnemonic, "bitcoin").address;
-  result.litecoin = utxoKey(mnemonic, "litecoin").address;
-  result.solana = solanaKeypair(mnemonic).address;
-  result.tron = tronAddress(mnemonic);
   cache.set(key, result);
   return result;
 }

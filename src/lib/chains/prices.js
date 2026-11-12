@@ -2,22 +2,34 @@
 import { assets } from "@/lib/chains/config";
 import { coins as catalog } from "@/lib/coin-catalog";
 
-let cache = { at: 0, data: {} };
+const cache = new Map();
 
-export async function fetchPrices() {
-  if (Date.now() - cache.at < 60000) return cache.data;
-  const ids = [...new Set(assets.map((asset) => asset.coingecko).filter(Boolean))];
+async function load(ids) {
+  const key = ids.join(",");
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 60000) return hit.data;
   try {
     const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=usd&include_24hr_change=true`,
+      `https://api.coingecko.com/api/v3/simple/price?ids=${key}&vs_currencies=usd&include_24hr_change=true`,
     );
     if (!response.ok) throw new Error("price feed unavailable");
     const data = await response.json();
-    cache = { at: Date.now(), data };
+    cache.set(key, { at: Date.now(), data });
     return data;
   } catch {
-    return cache.data;
+    return hit?.data || {};
   }
+}
+
+const idsOf = (list) => [...new Set(list.map((asset) => asset.coingecko).filter(Boolean))].sort();
+
+export async function fetchPrices() {
+  return load(idsOf(assets));
+}
+
+/** Prices for any asset list, e.g. the wider catalog used by the bulk scanner. */
+export async function fetchPricesFor(list) {
+  return load(idsOf(list));
 }
 
 export function priceOf(prices, coin) {

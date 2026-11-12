@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { FileText, ScanSearch, X } from "lucide-react";
+import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 
 export default function PhraseInput({ value, fileName, onChange, onFile, onScan, onCancel, scanning, count }) {
   const fileRef = useRef(null);
@@ -94,7 +95,7 @@ export default function PhraseInput({ value, fileName, onChange, onFile, onScan,
         )}
 
         <p className="mt-3 text-center text-[9.5px] uppercase tracking-[0.16em] text-muted-foreground/45">
-          14 assets · 8 chains per wallet
+          {SCAN_CHAINS.length} chains · {SCAN_ASSETS.length} assets per wallet
         </p>
       </div>
     </section>

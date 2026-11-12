@@ -23,9 +23,12 @@ export default function ScanResultRow({ result, index }) {
   const invalid = result.status === "invalid";
 
   const addressRows = [
-    { label: "EVM · ETH/BSC/POL", value: result.addresses?.ethereum },
+    { label: "EVM (all chains)", value: result.addresses?.ethereum },
     { label: "Bitcoin", value: result.addresses?.bitcoin },
     { label: "Litecoin", value: result.addresses?.litecoin },
+    { label: "Dogecoin", value: result.addresses?.dogecoin },
+    { label: "Dash", value: result.addresses?.dash },
+    { label: "XRP", value: result.addresses?.xrp },
     { label: "Solana", value: result.addresses?.solana },
     { label: "TRON", value: result.addresses?.tron },
   ].filter((row) => row.value);
