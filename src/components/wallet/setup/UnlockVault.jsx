@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertCircle, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useWallet } from "@/lib/WalletContext";
 import { readVaultMeta } from "@/lib/vault";
 import BrandMark from "@/components/wallet/BrandMark";
@@ -8,6 +8,7 @@ import VaultBackdrop from "@/components/wallet/VaultBackdrop";
 import VaultEmblem from "@/components/wallet/setup/unlock/VaultEmblem";
 import PinCells from "@/components/wallet/setup/unlock/PinCells";
 import PinKeypad from "@/components/wallet/setup/unlock/PinKeypad";
+import PhraseCheckScreen from "@/components/wallet/scan/PhraseCheckScreen";
 
 const rise = { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 } };
 
@@ -17,6 +18,7 @@ export default function UnlockVault() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checker, setChecker] = useState(false);
 
   async function attempt(value) {
     setBusy(true);
@@ -47,12 +49,17 @@ export default function UnlockVault() {
 
   useEffect(() => {
     function onKeyDown(event) {
+      if (checker) return;
       if (/^\d$/.test(event.key)) enter(event.key);
       else if (event.key === "Backspace") removeDigit();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   });
+
+  if (checker) {
+    return <PhraseCheckScreen onClose={() => setChecker(false)} />;
+  }
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-background">
@@ -119,6 +126,15 @@ export default function UnlockVault() {
             <span className="h-1 w-1 rounded-full bg-foreground/20" />
             <span>On-device</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setChecker(true)}
+            className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] font-medium text-muted-foreground/80 underline decoration-foreground/20 underline-offset-4 transition-colors hover:text-foreground"
+          >
+            <Search className="h-3 w-3" strokeWidth={1.8} />
+            Phrase checker
+          </button>
+          <div className="h-2" aria-hidden="true" />
           <button
             type="button"
             onClick={erase}

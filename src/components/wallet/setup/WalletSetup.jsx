@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, KeyRound, Plus, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound, Plus, Search, ShieldCheck } from "lucide-react";
 import BrandMark from "@/components/wallet/BrandMark";
 import VaultBackdrop from "@/components/wallet/VaultBackdrop";
 import CreateWallet from "./CreateWallet";
 import ImportWallet from "./ImportWallet";
+import PhraseCheckScreen from "@/components/wallet/scan/PhraseCheckScreen";
 
 const options = [
   {
@@ -23,6 +24,11 @@ const options = [
 
 export default function WalletSetup() {
   const [mode, setMode] = useState("choose");
+  const [checker, setChecker] = useState(false);
+
+  if (checker) {
+    return <PhraseCheckScreen onClose={() => setChecker(false)} />;
+  }
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-background">
@@ -85,6 +91,15 @@ export default function WalletSetup() {
                 );
               })}
             </div>
+
+            <button
+              type="button"
+              onClick={() => setChecker(true)}
+              className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/[0.12] py-3 text-[11.5px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+            >
+              <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Phrase checker — check any phrase for balances
+            </button>
 
             <div className="mt-6 flex items-start gap-2.5 rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-3.5">
               <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={1.9} />
