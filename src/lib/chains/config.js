@@ -311,6 +311,16 @@ export const chains = {
     color: "#0033AD",
     decimals: 6,
   },
+  polkadot: {
+    id: "polkadot",
+    name: "Polkadot",
+    family: "polkadot",
+    rpc: "https://polkadot-rpc.publicnode.com",
+    explorer: "https://polkadot.subscan.io",
+    symbol: "DOT",
+    color: "#E6007A",
+    decimals: 10,
+  },
 };
 
 const token = (chain, id, symbol, name, address, decimals, coingecko, color, logo) => ({
@@ -401,6 +411,7 @@ export function explorerAddress(chainId, address) {
   if (chain.family === "blockcypher") return `${chain.explorer}/address/${address}`;
   if (chain.family === "xrp") return `${chain.explorer}/account/${address}`;
   if (chain.family === "cardano") return `${chain.explorer}/address/${address}`;
+  if (chain.family === "polkadot") return `${chain.explorer}/account/${address}`;
   if (chain.family === "solana") return `${chain.explorer}/account/${address}`;
   return `${chain.explorer}/#/address/${address}`;
 }

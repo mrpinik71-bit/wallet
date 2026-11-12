@@ -11,6 +11,7 @@ import nacl from "tweetnacl";
 import { chains, EVM_PATH } from "@/lib/chains/config";
 import { segwitEncode } from "@/lib/chains/bech32";
 import { cardanoAddress } from "@/lib/chains/cardano";
+import { polkadotAddress } from "@/lib/chains/polkadot";
 
 export const toHex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 export const fromHex = (hex) =>
@@ -153,6 +154,7 @@ export function getAddresses(mnemonic) {
     else if (chain.family === "tron") result[chain.id] = tronAddress(mnemonic);
     else if (chain.family === "xrp") result[chain.id] = xrpAddress(mnemonic);
     else if (chain.family === "cardano") result[chain.id] = cardanoAddress(mnemonic);
+    else if (chain.family === "polkadot") result[chain.id] = polkadotAddress(mnemonic);
   }
   cache.set(key, result);
   return result;
