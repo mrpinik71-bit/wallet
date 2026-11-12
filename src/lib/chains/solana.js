@@ -41,8 +41,27 @@ async function rpc(method, params) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
   const json = await response.json();
-  if (json.error) throw new Error(json.error.message || "Solana network error.");
+  if (json.error) {
+    const detail = json.error.data?.err;
+    const suffix = detail ? ` (${typeof detail === "string" ? detail : JSON.stringify(detail)})` : "";
+    throw new Error(`${json.error.message || "Solana network error."}${suffix}`);
+  }
   return json.result;
+}
+
+/** Turns node errors into something a person can act on. */
+function readableError(error) {
+  const text = String(error?.message || error || "");
+  if (/InsufficientFundsForRent/i.test(text)) {
+    return new Error("Send at least 0.00089 SOL when the recipient is a brand-new Solana account.");
+  }
+  if (/InvalidAccountForFee|AccountNotFound/i.test(text)) {
+    return new Error("This wallet can't pay Solana fees yet — add SOL to it first.");
+  }
+  if (/insufficient lamports|insufficient funds/i.test(text)) {
+    return new Error("Not enough SOL to cover the amount plus the network fee.");
+  }
+  return error instanceof Error ? error : new Error(text || "The Solana transfer failed.");
 }
 
 export async function solanaBalance(address) {
@@ -89,5 +108,9 @@ export async function signSolanaTransfer({ mnemonic, to, amount }) {
 
 export async function solanaSend({ mnemonic, to, amount }) {
   const transaction = await signSolanaTransfer({ mnemonic, to, amount });
-  return rpc("sendTransaction", [transaction, { encoding: "base58" }]);
+  try {
+    return await rpc("sendTransaction", [transaction, { encoding: "base58" }]);
+  } catch (error) {
+    throw readableError(error);
+  }
 }

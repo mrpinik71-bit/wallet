@@ -120,10 +120,12 @@ function NavLinkMobile({ item }) {
       to={item.to}
       activeOptions={{ exact: item.to === "/" }}
       aria-label={item.label}
-      className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground transition-colors"
-      activeProps={{ className: "bg-secondary text-foreground" }}
+      className="group flex flex-1 flex-col items-center gap-1 rounded-2xl py-1 text-muted-foreground transition-colors data-[status=active]:text-primary"
     >
-      <Icon className="h-5 w-5" strokeWidth={1.8} />
+      <span className="grid h-9 w-9 place-items-center rounded-xl transition-colors group-data-[status=active]:bg-primary/10">
+        <Icon className="h-[19px] w-[19px]" strokeWidth={1.8} />
+      </span>
+      <span className="text-[10px] font-medium tracking-tight">{item.label}</span>
     </Link>
   );
 }

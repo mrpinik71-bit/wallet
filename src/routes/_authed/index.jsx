@@ -19,13 +19,13 @@ function Overview() {
   const { holdings, total, changeValue, changePct, addresses, loading, refresh } = usePortfolio();
 
   return (
-    <div className="mx-auto w-full max-w-[460px]">
+    <div className="mx-auto w-full max-w-[440px] overflow-x-hidden">
       <HomeHeader address={addresses.tron} />
       <BalanceBlock total={total} changeValue={changeValue} changePct={changePct} loading={loading} />
       <ActionsRow />
       <TokensList holdings={holdings} loading={loading} onRefresh={refresh} />
-      <p className="mt-8 text-center text-[10px] leading-relaxed text-muted-foreground">
-        Balances read from public RPC nodes · keys stay on this device
+      <p className="mt-10 text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+        Live on-chain balances · keys stay on this device
       </p>
     </div>
   );
