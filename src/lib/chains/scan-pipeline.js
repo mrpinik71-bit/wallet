@@ -1,0 +1,335 @@
+// Bulk scan pipeline. Phrases are derived on this device, then every chain is
+// asked about a whole batch of wallets at once: a batch of 20 wallets costs a
+// few round trips per chain instead of a fresh set for each wallet, and the
+// next batch is already in flight while the current one is answered.
+import { cardanoAddresses } from "@/lib/chains/cardano";
+import { chains } from "@/lib/chains/config";
+import { evmAddress, getAddresses } from "@/lib/chains/derive";
+import { readBalance } from "@/lib/chains/portfolio";
+import { priceOf } from "@/lib/chains/prices";
+import { SCAN_ASSETS } from "@/lib/chains/scan-catalog";
+import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
+import { cardanoBalancesMany, polkadotBalancesMany, solanaBalancesMany, suiBalancesMany } from "@/lib/chains/scan-batch-multi";
+
+const CHUNK = 20; // wallets per batch round
+const INFLIGHT = 6; // batch rounds kept in flight
+const PER_HOST = 12; // simultaneous requests to one public endpoint
+const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
+const WORD_COUNTS = [12, 15, 18, 21, 24];
+
+// Assets are routed by how their chain can be asked: EVM chains per network,
+// the multi-address chains together, everything else one wallet at a time.
+const EVM_COINS = new Map();
+const MULTI = { solana: [], sui: [], polkadot: [], cardano: [] };
+const SOLO = [];
+for (const coin of SCAN_ASSETS) {
+  if (coin.family === "evm") {
+    const list = EVM_COINS.get(coin.chain) || [];
+    list.push(coin);
+    EVM_COINS.set(coin.chain, list);
+  } else if (MULTI[coin.chain]) {
+    MULTI[coin.chain].push(coin);
+  } else {
+    SOLO.push(coin);
+  }
+}
+
+const hostOf = (chainId) => {
+  const chain = chains[chainId];
+  const url = chain?.rpc || chain?.api || "";
+  try {
+    return new URL(url).host;
+  } catch {
+    return chainId;
+  }
+};
+
+// Public endpoints rate-limit bursts, so each host has its own request budget;
+// the queues behind it never grow the number of open connections.
+const lanes = new Map();
+function limit(host, run) {
+  const lane = lanes.get(host) || { active: 0, queue: [] };
+  lanes.set(host, lane);
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      lane.active += 1;
+      Promise.resolve()
+        .then(run)
+        .then(resolve, reject)
+        .finally(() => {
+          lane.active -= 1;
+          const next = lane.queue.shift();
+          if (next) next();
+        });
+    };
+    if (lane.active < PER_HOST) start();
+    else lane.queue.push(start);
+  });
+}
+
+/** Derives every address this phrase controls, on this device. */
+function prepare(entry) {
+  const size = entry.words || entry.phrase.trim().split(/\s+/).length;
+  if (!WORD_COUNTS.includes(size)) {
+    return { invalid: true, error: "A recovery phrase has 12 or 24 words." };
+  }
+
+  let addresses = {};
+  try {
+    addresses = getAddresses(entry.phrase);
+  } catch {
+    // One chain failing to derive must not hide the wallet: the EVM address
+    // alone still shows funds on every EVM network.
+    try {
+      addresses = { ethereum: evmAddress(entry.phrase) };
+    } catch {
+      return { invalid: true, error: "Addresses could not be derived from this phrase." };
+    }
+  }
+
+  let cardano = [];
+  try {
+    cardano = cardanoAddresses(entry.phrase);
+  } catch {
+    cardano = [];
+  }
+
+  return { entry, words: size, addresses, cardano };
+}
+
+const withTimeout = (promise, ms) =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("This chain did not answer in time.")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
+const asCoinMap = (values, items, coins) => {
+  const out = new Map();
+  items.forEach((item, position) => {
+    const value = values.get(position);
+    if (value === undefined) return;
+    out.set(item.index, new Map(coins.map((coin) => [coin.id, value])));
+  });
+  return out;
+};
+
+/** Reads every asset for a batch of wallets, batching wherever a chain allows it. */
+async function readBatch(batch) {
+  const jobs = [];
+  const collect = (chainId, read) => {
+    const items = [];
+    batch.forEach((wallet, index) => {
+      const address = wallet.addresses[chainId];
+      if (address) items.push({ index, address });
+    });
+    if (items.length) jobs.push(read(items));
+  };
+
+  for (const [chainId, coins] of EVM_COINS) {
+    collect(chainId, (items) => ({
+      coins,
+      targets: items.map((item) => item.index),
+      run: async () => {
+        const values = await evmChainBalancesMany(chainId, items.map((item) => item.address), coins);
+        const out = new Map();
+        items.forEach((item, position) => {
+          const entry = values.get(position);
+          if (entry) out.set(item.index, entry);
+        });
+        return out;
+      },
+    }));
+  }
+
+  collect("solana", (items) => ({
+    coins: MULTI.solana,
+    targets: items.map((item) => item.index),
+    run: async () => asCoinMap(await solanaBalancesMany(items.map((item) => item.address)), items, MULTI.solana),
+  }));
+
+  collect("sui", (items) => ({
+    coins: MULTI.sui,
+    targets: items.map((item) => item.index),
+    run: async () => asCoinMap(await suiBalancesMany(items.map((item) => item.address)), items, MULTI.sui),
+  }));
+
+  collect("polkadot", (items) => ({
+    coins: MULTI.polkadot,
+    targets: items.map((item) => item.index),
+    run: async () => asCoinMap(await polkadotBalancesMany(items.map((item) => item.address)), items, MULTI.polkadot),
+  }));
+
+  if (MULTI.cardano.length) {
+    const items = [];
+    batch.forEach((wallet, index) => {
+      if (wallet.cardano?.length) items.push({ index, addresses: wallet.cardano });
+    });
+    if (items.length) {
+      jobs.push({
+        coins: MULTI.cardano,
+        targets: items.map((item) => item.index),
+        run: async () =>
+          asCoinMap(
+            await cardanoBalancesMany(items.map((item) => item.addresses)),
+            items,
+            MULTI.cardano,
+          ),
+      });
+    }
+  }
+
+  // Chains that only answer for one address at a time still run in parallel,
+  // within each host's own budget.
+  for (const coin of SOLO) {
+    const items = [];
+    batch.forEach((wallet, index) => {
+      if (coin.chain === "ton" && wallet.words !== 24) return;
+      const address = wallet.addresses[coin.chain];
+      if (address) items.push({ index, address });
+    });
+    if (!items.length) continue;
+
+    const host = hostOf(coin.chain);
+    jobs.push({
+      coins: [coin],
+      targets: items.map((item) => item.index),
+      run: async () => {
+        const values = new Map();
+        await Promise.all(
+          items.map(async (item) => {
+            values.set(item.index, await limit(host, () => readBalance(coin, item.address)));
+          }),
+        );
+        return new Map([...values].map(([index, balance]) => [index, new Map([[coin.id, balance]])]));
+      },
+    });
+  }
+
+  // A busy public node often answers the second time, so each group is retried once.
+  const settled = await Promise.all(
+    jobs.map(async (job) => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          return { job, values: await withTimeout(job.run(), JOB_TIMEOUT) };
+        } catch (cause) {
+          if (attempt === 1) return { job, error: cause };
+        }
+      }
+    }),
+  );
+
+  const reads = batch.map(() => []);
+  for (const { job, values, error } of settled) {
+    for (const index of job.targets) {
+      if (error) {
+        for (const coin of job.coins) reads[index].push({ coin, balance: 0, failed: true });
+        continue;
+      }
+      const entry = values.get(index);
+      for (const coin of job.coins) {
+        const balance = entry ? entry.get(coin.id) : undefined;
+        reads[index].push({ coin, balance: balance ?? 0, failed: balance === undefined });
+      }
+    }
+  }
+  return reads;
+}
+
+function toResult(wallet, reads, prices) {
+  const funded = reads
+    .filter((read) => read.balance > 0)
+    .map((read) => ({
+      id: read.coin.id,
+      chain: read.coin.chain,
+      symbol: read.coin.symbol,
+      name: read.coin.name,
+      color: read.coin.color,
+      logo: read.coin.logo,
+      balance: read.balance,
+      value: read.balance * priceOf(prices, read.coin),
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const failedReads = reads.filter((read) => read.failed);
+
+  return {
+    phrase: wallet.entry.phrase,
+    words: wallet.words,
+    addresses: wallet.addresses,
+    funded,
+    total: funded.reduce((sum, item) => sum + item.value, 0),
+    failed: failedReads.length,
+    failedChains: failedReads.map((read) => read.coin.symbol),
+    status: "done",
+    error: null,
+  };
+}
+
+/** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
+export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled } = {}) {
+  let completed = 0;
+  const active = new Set();
+  let buffer = [];
+
+  const report = (result) => {
+    completed += 1;
+    onResult?.(result);
+    onProgress?.({ completed, result });
+  };
+
+  const runBatch = async (entries) => {
+    const batch = [];
+    for (let position = 0; position < entries.length; position += 1) {
+      if (isCancelled?.()) return;
+      const entry = entries[position];
+      const wallet = prepare(entry);
+      if (wallet.invalid) {
+        report({
+          phrase: entry.phrase,
+          words: entry.words,
+          addresses: {},
+          funded: [],
+          total: 0,
+          failed: 0,
+          status: "invalid",
+          error: wallet.error,
+        });
+        continue;
+      }
+      batch.push(wallet);
+      // A long run must not freeze the page while it derives.
+      if (position % 6 === 5) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    if (!batch.length || isCancelled?.()) return;
+
+    const reads = await readBatch(batch);
+    batch.forEach((wallet, index) => report(toResult(wallet, reads[index], prices)));
+  };
+
+  const launch = (entries) => {
+    let task;
+    task = runBatch(entries).finally(() => active.delete(task));
+    active.add(task);
+  };
+
+  for await (const entry of source) {
+    if (isCancelled?.()) break;
+    buffer.push(entry);
+    if (buffer.length >= CHUNK) {
+      launch(buffer);
+      buffer = [];
+      if (active.size >= INFLIGHT) await Promise.race(active);
+    }
+  }
+  if (buffer.length && !isCancelled?.()) launch(buffer);
+  await Promise.all(active);
+}
