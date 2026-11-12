@@ -33,6 +33,8 @@ export default function ScanResultRow({ result, index }) {
     { label: "Polkadot", value: result.addresses?.polkadot },
     { label: "Aptos", value: result.addresses?.aptos },
     { label: "NEAR", value: result.addresses?.near },
+    { label: "TON", value: result.addresses?.ton },
+    { label: "Sui", value: result.addresses?.sui },
     { label: "Solana", value: result.addresses?.solana },
     { label: "TRON", value: result.addresses?.tron },
   ].filter((row) => row.value);

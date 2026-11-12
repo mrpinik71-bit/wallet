@@ -343,6 +343,26 @@ export const chains = {
     color: "#00C08B",
     decimals: 24,
   },
+  ton: {
+    id: "ton",
+    name: "Toncoin",
+    family: "ton",
+    api: "https://toncenter.com/api/v2",
+    explorer: "https://tonviewer.com",
+    symbol: "TON",
+    color: "#0098EA",
+    decimals: 9,
+  },
+  sui: {
+    id: "sui",
+    name: "Sui",
+    family: "sui",
+    api: "https://graphql.mainnet.sui.io/graphql",
+    explorer: "https://suiscan.xyz/mainnet",
+    symbol: "SUI",
+    color: "#4DA2FF",
+    decimals: 9,
+  },
 };
 
 const token = (chain, id, symbol, name, address, decimals, coingecko, color, logo) => ({
@@ -436,6 +456,8 @@ export function explorerAddress(chainId, address) {
   if (chain.family === "polkadot") return `${chain.explorer}/account/${address}`;
   if (chain.family === "aptos") return `${chain.explorer}/account/${address}?network=mainnet`;
   if (chain.family === "near") return `${chain.explorer}/address/${address}`;
+  if (chain.family === "ton") return `${chain.explorer}/${address}`;
+  if (chain.family === "sui") return `${chain.explorer}/account/${address}`;
   if (chain.family === "solana") return `${chain.explorer}/account/${address}`;
   return `${chain.explorer}/#/address/${address}`;
 }

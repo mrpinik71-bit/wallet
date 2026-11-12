@@ -11,6 +11,8 @@ import { cardanoAddress } from "@/lib/chains/cardano";
 import { polkadotAddress } from "@/lib/chains/polkadot";
 import { aptosAddress } from "@/lib/chains/aptos";
 import { nearAddress } from "@/lib/chains/near";
+import { tonAddress } from "@/lib/chains/ton";
+import { suiAddress } from "@/lib/chains/sui";
 import { ed25519PrivateKey, mnemonicSeed } from "@/lib/chains/slip10";
 
 export const toHex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -132,6 +134,10 @@ export function getAddresses(mnemonic) {
     else if (chain.family === "polkadot") result[chain.id] = polkadotAddress(mnemonic);
     else if (chain.family === "aptos") result[chain.id] = aptosAddress(mnemonic);
     else if (chain.family === "near") result[chain.id] = nearAddress(mnemonic);
+    // TON wallet contracts are only created from 24-word phrases.
+    else if (chain.family === "ton") {
+      if (mnemonic.trim().split(/\s+/).length === 24) result[chain.id] = tonAddress(mnemonic);
+    } else if (chain.family === "sui") result[chain.id] = suiAddress(mnemonic);
   }
   cache.set(key, result);
   return result;

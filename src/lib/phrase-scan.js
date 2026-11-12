@@ -78,8 +78,11 @@ async function scanOne(entry, prices) {
     return { ...base, status: "invalid", error: "Addresses could not be derived from this phrase." };
   }
 
+  // TON wallet v4R2 only exists for 24-word phrases, so other lengths skip it.
+  const scanned = scanAssets.filter((coin) => coin.chain !== "ton" || entry.words === 24);
+
   const reads = await Promise.all(
-    scanAssets.map(async (coin) => {
+    scanned.map(async (coin) => {
       const price = priceOf(prices, coin);
       // Cardano holds funds on several base addresses for one phrase, so its
       // reader takes the whole list and totals them.

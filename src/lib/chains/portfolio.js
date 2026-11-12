@@ -5,7 +5,16 @@ import { evmNativeBalance, evmTokenBalance } from "@/lib/chains/evm";
 import { utxoBalance } from "@/lib/chains/utxo";
 import { solanaBalance } from "@/lib/chains/solana";
 import { tronBalance, trc20Balance } from "@/lib/chains/tron";
-import { aptosBalance, blockcypherBalance, cardanoBalance, nearBalance, polkadotBalance, xrpBalance } from "@/lib/chains/scan-read";
+import {
+  aptosBalance,
+  blockcypherBalance,
+  cardanoBalance,
+  nearBalance,
+  polkadotBalance,
+  suiBalance,
+  tonBalance,
+  xrpBalance,
+} from "@/lib/chains/scan-read";
 import { changeOf, fetchPrices, priceOf } from "@/lib/chains/prices";
 
 export async function readBalance(coin, address) {
@@ -20,6 +29,8 @@ export async function readBalance(coin, address) {
   if (coin.family === "polkadot") return polkadotBalance(address);
   if (coin.family === "aptos") return aptosBalance(address);
   if (coin.family === "near") return nearBalance(address);
+  if (coin.family === "ton") return tonBalance(address);
+  if (coin.family === "sui") return suiBalance(address);
   if (coin.family === "solana") return solanaBalance(address);
   if (coin.chain === "tron") {
     return coin.kind === "token" ? trc20Balance(address, coin) : tronBalance(address);

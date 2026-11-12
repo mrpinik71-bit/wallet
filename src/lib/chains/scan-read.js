@@ -73,6 +73,37 @@ export async function nearBalance(address) {
   throw new Error("NEAR network error.");
 }
 
+/** TON balance in nanotons for a v4R2 wallet address. */
+export async function tonBalance(address) {
+  if (!address) return 0;
+  const response = await fetch(`${chains.ton.api}/getAddressBalance?address=${encodeURIComponent(address)}`);
+  if (!response.ok) throw new Error(`TON network error (${response.status}).`);
+
+  const data = await response.json();
+  if (!data?.ok) throw new Error("TON network error.");
+  // An address that has never been funded simply reports no balance.
+  return Number(data.result || 0) / 1e9;
+}
+
+/** SUI balance in MIST, read through the Sui GraphQL endpoint. */
+export async function suiBalance(address) {
+  if (!address) return 0;
+  const response = await fetch(chains.sui.api, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      query: "query($owner: SuiAddress!) { address(address: $owner) { balance(coinType: \"0x2::sui::SUI\") { totalBalance } } }",
+      variables: { owner: address },
+    }),
+  });
+  if (!response.ok) throw new Error(`Sui network error (${response.status}).`);
+
+  const data = await response.json();
+  const total = data?.data?.address?.balance?.totalBalance;
+  if (total === undefined) throw new Error("Sui network error.");
+  return Number(total) / 1e9;
+}
+
 const DOT_ENDPOINTS = [chains.polkadot.rpc, "https://rpc.polkadot.io"];
 const XRP_ENDPOINTS = [chains.xrp.api, "https://xrpl.ws"];
 

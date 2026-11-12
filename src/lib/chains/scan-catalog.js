@@ -37,6 +37,8 @@ const COINGECKO = {
   polkadot: "polkadot",
   aptos: "aptos",
   near: "near",
+  ton: "the-open-network",
+  sui: "sui",
 };
 
 const LOGO = {
@@ -52,6 +54,8 @@ const LOGO = {
   polkadot: cdn("dot"),
   aptos: "https://assets.coingecko.com/coins/images/26455/large/aptos_round.png",
   near: "https://assets.coingecko.com/coins/images/10365/large/near.jpg",
+  ton: "https://assets.coingecko.com/coins/images/17980/large/ton_symbol.png",
+  sui: "https://assets.coingecko.com/coins/images/26375/large/sui_asset.jpeg",
   solana: "https://assets.coingecko.com/coins/images/4128/large/solana.png",
   avalanche: "https://assets.coingecko.com/coins/images/12559/large/avax.png",
   polygon: "https://assets.coingecko.com/coins/images/4713/large/polygon.png",
