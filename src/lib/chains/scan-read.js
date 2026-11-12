@@ -9,6 +9,23 @@ export async function blockcypherBalance(chainId, address) {
   return (data.final_balance || 0) / 1e8;
 }
 
+/** ADA balance across the phrase's Shelley base addresses (Koios). */
+export async function cardanoBalance(addresses) {
+  const list = (Array.isArray(addresses) ? addresses : [addresses]).filter(Boolean);
+  if (!list.length) return 0;
+
+  const response = await fetch(`${chains.cardano.api}/address_info`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ _addresses: list }),
+  });
+  if (!response.ok) throw new Error(`Cardano network error (${response.status}).`);
+
+  const rows = await response.json();
+  const lovelace = (Array.isArray(rows) ? rows : []).reduce((sum, row) => sum + Number(row.balance || 0), 0);
+  return lovelace / 1e6;
+}
+
 const XRP_ENDPOINTS = [chains.xrp.api, "https://xrpl.ws"];
 
 export async function xrpBalance(address) {

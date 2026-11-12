@@ -1,5 +1,6 @@
 // Bulk recovery-phrase balance scanner. Everything runs on this device: phrases
 // are only used to derive addresses, and only those addresses are sent to RPCs.
+import { cardanoAddresses } from "@/lib/chains/cardano";
 import { getAddresses } from "@/lib/chains/derive";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
@@ -80,7 +81,9 @@ async function scanOne(entry, prices) {
   const reads = await Promise.all(
     scanAssets.map(async (coin) => {
       const price = priceOf(prices, coin);
-      const address = addresses[coin.chain] || "";
+      // Cardano holds funds on several base addresses for one phrase, so its
+      // reader takes the whole list and totals them.
+      const address = coin.chain === "cardano" ? cardanoAddresses(entry.phrase) : addresses[coin.chain] || "";
       // Public nodes rate-limit bursts, so a failed read is retried once before
       // it is reported as a failure — a chain is never silently counted as zero.
       for (let attempt = 0; attempt < 2; attempt += 1) {

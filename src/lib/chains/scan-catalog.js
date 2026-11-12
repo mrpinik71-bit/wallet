@@ -33,6 +33,7 @@ const COINGECKO = {
   solana: "solana",
   tron: "tron",
   xrp: "ripple",
+  cardano: "cardano",
 };
 
 const LOGO = {
@@ -44,6 +45,7 @@ const LOGO = {
   dash: cdn("dash"),
   tron: cdn("trx"),
   xrp: cdn("xrp"),
+  cardano: cdn("ada"),
   solana: "https://assets.coingecko.com/coins/images/4128/large/solana.png",
   avalanche: "https://assets.coingecko.com/coins/images/12559/large/avax.png",
   polygon: "https://assets.coingecko.com/coins/images/4713/large/polygon.png",

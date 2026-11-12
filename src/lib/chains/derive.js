@@ -10,6 +10,7 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { chains, EVM_PATH } from "@/lib/chains/config";
 import { segwitEncode } from "@/lib/chains/bech32";
+import { cardanoAddress } from "@/lib/chains/cardano";
 
 export const toHex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 export const fromHex = (hex) =>
@@ -151,6 +152,7 @@ export function getAddresses(mnemonic) {
     else if (chain.family === "solana") result[chain.id] = solanaKeypair(mnemonic).address;
     else if (chain.family === "tron") result[chain.id] = tronAddress(mnemonic);
     else if (chain.family === "xrp") result[chain.id] = xrpAddress(mnemonic);
+    else if (chain.family === "cardano") result[chain.id] = cardanoAddress(mnemonic);
   }
   cache.set(key, result);
   return result;

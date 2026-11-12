@@ -59,6 +59,13 @@ function fromWords(words) {
   return Uint8Array.from(bytes);
 }
 
+/** Plain bech32 (BIP-173) encoding of an arbitrary byte payload. */
+export function bech32Encode(hrp, bytes) {
+  const data = toWords(bytes);
+  const combined = data.concat(checksum(hrp, data));
+  return `${hrp}1${combined.map((word) => CHARSET[word]).join("")}`;
+}
+
 export function segwitEncode(hrp, version, program) {
   const data = [version].concat(toWords(program));
   const combined = data.concat(checksum(hrp, data));

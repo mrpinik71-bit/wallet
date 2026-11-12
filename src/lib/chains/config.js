@@ -300,6 +300,17 @@ export const chains = {
     color: "#25A768",
     decimals: 6,
   },
+  cardano: {
+    id: "cardano",
+    name: "Cardano",
+    family: "cardano",
+    api: "https://api.koios.rest/api/v1",
+    explorer: "https://cardanoscan.io",
+    path: "m/1852'/1815'/0'/0/0",
+    symbol: "ADA",
+    color: "#0033AD",
+    decimals: 6,
+  },
 };
 
 const token = (chain, id, symbol, name, address, decimals, coingecko, color, logo) => ({
@@ -389,6 +400,7 @@ export function explorerAddress(chainId, address) {
   if (chain.family === "utxo") return `${chain.explorer}/address/${address}`;
   if (chain.family === "blockcypher") return `${chain.explorer}/address/${address}`;
   if (chain.family === "xrp") return `${chain.explorer}/account/${address}`;
+  if (chain.family === "cardano") return `${chain.explorer}/address/${address}`;
   if (chain.family === "solana") return `${chain.explorer}/account/${address}`;
   return `${chain.explorer}/#/address/${address}`;
 }
