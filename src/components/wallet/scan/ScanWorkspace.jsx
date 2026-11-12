@@ -66,8 +66,8 @@ export default function ScanWorkspace() {
 
   const visible = rows.slice(0, page * PAGE);
 
-  // Only phrases of the selected length are counted and scanned.
-  const matching = (value, size) => parsePhrases(value).filter((entry) => entry.words === size);
+  // Each line is read with the selected number of words (12, 15, …).
+  const matching = (value, size) => parsePhrases(value, size);
 
   function onChange(value) {
     setText(value);

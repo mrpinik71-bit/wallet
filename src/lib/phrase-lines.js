@@ -9,36 +9,36 @@ export const tokenize = (text) =>
     .split(" ")
     .filter(Boolean);
 
-// One line is one phrase, checked exactly as the file lists it: nothing is
-// joined from the line above or below, and one line never becomes two phrases.
-function phraseFromLine(line) {
+// One line is one phrase: its first `size` words are the wallet, so a line
+// carrying extra text after the phrase is still checked correctly.
+function phraseFromLine(line, size) {
   const tokens = tokenize(line);
-  if (tokens.length < 12) return "";
-  return tokens.join(" ");
+  if (tokens.length < size) return "";
+  return tokens.slice(0, size).join(" ");
 }
 
 /** Splits a block of pasted text into phrases, line by line. */
-export function parsePhrases(text) {
+export function parsePhrases(text, size = 12) {
   const seen = new Set();
   const entries = [];
   const lines = String(text || "").replace(/\r/g, "").split("\n");
 
   lines.forEach((raw, position) => {
-    const phrase = phraseFromLine(raw);
+    const phrase = phraseFromLine(raw, size);
     if (!phrase || seen.has(phrase)) return;
     seen.add(phrase);
-    entries.push({ phrase, words: phrase.split(" ").length, line: position + 1 });
+    entries.push({ phrase, words: size, line: position + 1 });
   });
 
   return entries;
 }
 
 /** Streams the file line by line, one phrase per line, without holding it. */
-export async function* phrasesFromLines(lines) {
+export async function* phrasesFromLines(lines, size = 12) {
   let line = 0;
   for await (const raw of lines) {
     line += 1;
-    const phrase = phraseFromLine(raw);
+    const phrase = phraseFromLine(raw, size);
     if (phrase) yield { phrase, line };
   }
 }
