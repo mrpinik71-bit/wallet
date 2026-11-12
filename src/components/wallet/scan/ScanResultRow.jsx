@@ -78,7 +78,7 @@ export default function ScanResultRow({ result, index }) {
               ? result.error
               : hasBalance
                 ? funded.map((item) => item.symbol).join(" · ")
-                : "No balance on scanned assets"}
+                : `${addressRows.length} chain address${addressRows.length === 1 ? "" : "es"}`}
           </span>
         </span>
         <span className="shrink-0 text-right">

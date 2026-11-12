@@ -50,7 +50,7 @@ export default function ScanWorkspace() {
     const results = resultsRef.current;
     for (let index = 0; index < results.length; index += 1) {
       const slot = results[index];
-      if (!slot) continue;
+      if (!slot || slot.status !== "done") continue;
       if (onlyFunded && !(slot.total > 0)) continue;
       list.push({ slot, index });
     }
@@ -124,7 +124,10 @@ export default function ScanWorkspace() {
         prices,
         isCancelled: () => cancelledRef.current,
         onProgress: ({ completed, index, result }) => {
-          const worthwhile = result.total > 0 || result.status === "invalid" || index < RAW_KEEP;
+          // Phrases that fail validation are never listed: only readable
+          // phrases appear, with their derived chain addresses.
+          const valid = result.status === "done";
+          const worthwhile = valid && (result.total > 0 || index < RAW_KEEP);
           if (worthwhile) resultsRef.current[index] = result;
           live.completed = completed;
           if (result.total > 0) {
