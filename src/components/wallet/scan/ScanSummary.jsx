@@ -1,6 +1,6 @@
 import { formatUsd } from "@/lib/format";
 
-export default function ScanSummary({ results, progress, fundedCount, fundedTotal, onlyFunded, onToggleFilter, finished }) {
+export default function ScanSummary({ total, progress, fundedCount, fundedTotal, onlyFunded, onToggleFilter, finished }) {
   return (
     <section className="flex items-center justify-between rounded-[18px] border border-foreground/[0.07] bg-foreground/[0.025] px-4 py-3">
       <div>
@@ -8,7 +8,7 @@ export default function ScanSummary({ results, progress, fundedCount, fundedTota
           {finished ? "Funded wallets" : "Scanning"}
         </p>
         <p className="mt-1 font-heading text-[15px] font-semibold num">
-          {fundedCount} <span className="text-muted-foreground/60">/ {results.length}</span>
+          {fundedCount} <span className="text-muted-foreground/60">/ {total}</span>
         </p>
         {fundedCount > 0 ? (
           <p className="mt-0.5 text-[10.5px] text-primary num">{formatUsd(fundedTotal)} found</p>

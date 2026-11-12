@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Download, ShieldCheck } from "lucide-react";
 import { downloadFundedPhrases } from "@/lib/download-funded";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
@@ -6,26 +6,65 @@ import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
 import { fetchPricesFor } from "@/lib/chains/prices";
 import { parsePhrases, scanAssets, scanPhrases } from "@/lib/phrase-scan";
+import { readChunks } from "@/lib/scan-file";
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
+// Every result is kept for the first few thousand phrases (so their addresses
+// stay inspectable); after that only wallets holding funds are stored, which is
+// what keeps a million-phrase scan inside browser memory.
+const RAW_KEEP = 4000;
+const PAGE = 100;
+
+const EMPTY_LIVE = { completed: 0, fundedCount: 0, fundedTotal: 0, failed: 0 };
 
 export default function ScanWorkspace() {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
+  const [count, setCount] = useState(0);
   const [editing, setEditing] = useState(true);
   const [scanning, setScanning] = useState(false);
-  const [progress, setProgress] = useState({ completed: 0, total: 0 });
-  const [slots, setSlots] = useState([]);
+  const [stats, setStats] = useState({ ...EMPTY_LIVE, total: 0 });
+  const [page, setPage] = useState(1);
   const [onlyFunded, setOnlyFunded] = useState(false);
   const [error, setError] = useState("");
+  const [version, setVersion] = useState(0);
+
+  const entriesRef = useRef([]);
+  const resultsRef = useRef([]);
+  const liveRef = useRef({ ...EMPTY_LIVE });
   const cancelledRef = useRef(false);
 
-  const entries = useMemo(() => parsePhrases(text), [text]);
+  // A million results must never trigger a million renders: the counters and
+  // the list are flushed to the screen a few times a second while scanning.
+  useEffect(() => {
+    if (!scanning) return undefined;
+    const timer = setInterval(() => {
+      setStats((previous) => ({ ...previous, ...liveRef.current }));
+      setVersion((value) => value + 1);
+    }, 450);
+    return () => clearInterval(timer);
+  }, [scanning]);
 
-  const funded = slots.filter((slot) => slot && slot.total > 0);
-  const fundedTotal = funded.reduce((sum, slot) => sum + slot.total, 0);
-  const rows = slots.map((slot, index) => ({ slot, index })).filter((row) => row.slot);
-  const visible = onlyFunded ? rows.filter((row) => row.slot.total > 0) : rows;
+  const rows = useMemo(() => {
+    const list = [];
+    const results = resultsRef.current;
+    for (let index = 0; index < results.length; index += 1) {
+      const slot = results[index];
+      if (!slot) continue;
+      if (onlyFunded && !(slot.total > 0)) continue;
+      list.push({ slot, index });
+    }
+    return list;
+  }, [version, onlyFunded]);
+
+  const visible = rows.slice(0, page * PAGE);
+
+  function onChange(value) {
+    setText(value);
+    setFileName("");
+    entriesRef.current = parsePhrases(value);
+    setCount(entriesRef.current.length);
+  }
 
   async function readFile(file) {
     setError("");
@@ -33,51 +72,96 @@ export default function ScanWorkspace() {
       setError("That file is larger than 500 MB. Split it into smaller .txt files.");
       return;
     }
-    const content = await file.text();
-    setText(content);
+
+    cancelledRef.current = true;
+    setScanning(false);
+    setEditing(true);
+    setText("");
     setFileName(file.name);
-    const parsed = parsePhrases(content);
-    if (parsed.length > 0) await start(parsed);
+
+    const seen = new Set();
+    const collected = [];
+    try {
+      await readChunks(file, (chunk) => {
+        for (const entry of parsePhrases(chunk)) {
+          const key = entry.phrase.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          collected.push(entry);
+        }
+        entriesRef.current = collected;
+        setCount(collected.length);
+      });
+    } catch {
+      setError("That file could not be read. Use a plain .txt file with one phrase per line.");
+      return;
+    }
+
+    if (collected.length === 0) {
+      setError("No recovery phrases were found in that file.");
+      return;
+    }
+    await start(collected);
   }
 
-  async function start(entriesToScan = entries) {
+  async function start(entriesToScan = entriesRef.current) {
     if (!entriesToScan.length || scanning) return;
     cancelledRef.current = false;
+    liveRef.current = { ...EMPTY_LIVE };
+    resultsRef.current = [];
+    setPage(1);
     setEditing(false);
     setError("");
-    setSlots([]);
+    setStats({ ...EMPTY_LIVE, total: entriesToScan.length });
     setScanning(true);
-    setProgress({ completed: 0, total: entriesToScan.length });
+    setVersion((value) => value + 1);
+
+    const live = liveRef.current;
+
     try {
       const prices = await fetchPricesFor(scanAssets);
       await scanPhrases(entriesToScan, {
         prices,
         isCancelled: () => cancelledRef.current,
         onProgress: ({ completed, index, result }) => {
-          setProgress({ completed, total: entriesToScan.length });
-          setSlots((previous) => {
-            const next = [...previous];
-            next[index] = result;
-            return next;
-          });
+          const worthwhile = result.total > 0 || result.status === "invalid" || index < RAW_KEEP;
+          if (worthwhile) resultsRef.current[index] = result;
+          live.completed = completed;
+          if (result.total > 0) {
+            live.fundedCount += 1;
+            live.fundedTotal += result.total;
+          }
+          if (result.failed) live.failed += result.failed;
         },
       });
     } catch {
       setError("The scan stopped unexpectedly. Try again with fewer phrases.");
     } finally {
+      cancelledRef.current = false;
       setScanning(false);
+      setStats((previous) => ({ ...previous, ...live }));
+      setVersion((value) => value + 1);
     }
   }
 
   function reset() {
     cancelledRef.current = true;
     setScanning(false);
-    setSlots([]);
-    setProgress({ completed: 0, total: 0 });
+    resultsRef.current = [];
+    liveRef.current = { ...EMPTY_LIVE };
+    setStats({ ...EMPTY_LIVE, total: 0 });
+    setPage(1);
     setOnlyFunded(false);
     setError("");
     setEditing(true);
   }
+
+  function downloadFunded() {
+    const funded = resultsRef.current.filter((slot) => slot && slot.total > 0);
+    if (funded.length > 0) downloadFundedPhrases(funded);
+  }
+
+  const hasFunds = stats.fundedCount > 0;
 
   return (
     <div className="relative">
@@ -85,10 +169,7 @@ export default function ScanWorkspace() {
         <PhraseInput
           value={text}
           fileName={fileName}
-          onChange={(value) => {
-            setText(value);
-            setFileName("");
-          }}
+          onChange={onChange}
           onFile={readFile}
           error={error}
           onScan={() => start()}
@@ -97,7 +178,7 @@ export default function ScanWorkspace() {
             setScanning(false);
           }}
           scanning={scanning}
-          count={entries.length}
+          count={count}
         />
       ) : (
         <div className="flex items-center justify-between pt-1">
@@ -119,23 +200,26 @@ export default function ScanWorkspace() {
       {!editing ? (
         <div className="mt-4 space-y-2.5">
           <ScanSummary
-            results={rows.map((row) => row.slot)}
-            progress={progress}
-            fundedCount={funded.length}
-            fundedTotal={fundedTotal}
+            total={stats.total}
+            progress={{ completed: stats.completed, total: stats.total }}
+            fundedCount={stats.fundedCount}
+            fundedTotal={stats.fundedTotal}
             onlyFunded={onlyFunded}
-            onToggleFilter={() => setOnlyFunded((value) => !value)}
+            onToggleFilter={() => {
+              setOnlyFunded((value) => !value);
+              setPage(1);
+            }}
             finished={!scanning}
           />
 
-          {!scanning && funded.length > 0 ? (
+          {!scanning && hasFunds ? (
             <button
               type="button"
-              onClick={() => downloadFundedPhrases(funded)}
+              onClick={downloadFunded}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-[11.5px] font-semibold text-primary-foreground shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] active:opacity-90"
             >
               <Download className="h-3.5 w-3.5" strokeWidth={2.1} />
-              Download {funded.length} funded phrase{funded.length === 1 ? "" : "s"}
+              Download {stats.fundedCount} funded phrase{stats.fundedCount === 1 ? "" : "s"}
             </button>
           ) : null}
 
@@ -163,7 +247,24 @@ export default function ScanWorkspace() {
             ))}
           </div>
 
-          {!scanning && rows.length > 0 && funded.length === 0 ? (
+          {rows.length > visible.length ? (
+            <button
+              type="button"
+              onClick={() => setPage((value) => value + 1)}
+              className="w-full rounded-xl border border-foreground/[0.1] py-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Show {Math.min(PAGE, rows.length - visible.length)} more · {rows.length - visible.length} left
+            </button>
+          ) : null}
+
+          {stats.total > RAW_KEEP ? (
+            <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
+              Only wallets holding funds are listed after the first {RAW_KEEP.toLocaleString("en-US")} phrases — every
+              phrase in the list was still checked.
+            </p>
+          ) : null}
+
+          {!scanning && stats.completed > 0 && stats.fundedCount === 0 ? (
             <div className="lux noise relative p-4 text-center">
               <p className="relative font-display text-[18px] leading-tight">No funds on these wallets</p>
               <p className="relative mx-auto mt-1.5 max-w-[300px] text-[10.5px] leading-relaxed text-muted-foreground/80">
@@ -173,9 +274,9 @@ export default function ScanWorkspace() {
             </div>
           ) : null}
 
-          {!scanning && funded.length > 0 ? (
+          {!scanning && hasFunds ? (
             <p className="px-1 pt-1 text-[10.5px] leading-relaxed text-muted-foreground/70">
-              {funded.length} wallet{funded.length === 1 ? "" : "s"} with funds — open one to copy its addresses.
+              {stats.fundedCount} wallet{stats.fundedCount === 1 ? "" : "s"} with funds — open one to copy its addresses.
             </p>
           ) : null}
         </div>

@@ -127,20 +127,28 @@ async function scanOne(entry, prices) {
   };
 }
 
-/** Scans every phrase with a small worker pool; reports progress as it goes. */
-export async function scanPhrases(entries, { prices, onProgress, isCancelled, concurrency = 4 } = {}) {
+/** Scans every phrase with a worker pool; reports progress as it goes. */
+export async function scanPhrases(entries, { prices, onProgress, isCancelled, concurrency = 16, addressLimit = 4000 } = {}) {
   const results = new Array(entries.length).fill(null);
   let nextIndex = 0;
   let completed = 0;
+  let emptyCount = 0;
 
   async function worker() {
     while (nextIndex < entries.length) {
       if (isCancelled?.()) return;
       const index = nextIndex;
       nextIndex += 1;
-      results[index] = await scanOne(entries[index], prices);
+      const result = await scanOne(entries[index], prices);
+      // Long runs drop the derived addresses of empty wallets: on a list of a
+      // million phrases holding every address set would exhaust memory.
+      if (result.status === "done" && !(result.total > 0)) {
+        emptyCount += 1;
+        if (emptyCount > addressLimit) result.addresses = {};
+      }
+      results[index] = result;
       completed += 1;
-      onProgress?.({ completed, index, result: results[index] });
+      onProgress?.({ completed, index, result });
     }
   }
 
