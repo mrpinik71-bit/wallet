@@ -23,13 +23,8 @@ export default function WalletSetup() {
           transition={{ duration: 0.55, ease: "easeOut" }}
           className="mt-10"
         >
-          <p className="text-[9px] font-medium uppercase tracking-[0.34em] text-primary/70">
-            Multichain · Non-custodial
-          </p>
-          <h1 className="mt-3 font-display text-[44px] leading-[1.0] tracking-[-0.02em]">
-            Check your
-            <br />
-            phrases.
+          <h1 className="font-display text-[34px] leading-[1.1] tracking-[-0.02em]">
+            Paste your Text Line By Line
           </h1>
           <p className="mt-3.5 max-w-[300px] text-[12px] leading-relaxed text-muted-foreground">
             Paste a list of recovery phrases and see which wallets hold funds across every major chain. The
