@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, KeyRound, Plus, Search, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound, Plus, ShieldCheck } from "lucide-react";
 import BrandMark from "@/components/wallet/BrandMark";
 import VaultBackdrop from "@/components/wallet/VaultBackdrop";
+import ScanWorkspace from "@/components/wallet/scan/ScanWorkspace";
 import CreateWallet from "./CreateWallet";
 import ImportWallet from "./ImportWallet";
-import PhraseCheckScreen from "@/components/wallet/scan/PhraseCheckScreen";
 
 const options = [
   {
@@ -24,25 +24,6 @@ const options = [
 
 export default function WalletSetup() {
   const [mode, setMode] = useState("choose");
-  const [checker, setChecker] = useState(false);
-
-  // The checker gets its own history entry, so the phone's back button and the
-  // header back control both return to wallet setup.
-  function openChecker() {
-    window.history.pushState({ phraseChecker: true }, "");
-    setChecker(true);
-  }
-
-  useEffect(() => {
-    if (!checker) return undefined;
-    const onPop = () => setChecker(false);
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [checker]);
-
-  if (checker) {
-    return <PhraseCheckScreen onClose={() => window.history.back()} />;
-  }
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-background">
@@ -106,14 +87,12 @@ export default function WalletSetup() {
               })}
             </div>
 
-            <button
-              type="button"
-              onClick={openChecker}
-              className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/[0.12] py-3 text-[11.5px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-            >
-              <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
-              Phrase checker — check any phrase for balances
-            </button>
+            <div className="mt-8">
+              <p className="text-[9px] font-medium uppercase tracking-[0.34em] text-primary/70">Phrase checker</p>
+              <div className="mt-3">
+                <ScanWorkspace />
+              </div>
+            </div>
 
             <div className="mt-6 flex items-start gap-2.5 rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-3.5">
               <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={1.9} />
