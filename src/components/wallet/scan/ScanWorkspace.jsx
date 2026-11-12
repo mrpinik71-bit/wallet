@@ -245,6 +245,13 @@ export default function ScanWorkspace() {
             </p>
           ) : null}
 
+          {stats.failed > 0 ? (
+            <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
+              {stats.failed.toLocaleString("en-US")} chain read{stats.failed === 1 ? "" : "s"} failed on busy public
+              nodes — those wallets may hold more than shown, so run the scan again for a full picture.
+            </p>
+          ) : null}
+
           {stats.invalid > 0 ? (
             <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
               {stats.invalid.toLocaleString("en-US")} entr{stats.invalid === 1 ? "y is" : "ies are"} not a valid BIP-39

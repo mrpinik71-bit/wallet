@@ -121,6 +121,14 @@ export default function ScanResultRow({ result, index }) {
             </p>
           )}
 
+          {funded.length > 0 && result.failed ? (
+            <p className="mt-2 text-[10px] text-muted-foreground/60">
+              {result.failed} chain read{result.failed === 1 ? "" : "s"} failed
+              {result.failedChains?.length ? ` (${result.failedChains.slice(0, 4).join(", ")})` : ""} — open the
+              address on a block explorer to be sure.
+            </p>
+          ) : null}
+
           <div className="mt-3 space-y-1.5 border-t border-foreground/[0.06] pt-2.5">
             {addressRows.map((row) => (
               <div key={row.label} className="flex items-center gap-2">

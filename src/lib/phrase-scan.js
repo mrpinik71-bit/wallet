@@ -1,7 +1,7 @@
 // Bulk recovery-phrase balance scanner. Everything runs on this device: phrases
 // are only used to derive addresses, and only those addresses are sent to RPCs.
 import { cardanoAddresses } from "@/lib/chains/cardano";
-import { getAddresses } from "@/lib/chains/derive";
+import { evmAddress, getAddresses } from "@/lib/chains/derive";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
@@ -26,7 +26,13 @@ async function scanOne(entry, prices) {
   try {
     addresses = getAddresses(entry.phrase);
   } catch {
-    return { ...base, status: "invalid", error: "Addresses could not be derived from this phrase." };
+    // One chain failing to derive must not hide the wallet: the EVM address
+    // alone still shows funds on every EVM network.
+    try {
+      addresses = { ethereum: evmAddress(entry.phrase) };
+    } catch {
+      return { ...base, status: "invalid", error: "Addresses could not be derived from this phrase." };
+    }
   }
 
   // TON wallet v4R2 only exists for 24-word phrases, so other lengths skip it.
@@ -35,9 +41,17 @@ async function scanOne(entry, prices) {
   const reads = await Promise.all(
     scanned.map(async (coin) => {
       const price = priceOf(prices, coin);
+      let address = addresses[coin.chain] || "";
       // Cardano holds funds on several base addresses for one phrase, so its
-      // reader takes the whole list and totals them.
-      const address = coin.chain === "cardano" ? cardanoAddresses(entry.phrase) : addresses[coin.chain] || "";
+      // reader takes the whole list and totals them — and a failure there must
+      // not take the whole wallet down with it.
+      if (coin.chain === "cardano") {
+        try {
+          address = cardanoAddresses(entry.phrase);
+        } catch {
+          address = "";
+        }
+      }
       // Public nodes rate-limit bursts, so a failed read is retried once before
       // it is reported as a failure — a chain is never silently counted as zero.
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -104,13 +118,29 @@ export async function* phrasesFromFile(file, { onCount } = {}) {
 }
 
 /** Scans phrases as they stream in with a worker pool; reports each result. */
-export async function scanPhraseStream(source, { prices, onResult, onProgress, isCancelled, concurrency = 32 } = {}) {
+export async function scanPhraseStream(source, { prices, onResult, onProgress, isCancelled, concurrency = 8 } = {}) {
   let completed = 0;
 
   async function worker() {
     for await (const entry of source) {
       if (isCancelled?.()) return;
-      const result = await scanOne(entry, prices);
+      // One phrase that throws must never end the whole run: it is reported
+      // back and the scanner moves on to the next one.
+      let result;
+      try {
+        result = await scanOne(entry, prices);
+      } catch (cause) {
+        result = {
+          phrase: entry.phrase,
+          words: entry.words,
+          addresses: {},
+          funded: [],
+          total: 0,
+          failed: 0,
+          status: "invalid",
+          error: cause?.message || "This phrase could not be checked.",
+        };
+      }
       completed += 1;
       onResult?.(result);
       onProgress?.({ completed, result });
