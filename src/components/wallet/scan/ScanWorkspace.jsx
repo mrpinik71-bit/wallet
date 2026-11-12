@@ -32,6 +32,7 @@ export default function ScanWorkspace() {
   const resultsRef = useRef([]);
   const liveRef = useRef({ ...EMPTY_LIVE });
   const cancelledRef = useRef(false);
+  const countRef = useRef(0);
 
   // A scan of millions must never trigger a render per phrase: the counters and
   // the list are flushed to the screen a few times a second while scanning.
@@ -71,12 +72,20 @@ export default function ScanWorkspace() {
     setEditing(true);
     setText("");
     setFileName(file.name);
+    countRef.current = 0;
     setCount(0);
     setTotal(0);
 
     // The file is scanned as it is read: phrases beyond the first few thousand
     // are handled one at a time, so even a multi-gigabyte list stays in memory.
-    await start(phrasesFromFile(file, { onCount: setCount }));
+    await start(
+      phrasesFromFile(file, {
+        onCount: (value) => {
+          countRef.current = value;
+          setCount(value);
+        },
+      }),
+    );
   }
 
   function startText() {
@@ -129,6 +138,8 @@ export default function ScanWorkspace() {
     } finally {
       cancelledRef.current = false;
       setScanning(false);
+      // A file's phrase count is only known once it has been read through.
+      setTotal((current) => current || countRef.current);
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
     }
@@ -140,6 +151,9 @@ export default function ScanWorkspace() {
     resultsRef.current = [];
     liveRef.current = { ...EMPTY_LIVE };
     setStats({ ...EMPTY_LIVE });
+    countRef.current = 0;
+    setCount(0);
+    setTotal(0);
     setPage(1);
     setOnlyFunded(false);
     setError("");
@@ -175,6 +189,9 @@ export default function ScanWorkspace() {
           <div>
             <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-muted-foreground/70">Batch scan</p>
             <p className="mt-1.5 font-display text-[22px] leading-none">Results</p>
+            <p className="mt-1 text-[10px] text-muted-foreground/70 num">
+              {count.toLocaleString("en-US")} phrases detected
+            </p>
           </div>
           <button
             type="button"
