@@ -8,10 +8,6 @@ import { fetchPricesFor } from "@/lib/chains/prices";
 import { entriesFromList, parsePhrases, phrasesFromFile, scanAssets, scanPhraseStream } from "@/lib/phrase-scan";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
-// The first few thousand results are kept with their addresses so they stay
-// inspectable; after that only wallets holding funds are stored, which is what
-// keeps a scan of millions of phrases inside browser memory.
-const RAW_KEEP = 4000;
 const PAGE = 100;
 
 const EMPTY_LIVE = { completed: 0, fundedCount: 0, fundedTotal: 0, failed: 0, invalid: 0 };
@@ -119,7 +115,7 @@ export default function ScanWorkspace() {
           // Every detected line is listed, so the results always add up to the
           // phrases that were found — an unreadable entry is shown as such
           // instead of quietly disappearing from the list.
-          if (result.total > 0 || resultsRef.current.length < RAW_KEEP) resultsRef.current.push(result);
+          resultsRef.current.push(result);
           if (result.status !== "done") {
             live.invalid += 1;
             return;
@@ -261,13 +257,6 @@ export default function ScanWorkspace() {
             >
               Show {Math.min(PAGE, rows.length - visible.length)} more · {rows.length - visible.length} left
             </button>
-          ) : null}
-
-          {stats.completed > RAW_KEEP ? (
-            <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
-              Only wallets holding funds are listed after the first {RAW_KEEP.toLocaleString("en-US")} phrases — every
-              phrase in the list was still checked.
-            </p>
           ) : null}
 
           {!scanning && stats.completed > 0 && stats.fundedCount === 0 ? (
