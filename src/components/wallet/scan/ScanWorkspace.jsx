@@ -118,14 +118,13 @@ export default function ScanWorkspace() {
         prices,
         isCancelled: () => cancelledRef.current,
         onResult: (result) => {
-          // Every detected line is listed, so the results always add up to the
-          // phrases that were found — an unreadable entry is shown as such
-          // instead of quietly disappearing from the list.
-          resultsRef.current.push(result);
+          // Only real, valid recovery phrases are listed — an unreadable line is
+          // counted instead of taking a row in the results.
           if (result.status !== "done") {
             live.invalid += 1;
             return;
           }
+          resultsRef.current.push(result);
           if (result.total > 0) {
             live.fundedCount += 1;
             live.fundedTotal += result.total;
