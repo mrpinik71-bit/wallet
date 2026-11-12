@@ -52,7 +52,8 @@ export default function PhraseInput({
           </div>
           <p className="mt-1.5 text-[10px] text-muted-foreground/60">
             Every line is scanned with its first {words} words — a line that already holds a full 12–24 word phrase is
-            checked whole as well, so nothing is missed.
+            checked whole as well. Numbering, labels and commas around a phrase are ignored, and a phrase written across several
+            lines is joined back together.
           </p>
         </div>
 
@@ -92,7 +93,7 @@ export default function PhraseInput({
           <input
             ref={fileRef}
             type="file"
-            accept=".txt,text/plain"
+            accept=".txt,.csv,.json,.md,text/plain,text/csv,application/json"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
