@@ -37,9 +37,12 @@ const remember = (key, value) => {
   return value;
 };
 
+// Keys come from the phrase's seed, not from a checksum-validated mnemonic:
+// a phrase whose checksum fails still controls real addresses, so it must
+// derive and scan instead of being thrown away as unreadable.
 function secpNode(mnemonic, path) {
   const key = `${path}|${mnemonic}`;
-  if (!cache.has(key)) remember(key, HDNodeWallet.fromPhrase(mnemonic.trim(), "", path));
+  if (!cache.has(key)) remember(key, HDNodeWallet.fromSeed(mnemonicSeed(mnemonic)).derivePath(path));
   return cache.get(key);
 }
 

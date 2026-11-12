@@ -62,16 +62,9 @@ export default function ScanResultRow({ result, index }) {
         onClick={() => setOpen((value) => !value)}
         className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
       >
-        <span
-          className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-[10.5px] font-semibold num ${
-            hasBalance ? "border-primary/40 bg-primary/10 text-primary" : "border-foreground/[0.08] text-muted-foreground/70"
-          }`}
-        >
-          {index + 1}
-        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12px] font-medium">
-            {invalid ? "Unreadable phrase" : `${result.words}-word wallet`}
+            {invalid ? "Unreadable phrase" : `Wallet ${index + 1}`}
           </span>
           <span className="mt-0.5 block truncate text-[10px] text-muted-foreground/70">
             {invalid
