@@ -19,7 +19,8 @@ export async function* phrasesFromFile(file, { onCount, words } = {}) {
 
   // Each line of the file is one phrase, using its first `words` words.
   const size = words || 12;
-  for await (const { phrase, line } of phrasesFromLines(readLines(file), size)) {
+  for await (const entry of phrasesFromLines(readLines(file), size)) {
+    const { phrase, line } = entry;
     if (seen.has(phrase)) continue;
     // The de-duplication set is capped: past a few hundred thousand entries a
     // repeat is simply scanned again instead of exhausting browser memory.
@@ -29,7 +30,7 @@ export async function* phrasesFromFile(file, { onCount, words } = {}) {
       reported = count;
       onCount?.(count);
     }
-    yield { phrase, words: size, line };
+    yield { phrase, words: entry.words || size, line };
   }
 
   onCount?.(count);

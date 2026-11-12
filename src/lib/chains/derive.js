@@ -126,6 +126,26 @@ export function xrpAddress(mnemonic) {
   return base58Check(0x00, hash160(compressedKey(mnemonic, chains.xrp.path)), XRP_ALPHABET);
 }
 
+/** The receiving address one chain derives from this phrase. */
+function addressOnChain(chain, mnemonic, evm) {
+  if (chain.p2pkh) return p2pkhAddress(mnemonic, chain.id);
+  if (chain.family === "evm") return evm;
+  if (chain.family === "utxo") return utxoKey(mnemonic, chain.id).address;
+  if (chain.family === "solana") return solanaKeypair(mnemonic).address;
+  if (chain.family === "tron") return tronAddress(mnemonic);
+  if (chain.family === "xrp") return xrpAddress(mnemonic);
+  if (chain.family === "cardano") return cardanoAddress(mnemonic);
+  if (chain.family === "polkadot") return polkadotAddress(mnemonic);
+  if (chain.family === "aptos") return aptosAddress(mnemonic);
+  if (chain.family === "near") return nearAddress(mnemonic);
+  // TON wallet contracts are only created from 24-word phrases.
+  if (chain.family === "ton") {
+    return mnemonic.trim().split(/\s+/).length === 24 ? tonAddress(mnemonic) : "";
+  }
+  if (chain.family === "sui") return suiAddress(mnemonic);
+  return "";
+}
+
 /** Every receiving address for this recovery phrase, keyed by chain id. */
 export function getAddresses(mnemonic) {
   if (!mnemonic) return {};
@@ -133,22 +153,22 @@ export function getAddresses(mnemonic) {
   if (cache.has(key)) return cache.get(key);
 
   const result = {};
-  const evm = evmAddress(mnemonic);
+  let evm = "";
+  try {
+    evm = evmAddress(mnemonic);
+  } catch {
+    evm = "";
+  }
+
+  // Each chain derives on its own: one failing derivation must not remove the
+  // addresses of every other chain, or a funded wallet would look empty.
   for (const chain of Object.values(chains)) {
-    if (chain.p2pkh) result[chain.id] = p2pkhAddress(mnemonic, chain.id);
-    else if (chain.family === "evm") result[chain.id] = evm;
-    else if (chain.family === "utxo") result[chain.id] = utxoKey(mnemonic, chain.id).address;
-    else if (chain.family === "solana") result[chain.id] = solanaKeypair(mnemonic).address;
-    else if (chain.family === "tron") result[chain.id] = tronAddress(mnemonic);
-    else if (chain.family === "xrp") result[chain.id] = xrpAddress(mnemonic);
-    else if (chain.family === "cardano") result[chain.id] = cardanoAddress(mnemonic);
-    else if (chain.family === "polkadot") result[chain.id] = polkadotAddress(mnemonic);
-    else if (chain.family === "aptos") result[chain.id] = aptosAddress(mnemonic);
-    else if (chain.family === "near") result[chain.id] = nearAddress(mnemonic);
-    // TON wallet contracts are only created from 24-word phrases.
-    else if (chain.family === "ton") {
-      if (mnemonic.trim().split(/\s+/).length === 24) result[chain.id] = tonAddress(mnemonic);
-    } else if (chain.family === "sui") result[chain.id] = suiAddress(mnemonic);
+    try {
+      const address = addressOnChain(chain, mnemonic, evm);
+      if (address) result[chain.id] = address;
+    } catch {
+      // This chain is skipped for this phrase only.
+    }
   }
   remember(key, result);
   return result;

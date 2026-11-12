@@ -51,7 +51,8 @@ export default function PhraseInput({
             ))}
           </div>
           <p className="mt-1.5 text-[10px] text-muted-foreground/60">
-            Every line is scanned with its first {words} words. Pick the length before uploading.
+            Every line is scanned with its first {words} words — a line that already holds a full 12–24 word phrase is
+            checked whole as well, so nothing is missed.
           </p>
         </div>
 

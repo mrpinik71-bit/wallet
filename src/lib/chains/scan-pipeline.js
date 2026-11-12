@@ -69,9 +69,11 @@ function limit(host, run) {
 
 /** Derives every address this phrase controls, on this device. */
 function prepare(entry) {
-  const size = entry.words || entry.phrase.trim().split(/\s+/).length;
+  // Any standard length is accepted — a phrase is never dropped just because it
+  // differs from the selector, so every real phrase gets derived and checked.
+  const size = entry.phrase.trim().split(/\s+/).filter(Boolean).length;
   if (!WORD_COUNTS.includes(size)) {
-    return { invalid: true, error: "A recovery phrase has 12 or 24 words." };
+    return { invalid: true, error: "A recovery phrase has 12, 15, 18, 21 or 24 words." };
   }
 
   let addresses = {};
@@ -85,6 +87,12 @@ function prepare(entry) {
     } catch {
       return { invalid: true, error: "Addresses could not be derived from this phrase." };
     }
+  }
+
+  // No address at all means nothing could be checked — say so instead of
+  // reporting an empty wallet as if it had been scanned.
+  if (!Object.keys(addresses).length) {
+    return { invalid: true, error: "Addresses could not be derived from this phrase." };
   }
 
   let cardano = [];
@@ -214,14 +222,16 @@ async function readBatch(batch) {
     });
   }
 
-  // A busy public node often answers the second time, so each group is retried once.
+  // A busy public node often answers on a later try, so each group is retried
+  // twice more before a wallet is marked as only partially read.
   const settled = await Promise.all(
     jobs.map(async (job) => {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           return { job, values: await withTimeout(job.run(), JOB_TIMEOUT) };
         } catch (cause) {
-          if (attempt === 1) return { job, error: cause };
+          if (attempt === 2) return { job, error: cause };
+          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
         }
       }
     }),
