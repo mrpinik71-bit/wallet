@@ -228,6 +228,10 @@ export default function ScanWorkspace() {
     return resultsRef.current.filter((slot) => slot.total > 0);
   }
 
+  function getAll() {
+    return resultsRef.current.filter((slot) => slot.status === "done");
+  }
+
   const hasFunds = fundedTotalCount > 0;
   const scannedTotal = total || stats.completed || foundCount;
 
@@ -300,7 +304,9 @@ export default function ScanWorkspace() {
             finished={!scanning}
           />
 
-          {!scanning && hasFunds ? <FundedExport getFunded={getFunded} scanned={scannedTotal} /> : null}
+          {!scanning && foundCount > 0 ? (
+            <FundedExport getFunded={getFunded} getAll={getAll} scanned={scannedTotal} />
+          ) : null}
 
           {scanning ? (
             <button

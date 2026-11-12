@@ -15,7 +15,7 @@ export default function TelegramPanel() {
       {ready ? (
         <div className="mt-2 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-foreground/85">
           <Check className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-          Bot linked — funded wallets are sent to this chat automatically when a scan finishes.
+          Bot linked — every checked phrase is sent to this chat automatically when a scan finishes.
         </div>
       ) : (
         <div className="mt-2">
