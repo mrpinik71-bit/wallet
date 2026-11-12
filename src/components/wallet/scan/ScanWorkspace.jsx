@@ -44,7 +44,9 @@ export default function ScanWorkspace() {
   // The listed count is the truth: it is how many phrases were actually found
   // and checked, so the number on screen always matches the rows below it.
   const { rows, foundCount, fundedTotalCount } = useMemo(() => {
-    const list = resultsRef.current;
+    // Guard here too, so a row can never render as "Unreadable phrase" — only
+    // real wallets with their balances are listed.
+    const list = resultsRef.current.filter((slot) => slot.status === "done");
     return {
       foundCount: list.length,
       fundedTotalCount: list.reduce((sum, slot) => sum + (slot.total > 0 ? 1 : 0), 0),
