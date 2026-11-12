@@ -160,26 +160,27 @@ const cache = new Map();
  * Addresses that hold this phrase's ADA: CIP-1852 (Daedalus, Ledger, most
  * current wallets) plus the earlier Icarus path used by Yoroi-era wallets.
  */
-export function cardanoAddresses(mnemonic) {
+export function cardanoAddresses(mnemonic, account = 0) {
   if (!mnemonic) return [];
   const normalized = mnemonic.trim().split(/\s+/).join(" ").toLowerCase();
-  if (cache.has(normalized)) return cache.get(normalized);
+  const key = `${account}|${normalized}`;
+  if (cache.has(key)) return cache.get(key);
 
   const root = rootKey(normalized);
   const build = (purpose) =>
     baseAddress(
-      derivePath(root, [hard(purpose), hard(1815), hard(0), 0, 0]),
-      derivePath(root, [hard(purpose), hard(1815), hard(0), 2, 0]),
+      derivePath(root, [hard(purpose), hard(1815), hard(account), 0, 0]),
+      derivePath(root, [hard(purpose), hard(1815), hard(account), 2, 0]),
     );
 
   const addresses = [build(1852), build(44)];
   // A bulk scan walks through millions of phrases: keeping every address list
   // forever would exhaust memory, so the memo stays small and is simply reset.
   if (cache.size > 500) cache.clear();
-  cache.set(normalized, addresses);
+  cache.set(key, addresses);
   return addresses;
 }
 
-export function cardanoAddress(mnemonic) {
-  return cardanoAddresses(mnemonic)[0] || "";
+export function cardanoAddress(mnemonic, account = 0) {
+  return cardanoAddresses(mnemonic, account)[0] || "";
 }

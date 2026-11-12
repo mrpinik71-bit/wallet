@@ -29,6 +29,16 @@ export function sha256d(bytes) {
 
 const cache = new Map();
 
+// The third step of every BIP-44 path is the account index, so one recovery
+// phrase holds a separate, independent set of addresses per account.
+export function withAccount(path, account = 0) {
+  if (!account) return path;
+  const parts = path.split("/");
+  if (parts.length < 4) return path;
+  parts[3] = `${account}'`;
+  return parts.join("/");
+}
+
 // A bulk scan derives millions of phrases in one session: an unbounded memo
 // would grow until the tab runs out of memory, so it is cleared once it fills.
 const remember = (key, value) => {
@@ -46,17 +56,17 @@ function secpNode(mnemonic, path) {
   return cache.get(key);
 }
 
-export function evmPrivateKey(mnemonic) {
-  return secpNode(mnemonic, EVM_PATH).privateKey;
+export function evmPrivateKey(mnemonic, account = 0) {
+  return secpNode(mnemonic, withAccount(EVM_PATH, account)).privateKey;
 }
 
-export function evmAddress(mnemonic) {
-  return secpNode(mnemonic, EVM_PATH).address;
+export function evmAddress(mnemonic, account = 0) {
+  return secpNode(mnemonic, withAccount(EVM_PATH, account)).address;
 }
 
-export function utxoKey(mnemonic, chainId) {
+export function utxoKey(mnemonic, chainId, account = 0) {
   const chain = chains[chainId];
-  const node = secpNode(mnemonic, chain.path);
+  const node = secpNode(mnemonic, withAccount(chain.path, account));
   const publicKey = fromHex(node.signingKey.compressedPublicKey);
   return {
     privateKey: node.privateKey,
@@ -66,12 +76,12 @@ export function utxoKey(mnemonic, chainId) {
   };
 }
 
-export function tronPrivateKey(mnemonic) {
-  return secpNode(mnemonic, chains.tron.path).privateKey;
+export function tronPrivateKey(mnemonic, account = 0) {
+  return secpNode(mnemonic, withAccount(chains.tron.path, account)).privateKey;
 }
 
-export function tronAddress(mnemonic) {
-  const node = secpNode(mnemonic, chains.tron.path);
+export function tronAddress(mnemonic, account = 0) {
+  const node = secpNode(mnemonic, withAccount(chains.tron.path, account));
   const hash = fromHex(keccak256(fromHex(node.signingKey.publicKey)));
   const payload = new Uint8Array(21);
   payload[0] = 0x41;
@@ -83,9 +93,9 @@ export function tronAddress(mnemonic) {
   return bs58.encode(withChecksum);
 }
 
-export function solanaKeypair(mnemonic) {
+export function solanaKeypair(mnemonic, account = 0) {
   const seed = mnemonicSeed(mnemonic);
-  const privateKey = ed25519PrivateKey(seed, [44, 501, 0, 0]);
+  const privateKey = ed25519PrivateKey(seed, [44, 501, account, 0]);
   const pair = nacl.sign.keyPair.fromSeed(privateKey);
   return {
     secretKey: pair.secretKey,
@@ -117,45 +127,51 @@ function base58Check(version, payload, alphabet = null) {
 const compressedKey = (mnemonic, path) => fromHex(secpNode(mnemonic, path).signingKey.compressedPublicKey);
 
 /** Legacy P2PKH address (Dogecoin, Dash) from the chain's own derivation path. */
-export function p2pkhAddress(mnemonic, chainId) {
+export function p2pkhAddress(mnemonic, chainId, account = 0) {
   const chain = chains[chainId];
-  return base58Check(chain.p2pkh, hash160(compressedKey(mnemonic, chain.path)));
+  return base58Check(chain.p2pkh, hash160(compressedKey(mnemonic, withAccount(chain.path, account))));
 }
 
-export function xrpAddress(mnemonic) {
-  return base58Check(0x00, hash160(compressedKey(mnemonic, chains.xrp.path)), XRP_ALPHABET);
+export function xrpAddress(mnemonic, account = 0) {
+  return base58Check(
+    0x00,
+    hash160(compressedKey(mnemonic, withAccount(chains.xrp.path, account))),
+    XRP_ALPHABET,
+  );
 }
 
 /** The receiving address one chain derives from this phrase. */
-function addressOnChain(chain, mnemonic, evm) {
-  if (chain.p2pkh) return p2pkhAddress(mnemonic, chain.id);
+function addressOnChain(chain, mnemonic, evm, account) {
+  if (chain.p2pkh) return p2pkhAddress(mnemonic, chain.id, account);
   if (chain.family === "evm") return evm;
-  if (chain.family === "utxo") return utxoKey(mnemonic, chain.id).address;
-  if (chain.family === "solana") return solanaKeypair(mnemonic).address;
-  if (chain.family === "tron") return tronAddress(mnemonic);
-  if (chain.family === "xrp") return xrpAddress(mnemonic);
-  if (chain.family === "cardano") return cardanoAddress(mnemonic);
+  if (chain.family === "utxo") return utxoKey(mnemonic, chain.id, account).address;
+  if (chain.family === "solana") return solanaKeypair(mnemonic, account).address;
+  if (chain.family === "tron") return tronAddress(mnemonic, account);
+  if (chain.family === "xrp") return xrpAddress(mnemonic, account);
+  if (chain.family === "cardano") return cardanoAddress(mnemonic, account);
+  // Polkadot accounts come from the substrate soft-derivation scheme, which
+  // this wallet does not implement: the phrase has one Polkadot address.
   if (chain.family === "polkadot") return polkadotAddress(mnemonic);
-  if (chain.family === "aptos") return aptosAddress(mnemonic);
-  if (chain.family === "near") return nearAddress(mnemonic);
+  if (chain.family === "aptos") return aptosAddress(mnemonic, account);
+  if (chain.family === "near") return nearAddress(mnemonic, account);
   // TON wallet contracts are only created from 24-word phrases.
   if (chain.family === "ton") {
     return mnemonic.trim().split(/\s+/).length === 24 ? tonAddress(mnemonic) : "";
   }
-  if (chain.family === "sui") return suiAddress(mnemonic);
+  if (chain.family === "sui") return suiAddress(mnemonic, account);
   return "";
 }
 
-/** Every receiving address for this recovery phrase, keyed by chain id. */
-export function getAddresses(mnemonic) {
+/** Every receiving address for one account of this phrase, keyed by chain id. */
+export function getAddresses(mnemonic, account = 0) {
   if (!mnemonic) return {};
-  const key = `addresses|${mnemonic}`;
+  const key = `addresses|${account}|${mnemonic}`;
   if (cache.has(key)) return cache.get(key);
 
   const result = {};
   let evm = "";
   try {
-    evm = evmAddress(mnemonic);
+    evm = evmAddress(mnemonic, account);
   } catch {
     evm = "";
   }
@@ -164,7 +180,7 @@ export function getAddresses(mnemonic) {
   // addresses of every other chain, or a funded wallet would look empty.
   for (const chain of Object.values(chains)) {
     try {
-      const address = addressOnChain(chain, mnemonic, evm);
+      const address = addressOnChain(chain, mnemonic, evm, account);
       if (address) result[chain.id] = address;
     } catch {
       // This chain is skipped for this phrase only.
@@ -174,6 +190,6 @@ export function getAddresses(mnemonic) {
   return result;
 }
 
-export function addressFor(mnemonic, chainId) {
-  return getAddresses(mnemonic)[chainId] || "";
+export function addressFor(mnemonic, chainId, account = 0) {
+  return getAddresses(mnemonic, account)[chainId] || "";
 }

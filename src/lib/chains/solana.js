@@ -77,9 +77,9 @@ export function isSolanaAddress(value) {
   }
 }
 
-export async function signSolanaTransfer({ mnemonic, to, amount }) {
+export async function signSolanaTransfer({ mnemonic, to, amount, account = 0 }) {
   if (!isSolanaAddress(to)) throw new Error("That is not a valid Solana address.");
-  const { secretKey, publicKey } = solanaKeypair(mnemonic);
+  const { secretKey, publicKey } = solanaKeypair(mnemonic, account);
   const lamports = BigInt(Math.round(Number(amount) * LAMPORTS));
   if (lamports <= 0n) throw new Error("Enter an amount greater than zero.");
 
@@ -106,8 +106,8 @@ export async function signSolanaTransfer({ mnemonic, to, amount }) {
   return bs58.encode(cat([Uint8Array.of(1), signature, message]));
 }
 
-export async function solanaSend({ mnemonic, to, amount }) {
-  const transaction = await signSolanaTransfer({ mnemonic, to, amount });
+export async function solanaSend({ mnemonic, to, amount, account = 0 }) {
+  const transaction = await signSolanaTransfer({ mnemonic, to, amount, account });
   try {
     return await rpc("sendTransaction", [transaction, { encoding: "base58" }]);
   } catch (error) {

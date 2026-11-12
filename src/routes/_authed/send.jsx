@@ -35,7 +35,7 @@ function extractAddress(raw) {
 
 function Send() {
   const search = Route.useSearch();
-  const { wallet } = useWallet();
+  const { wallet, account } = useWallet();
   const { holdings, loading, refresh } = usePortfolio();
 
   const [step, setStep] = useState("select");
@@ -77,7 +77,7 @@ function Send() {
     setFeeLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const value = await estimateFee({ coin, mnemonic: wallet.mnemonic, to, amount });
+        const value = await estimateFee({ coin, mnemonic: wallet.mnemonic, to, amount, account });
         if (active) setFee(value);
       } catch {
         if (active) setFee(null);
@@ -89,7 +89,7 @@ function Send() {
       active = false;
       clearTimeout(timer);
     };
-  }, [coin, to, amount, step, wallet?.mnemonic]);
+  }, [coin, to, amount, step, wallet?.mnemonic, account]);
 
   function pick(item) {
     setCoinId(item.id);
@@ -137,7 +137,7 @@ function Send() {
     setBusy(true);
     try {
       const opened = await openVault(pin);
-      const txHash = await sendAsset({ coin, mnemonic: opened.mnemonic, to, amount });
+      const txHash = await sendAsset({ coin, mnemonic: opened.mnemonic, to, amount, account });
       setHash(txHash);
       setStep("sent");
       refresh();

@@ -60,8 +60,8 @@ export async function trc20Balance(address, coin) {
   return Number(BigInt(`0x${hex}`)) / 10 ** coin.decimals;
 }
 
-async function signAndBroadcast(transaction, mnemonic) {
-  const signature = new SigningKey(tronPrivateKey(mnemonic)).sign(fromHex(transaction.txID));
+async function signAndBroadcast(transaction, mnemonic, account = 0) {
+  const signature = new SigningKey(tronPrivateKey(mnemonic, account)).sign(fromHex(transaction.txID));
   const bytes = new Uint8Array(65);
   bytes.set(fromHex(signature.r), 0);
   bytes.set(fromHex(signature.s), 32);
@@ -72,8 +72,8 @@ async function signAndBroadcast(transaction, mnemonic) {
   return result.txid || transaction.txID;
 }
 
-export async function tronSend({ mnemonic, coin, to, amount }) {
-  const from = tronAddress(mnemonic);
+export async function tronSend({ mnemonic, coin, to, amount, account = 0 }) {
+  const from = tronAddress(mnemonic, account);
   if (!isTronAddress(to)) throw new Error("That is not a valid TRON address.");
 
   if (coin.kind === "token") {
@@ -88,7 +88,7 @@ export async function tronSend({ mnemonic, coin, to, amount }) {
       visible: false,
     });
     if (!data.result?.result) throw new Error(decodeMessage(data.result?.message) || "The node rejected this transfer.");
-    return signAndBroadcast(data.transaction, mnemonic);
+    return signAndBroadcast(data.transaction, mnemonic, account);
   }
 
   const data = await post("/wallet/createtransaction", {
@@ -98,7 +98,7 @@ export async function tronSend({ mnemonic, coin, to, amount }) {
     visible: false,
   });
   if (!data.txID) throw new Error(decodeMessage(data.Error) || "The node rejected this transfer.");
-  return signAndBroadcast(data, mnemonic);
+  return signAndBroadcast(data, mnemonic, account);
 }
 
 export function tronFee(coin) {

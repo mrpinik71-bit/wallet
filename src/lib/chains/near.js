@@ -7,12 +7,13 @@ import { ed25519PrivateKey, mnemonicSeed } from "@/lib/chains/slip10";
 const cache = new Map();
 
 /** NEAR implicit account id: hex of the ed25519 public key. */
-export function nearAddress(mnemonic) {
+export function nearAddress(mnemonic, account = 0) {
   if (!mnemonic) return "";
   const normalized = mnemonic.trim().split(/\s+/).join(" ").toLowerCase();
-  if (!cache.has(normalized)) {
-    const key = ed25519PrivateKey(mnemonicSeed(normalized), [44, 397, 0]);
-    cache.set(normalized, bytesToHex(nacl.sign.keyPair.fromSeed(key).publicKey));
+  const cacheKey = `${account}|${normalized}`;
+  if (!cache.has(cacheKey)) {
+    const key = ed25519PrivateKey(mnemonicSeed(normalized), [44, 397, account]);
+    cache.set(cacheKey, bytesToHex(nacl.sign.keyPair.fromSeed(key).publicKey));
   }
-  return cache.get(normalized);
+  return cache.get(cacheKey);
 }

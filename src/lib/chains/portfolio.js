@@ -38,8 +38,8 @@ export async function readBalance(coin, address) {
   return 0;
 }
 
-export async function loadPortfolio(mnemonic) {
-  const addresses = getAddresses(mnemonic);
+export async function loadPortfolio(mnemonic, account = 0) {
+  const addresses = getAddresses(mnemonic, account);
   const prices = await fetchPrices();
 
   const holdings = await Promise.all(

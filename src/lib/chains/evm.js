@@ -46,9 +46,9 @@ export async function evmFee({ chainId, coin, from, to, amount }) {
   return Number(formatEther(gas * price));
 }
 
-export async function evmSend({ chainId, coin, mnemonic, to, amount }) {
+export async function evmSend({ chainId, coin, mnemonic, to, amount, account = 0 }) {
   if (!isAddress(to)) throw new Error(`That is not a valid ${chains[chainId].name} address.`);
-  const wallet = new Wallet(evmPrivateKey(mnemonic), provider(chainId));
+  const wallet = new Wallet(evmPrivateKey(mnemonic, account), provider(chainId));
   const target = getAddress(to);
 
   if (coin.kind === "token") {

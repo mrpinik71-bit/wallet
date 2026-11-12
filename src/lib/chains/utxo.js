@@ -110,9 +110,9 @@ export async function utxoFee(chainId, address, amount, feeRate = null) {
   return { fee: Number(fee) / 1e8, feeRate: rate };
 }
 
-export async function utxoSign({ chainId, mnemonic, to, amount, feeRate: rate }) {
+export async function utxoSign({ chainId, mnemonic, to, amount, feeRate: rate, account = 0 }) {
   if (!isUtxoAddress(chainId, to)) throw new Error(`That is not a valid ${chains[chainId].name} address.`);
-  const key = utxoKey(mnemonic, chainId);
+  const key = utxoKey(mnemonic, chainId, account);
   const target = BigInt(Math.round(Number(amount) * 1e8));
   if (target <= 0n) throw new Error("Enter an amount greater than zero.");
 
@@ -170,8 +170,8 @@ export async function utxoBroadcast(chainId, rawTransaction) {
   return (await response.text()).trim();
 }
 
-export async function utxoSend({ chainId, mnemonic, to, amount }) {
-  const hex = await utxoSign({ chainId, mnemonic, to, amount });
+export async function utxoSend({ chainId, mnemonic, to, amount, account = 0 }) {
+  const hex = await utxoSign({ chainId, mnemonic, to, amount, account });
   return utxoBroadcast(chainId, hex);
 }
 

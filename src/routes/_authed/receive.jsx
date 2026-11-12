@@ -23,12 +23,15 @@ export const Route = createFileRoute("/_authed/receive")({
 
 function Receive() {
   const search = Route.useSearch();
-  const { wallet } = useWallet();
+  const { wallet, account } = useWallet();
   const [coinId, setCoinId] = useState(search.coin || "bitcoin");
   const [query, setQuery] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const addresses = useMemo(() => getAddresses(wallet?.mnemonic || ""), [wallet?.mnemonic]);
+  const addresses = useMemo(
+    () => getAddresses(wallet?.mnemonic || "", account),
+    [wallet?.mnemonic, account],
+  );
   const coin = assets.find((item) => item.id === coinId) || assets[0];
   const address = addresses[coin.chain] || "";
 

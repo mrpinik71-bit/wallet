@@ -5,7 +5,7 @@ import { loadPortfolio } from "@/lib/chains/portfolio";
 const empty = { holdings: [], addresses: {}, total: 0, changeValue: 0, changePct: 0 };
 
 export default function usePortfolio() {
-  const { wallet } = useWallet();
+  const { wallet, account } = useWallet();
   const mnemonic = wallet?.mnemonic;
   const [state, setState] = useState({ ...empty, loading: true, error: null });
   const requestId = useRef(0);
@@ -16,14 +16,14 @@ export default function usePortfolio() {
     requestId.current = id;
     setState((prev) => ({ ...prev, loading: true }));
     try {
-      const data = await loadPortfolio(mnemonic);
+      const data = await loadPortfolio(mnemonic, account);
       if (requestId.current === id) setState({ ...data, loading: false, error: null });
     } catch (cause) {
       if (requestId.current === id) {
         setState((prev) => ({ ...prev, loading: false, error: cause?.message || "Balances are unavailable right now." }));
       }
     }
-  }, [mnemonic]);
+  }, [mnemonic, account]);
 
   useEffect(() => {
     refresh();

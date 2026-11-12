@@ -19,8 +19,8 @@ export function validateAddress(coin, value) {
 }
 
 /** Fee in the chain's native coin. */
-export async function estimateFee({ coin, mnemonic, to, amount }) {
-  const from = getAddresses(mnemonic)[coin.chain];
+export async function estimateFee({ coin, mnemonic, to, amount, account = 0 }) {
+  const from = getAddresses(mnemonic, account)[coin.chain];
   if (coin.family === "evm") return evmFee({ chainId: coin.chain, coin, from, to, amount });
   if (coin.family === "utxo") {
     const { fee } = await utxoFee(coin.chain, from, amount);
@@ -31,16 +31,20 @@ export async function estimateFee({ coin, mnemonic, to, amount }) {
   return 0;
 }
 
-export async function sendAsset({ coin, mnemonic, to, amount }) {
+export async function sendAsset({ coin, mnemonic, to, amount, account = 0 }) {
   const address = String(to || "").trim();
   const invalid = validateAddress(coin, address);
   if (invalid) throw new Error(invalid);
   const value = Number(amount);
   if (!Number.isFinite(value) || value <= 0) throw new Error("Enter an amount greater than zero.");
 
-  if (coin.family === "evm") return evmSend({ chainId: coin.chain, coin, mnemonic, to: address, amount: value });
-  if (coin.family === "utxo") return utxoSend({ chainId: coin.chain, mnemonic, to: address, amount: value });
-  if (coin.family === "solana") return solanaSend({ mnemonic, to: address, amount: value });
-  if (coin.chain === "tron") return tronSend({ coin, mnemonic, to: address, amount: value });
+  if (coin.family === "evm") {
+    return evmSend({ chainId: coin.chain, coin, mnemonic, to: address, amount: value, account });
+  }
+  if (coin.family === "utxo") {
+    return utxoSend({ chainId: coin.chain, mnemonic, to: address, amount: value, account });
+  }
+  if (coin.family === "solana") return solanaSend({ mnemonic, to: address, amount: value, account });
+  if (coin.chain === "tron") return tronSend({ coin, mnemonic, to: address, amount: value, account });
   throw new Error("This asset cannot be sent yet.");
 }

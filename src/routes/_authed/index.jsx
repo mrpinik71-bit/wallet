@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import HomeHeader from "@/components/wallet/home/HomeHeader";
+import AccountSwitcher from "@/components/wallet/home/AccountSwitcher";
 import BalanceBlock from "@/components/wallet/home/BalanceBlock";
 import ActionsRow from "@/components/wallet/home/ActionsRow";
 import MarketPulse from "@/components/wallet/home/MarketPulse";
@@ -35,6 +36,7 @@ function Overview() {
 
       <div className="relative">
         <HomeHeader address={addresses.tron} />
+        <AccountSwitcher />
 
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start lg:gap-6">
           <div className="lg:col-start-1 lg:row-start-1">
