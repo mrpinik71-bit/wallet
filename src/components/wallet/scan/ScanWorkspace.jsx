@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Download, ShieldCheck } from "lucide-react";
+import { downloadFundedPhrases } from "@/lib/download-funded";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
@@ -118,6 +119,17 @@ export default function ScanWorkspace() {
             onToggleFilter={() => setOnlyFunded((value) => !value)}
             finished={!scanning}
           />
+
+          {!scanning && funded.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => downloadFundedPhrases(funded)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-[11.5px] font-semibold text-primary-foreground shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] active:opacity-90"
+            >
+              <Download className="h-3.5 w-3.5" strokeWidth={2.1} />
+              Download {funded.length} funded phrase{funded.length === 1 ? "" : "s"}
+            </button>
+          ) : null}
 
           {scanning ? (
             <button
