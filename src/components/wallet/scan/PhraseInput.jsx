@@ -70,7 +70,7 @@ export default function PhraseInput({ value, fileName, onChange, onFile, onScan,
           {fileName ? (
             <span className="text-primary/85">{fileName} — scan starts automatically</span>
           ) : (
-            "Uploading a file (.txt, up to 500 MB) starts the balance scan right away."
+            "Uploading a file (.txt, up to 2 GB) starts the balance scan right away."
           )}
         </p>
 

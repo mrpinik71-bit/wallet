@@ -7,6 +7,7 @@ import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 import WORDLIST from "@/lib/bip39-words.json";
 import { validateMnemonic } from "@/lib/bip39";
+import { readLines } from "@/lib/scan-file";
 
 export const scanAssets = SCAN_ASSETS;
 export const scanChains = SCAN_CHAINS;
@@ -143,31 +144,87 @@ async function scanOne(entry, prices) {
   };
 }
 
-/** Scans every phrase with a worker pool; reports progress as it goes. */
-export async function scanPhrases(entries, { prices, onProgress, isCancelled, concurrency = 16, addressLimit = 4000 } = {}) {
-  const results = new Array(entries.length).fill(null);
-  let nextIndex = 0;
+const DEDUPE_LIMIT = 300000;
+
+/** Streams the phrases out of a text file as its lines arrive, so a list of
+ * millions never has to sit in memory. */
+export async function* phrasesFromLines(lines) {
+  let pending = [];
+
+  const flush = () => {
+    const out = [];
+    if (PHRASE_SIZES.has(pending.length)) out.push(pending.join(" "));
+    else if (pending.length > 24) {
+      for (let i = 0; i + 12 <= pending.length; i += 12) out.push(pending.slice(i, i + 12).join(" "));
+    } else if (pending.length >= 12) out.push(pending.slice(0, 12).join(" "));
+    pending = [];
+    return out;
+  };
+
+  for await (const line of lines) {
+    const tokens = tokenize(line);
+    if (tokens.length === 0) {
+      for (const phrase of flush()) yield phrase;
+      continue;
+    }
+    // A line that carries a whole phrase is taken on its own, even when it also
+    // carries an index, a label or an address.
+    const direct = candidatesFromLine(line);
+    if (direct.length) {
+      pending = [];
+      for (const phrase of direct) yield phrase;
+      continue;
+    }
+    // Otherwise it may be part of a phrase wrapped over several lines.
+    pending.push(...tokens);
+    if (pending.length >= 24) for (const phrase of flush()) yield phrase;
+  }
+
+  for (const phrase of flush()) yield phrase;
+}
+
+/** Reads a .txt file and streams its phrases, de-duplicated. */
+export async function* phrasesFromFile(file, { onCount } = {}) {
+  const seen = new Set();
+  let count = 0;
+  let reported = 0;
+
+  for await (const phrase of phrasesFromLines(readLines(file))) {
+    const key = phrase.toLowerCase();
+    if (seen.has(key)) continue;
+    // The de-duplication set is capped: past a few hundred thousand entries a
+    // repeat is simply scanned again instead of exhausting browser memory.
+    if (seen.size < DEDUPE_LIMIT) seen.add(key);
+    count += 1;
+    if (count - reported >= 5000) {
+      reported = count;
+      onCount?.(count);
+    }
+    yield { phrase, words: phrase.split(" ").length };
+  }
+
+  onCount?.(count);
+}
+
+/** Scans phrases as they stream in with a worker pool; reports each result. */
+export async function scanPhraseStream(source, { prices, onResult, onProgress, isCancelled, concurrency = 32 } = {}) {
   let completed = 0;
-  let emptyCount = 0;
 
   async function worker() {
-    while (nextIndex < entries.length) {
+    for await (const entry of source) {
       if (isCancelled?.()) return;
-      const index = nextIndex;
-      nextIndex += 1;
-      const result = await scanOne(entries[index], prices);
-      // Long runs drop the derived addresses of empty wallets: on a list of a
-      // million phrases holding every address set would exhaust memory.
-      if (result.status === "done" && !(result.total > 0)) {
-        emptyCount += 1;
-        if (emptyCount > addressLimit) result.addresses = {};
-      }
-      results[index] = result;
+      const result = await scanOne(entry, prices);
       completed += 1;
-      onProgress?.({ completed, index, result });
+      onResult?.(result);
+      onProgress?.({ completed, result });
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, entries.length) }, () => worker()));
-  return results.filter(Boolean);
+  // Public nodes rate-limit bursts, so the pool stays at a fixed size.
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+}
+
+/** Streams an in-memory list of entries (pasted text) through the same pool. */
+export async function* entriesFromList(entries) {
+  for (const entry of entries) yield entry;
 }
