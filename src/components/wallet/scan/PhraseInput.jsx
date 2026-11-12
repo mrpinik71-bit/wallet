@@ -85,9 +85,6 @@ export default function PhraseInput({
               event.target.value = "";
             }}
           />
-          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/60 num">
-            {count} {count === 1 ? "phrase" : "phrases"}
-          </p>
         </div>
 
         <p className="mt-2 truncate text-[10px] text-muted-foreground/65">
