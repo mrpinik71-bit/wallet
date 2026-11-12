@@ -12,7 +12,7 @@ import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
 import { cardanoBalancesMany, polkadotBalancesMany, solanaBalancesMany, suiBalancesMany } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 20; // wallets per batch round
-const INFLIGHT = 6; // batch rounds kept in flight
+const INFLIGHT = 11; // batch rounds kept in flight (11 parallel scanners)
 const PER_HOST = 12; // simultaneous requests to one public endpoint
 const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
 const WORD_COUNTS = [12, 15, 18, 21, 24];
