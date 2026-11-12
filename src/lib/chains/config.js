@@ -405,6 +405,9 @@ export const assets = [
   native("tron", { coingecko: "tron", logo: cdn("trx"), name: "TRON", decimals: 6 }),
   native("polygon", { coingecko: "polygon-ecosystem-token", logo: cg(4713, "polygon.png"), name: "Polygon" }),
   native("avalanche", { coingecko: "avalanche-2", logo: cg(12559, "avax.png"), name: "Avalanche" }),
+  native("zksync", { coingecko: "ethereum", logo: cdn("eth"), name: "zkSync Era" }),
+  native("linea", { coingecko: "ethereum", logo: cdn("eth"), name: "Linea" }),
+  native("scroll", { coingecko: "ethereum", logo: cdn("eth"), name: "Scroll" }),
   native("litecoin", { coingecko: "litecoin", logo: cdn("ltc"), name: "Litecoin", decimals: 8 }),
 
   token("ethereum", "usdt-eth", "USDT", "Tether USD", "0xdAC17F958D2ee523a2206206994597C13D831ec7", 6, "tether", "#26A17B", cdn("usdt")),
