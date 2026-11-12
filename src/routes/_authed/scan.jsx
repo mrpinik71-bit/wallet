@@ -19,6 +19,7 @@ export const Route = createFileRoute("/_authed/scan")({
 
 function ScanPage() {
   const [text, setText] = useState("");
+  const [fileName, setFileName] = useState("");
   const [editing, setEditing] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
@@ -37,23 +38,26 @@ function ScanPage() {
   async function readFile(file) {
     const content = await file.text();
     setText(content);
+    setFileName(file.name);
+    const parsed = parsePhrases(content);
+    if (parsed.length > 0) await start(parsed);
   }
 
-  async function start() {
-    if (!entries.length || scanning) return;
+  async function start(entriesToScan = entries) {
+    if (!entriesToScan.length || scanning) return;
     cancelledRef.current = false;
     setEditing(false);
     setError("");
     setSlots([]);
     setScanning(true);
-    setProgress({ completed: 0, total: entries.length });
+    setProgress({ completed: 0, total: entriesToScan.length });
     try {
       const prices = await fetchPrices();
-      await scanPhrases(entries, {
+      await scanPhrases(entriesToScan, {
         prices,
         isCancelled: () => cancelledRef.current,
         onProgress: ({ completed, index, result }) => {
-          setProgress({ completed, total: entries.length });
+          setProgress({ completed, total: entriesToScan.length });
           setSlots((previous) => {
             const next = [...previous];
             next[index] = result;
@@ -89,9 +93,13 @@ function ScanPage() {
         {editing ? (
           <PhraseInput
             value={text}
-            onChange={setText}
+            fileName={fileName}
+            onChange={(value) => {
+              setText(value);
+              setFileName("");
+            }}
             onFile={readFile}
-            onScan={start}
+            onScan={() => start()}
             onCancel={() => {
               cancelledRef.current = true;
               setScanning(false);

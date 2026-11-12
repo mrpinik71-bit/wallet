@@ -150,7 +150,7 @@ async function scanOne(entry, prices) {
 }
 
 /** Scans every phrase with a small worker pool; reports progress as it goes. */
-export async function scanPhrases(entries, { prices, onProgress, isCancelled, concurrency = 2 } = {}) {
+export async function scanPhrases(entries, { prices, onProgress, isCancelled, concurrency = 4 } = {}) {
   const results = new Array(entries.length).fill(null);
   let nextIndex = 0;
   let completed = 0;

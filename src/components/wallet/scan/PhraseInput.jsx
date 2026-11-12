@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { FileText, ScanSearch, X } from "lucide-react";
 
-export default function PhraseInput({ value, onChange, onFile, onScan, onCancel, scanning, count }) {
+export default function PhraseInput({ value, fileName, onChange, onFile, onScan, onCancel, scanning, count }) {
   const fileRef = useRef(null);
 
   return (
@@ -46,7 +46,7 @@ export default function PhraseInput({ value, onChange, onFile, onScan, onCancel,
             className="inline-flex items-center gap-1.5 rounded-full border border-foreground/[0.1] bg-foreground/[0.03] px-3 py-1.5 text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           >
             <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
-            Open .txt file
+            {fileName ? "Change file" : "Upload .txt file"}
           </button>
           <input
             ref={fileRef}
@@ -63,6 +63,14 @@ export default function PhraseInput({ value, onChange, onFile, onScan, onCancel,
             {count} {count === 1 ? "phrase" : "phrases"}
           </p>
         </div>
+
+        <p className="mt-2 truncate text-[10px] text-muted-foreground/65">
+          {fileName ? (
+            <span className="text-primary/85">{fileName} — scan starts automatically</span>
+          ) : (
+            "Uploading a file starts the balance scan right away."
+          )}
+        </p>
 
         {scanning ? (
           <button
