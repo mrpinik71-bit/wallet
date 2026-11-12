@@ -12,9 +12,6 @@ export default function WalletSetup() {
       <div className="relative mx-auto flex min-h-dvh w-full max-w-[452px] flex-col px-5 pb-8 pt-8">
         <header className="flex items-center justify-between">
           <BrandMark caption="Self-custody" />
-          <span className="text-[9px] font-medium uppercase tracking-[0.24em] text-muted-foreground/60">
-            Phrase checker
-          </span>
         </header>
 
         <motion.div
