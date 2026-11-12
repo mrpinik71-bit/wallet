@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import CoinAvatar from "@/components/wallet/CoinAvatar";
+import { SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 import { formatUsd } from "@/lib/format";
 
 function shortAddress(value) {
@@ -23,7 +24,7 @@ export default function ScanResultRow({ result, index }) {
   const invalid = result.status === "invalid";
 
   const addressRows = [
-    { label: "EVM · AVAX", value: result.addresses?.ethereum },
+    { label: "EVM · all networks", value: result.addresses?.ethereum },
     { label: "Bitcoin", value: result.addresses?.bitcoin },
     { label: "Litecoin", value: result.addresses?.litecoin },
     { label: "Dogecoin", value: result.addresses?.dogecoin },
@@ -38,6 +39,10 @@ export default function ScanResultRow({ result, index }) {
     { label: "Solana", value: result.addresses?.solana },
     { label: "TRON", value: result.addresses?.tron },
   ].filter((row) => row.value);
+
+  // How many networks were really asked: every EVM network shares one address,
+  // and a 12-word phrase has no TON address, so the number is not the row count.
+  const scannedChains = SCAN_CHAINS.filter((chain) => result.addresses?.[chain]).length;
 
   async function copy(value) {
     try {
@@ -80,7 +85,7 @@ export default function ScanResultRow({ result, index }) {
                     .slice(0, 3)
                     .map((item) => `${compactAmount(item.balance)} ${item.symbol}`)
                     .join(" · ") + (funded.length > 3 ? ` · +${funded.length - 3}` : "")
-                : `No balance · ${addressRows.length} chain${addressRows.length === 1 ? "" : "s"} checked`}
+                : `No balance · ${scannedChains} networks checked`}
           </span>
         </span>
         <span className="shrink-0 text-right">
