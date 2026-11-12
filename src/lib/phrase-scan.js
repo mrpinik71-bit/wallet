@@ -12,12 +12,15 @@ export { parsePhrases };
 const DEDUPE_LIMIT = 300000;
 
 /** Reads a .txt file and streams its phrases, de-duplicated. */
-export async function* phrasesFromFile(file, { onCount } = {}) {
+export async function* phrasesFromFile(file, { onCount, words } = {}) {
   const seen = new Set();
   let count = 0;
   let reported = 0;
 
   for await (const phrase of phrasesFromLines(readLines(file))) {
+    // Only phrases of the chosen length are scanned; the rest of the file is
+    // skipped rather than checked and thrown away.
+    if (words && phrase.split(" ").length !== words) continue;
     const key = phrase.toLowerCase();
     if (seen.has(key)) continue;
     // The de-duplication set is capped: past a few hundred thousand entries a

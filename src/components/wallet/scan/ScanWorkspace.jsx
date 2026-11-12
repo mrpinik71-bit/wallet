@@ -16,6 +16,7 @@ export default function ScanWorkspace() {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
   const [count, setCount] = useState(0);
+  const [words, setWords] = useState(12);
   const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -65,10 +66,20 @@ export default function ScanWorkspace() {
 
   const visible = rows.slice(0, page * PAGE);
 
+  // Only phrases of the selected length are counted and scanned.
+  const matching = (value, size) => parsePhrases(value).filter((entry) => entry.words === size);
+
   function onChange(value) {
     setText(value);
     setFileName("");
-    const entries = parsePhrases(value);
+    const entries = matching(value, words);
+    setCount(entries.length);
+    setTotal(entries.length);
+  }
+
+  function changeWords(size) {
+    setWords(size);
+    const entries = matching(text, size);
     setCount(entries.length);
     setTotal(entries.length);
   }
@@ -93,6 +104,7 @@ export default function ScanWorkspace() {
     // are handled one at a time, so even a multi-gigabyte list stays in memory.
     await start(
       phrasesFromFile(file, {
+        words,
         onCount: (value) => {
           countRef.current = value;
           setCount(value);
@@ -102,7 +114,7 @@ export default function ScanWorkspace() {
   }
 
   function startText() {
-    const entries = parsePhrases(text);
+    const entries = matching(text, words);
     if (!entries.length) return;
     setCount(entries.length);
     setTotal(entries.length);
@@ -207,6 +219,8 @@ export default function ScanWorkspace() {
           }}
           scanning={scanning}
           count={count}
+          words={words}
+          onWords={changeWords}
         />
       ) : (
         <div className="flex items-center justify-between pt-1">

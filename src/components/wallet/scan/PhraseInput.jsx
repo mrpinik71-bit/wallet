@@ -3,7 +3,21 @@ import { FileText, ScanSearch, X } from "lucide-react";
 import TelegramPanel from "@/components/wallet/scan/TelegramPanel";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 
-export default function PhraseInput({ value, fileName, onChange, onFile, onScan, onCancel, scanning, count, error }) {
+const SIZES = [12, 15, 18, 21, 24];
+
+export default function PhraseInput({
+  value,
+  fileName,
+  onChange,
+  onFile,
+  onScan,
+  onCancel,
+  scanning,
+  count,
+  error,
+  words,
+  onWords,
+}) {
   const fileRef = useRef(null);
 
   return (
@@ -16,6 +30,30 @@ export default function PhraseInput({ value, fileName, onChange, onFile, onScan,
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/85">
           Paste your list or open the text file. Addresses are derived here on this device — phrases are never uploaded.
         </p>
+
+        <div className="mt-4">
+          <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-muted-foreground/60">Phrase length</p>
+          <div className="mt-2 flex gap-1.5">
+            {SIZES.map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => onWords(size)}
+                disabled={scanning}
+                className={`flex-1 rounded-lg border py-1.5 text-[11px] font-medium num transition-colors disabled:opacity-50 ${
+                  words === size
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-foreground/[0.08] bg-foreground/[0.02] text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-muted-foreground/60">
+            Only {words}-word phrases are scanned — every other line is skipped.
+          </p>
+        </div>
 
         <div className="relative mt-4">
           <textarea
