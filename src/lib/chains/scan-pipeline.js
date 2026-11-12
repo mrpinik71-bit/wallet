@@ -11,7 +11,7 @@ import { SCAN_ASSETS } from "@/lib/chains/scan-catalog";
 import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
 import { cardanoBalancesMany, polkadotBalancesMany, solanaBalancesMany, suiBalancesMany } from "@/lib/chains/scan-batch-multi";
 
-const CHUNK = 20; // wallets per batch round
+const CHUNK = 10; // wallets per batch round — small enough that rows keep arriving
 const INFLIGHT = 11; // batch rounds kept in flight (11 parallel scanners)
 const PER_HOST = 12; // simultaneous requests to one public endpoint
 const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
@@ -131,7 +131,7 @@ const asCoinMap = (values, items, coins) => {
 };
 
 /** Reads every asset for a batch of wallets, batching wherever a chain allows it. */
-async function readBatch(batch) {
+async function readBatch(batch, onWallet) {
   const jobs = [];
   const collect = (chainId, read) => {
     const items = [];
@@ -227,35 +227,55 @@ async function readBatch(batch) {
     });
   }
 
+  const reads = batch.map(() => []);
+  const expected = batch.map(() => 0);
+  for (const job of jobs) {
+    for (const index of job.targets) expected[index] += job.coins.length;
+  }
+
+  // A wallet is finished the moment every group that asked about it has
+  // answered, so it is handed over right then instead of waiting for the whole
+  // batch — the results list fills row by row while the scan keeps running.
+  const reported = new Set();
+  const finish = (index) => {
+    if (reported.has(index) || reads[index].length < expected[index]) return;
+    reported.add(index);
+    onWallet?.(index, reads[index]);
+  };
+  batch.forEach((wallet, index) => {
+    if (!expected[index]) finish(index);
+  });
+
   // A busy public node often answers on a later try, so each group is retried
   // twice more before a wallet is marked as only partially read.
-  const settled = await Promise.all(
+  await Promise.all(
     jobs.map(async (job) => {
+      let result;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          return { job, values: await withTimeout(job.run(), JOB_TIMEOUT) };
+          result = { job, values: await withTimeout(job.run(), JOB_TIMEOUT) };
+          break;
         } catch (cause) {
-          if (attempt === 2) return { job, error: cause };
-          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+          if (attempt === 2) result = { job, error: cause };
+          else await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
         }
+      }
+
+      for (const index of job.targets) {
+        if (result.error) {
+          for (const coin of job.coins) reads[index].push({ coin, balance: 0, failed: true });
+        } else {
+          const entry = result.values.get(index);
+          for (const coin of job.coins) {
+            const balance = entry ? entry.get(coin.id) : undefined;
+            reads[index].push({ coin, balance: balance ?? 0, failed: balance === undefined });
+          }
+        }
+        finish(index);
       }
     }),
   );
 
-  const reads = batch.map(() => []);
-  for (const { job, values, error } of settled) {
-    for (const index of job.targets) {
-      if (error) {
-        for (const coin of job.coins) reads[index].push({ coin, balance: 0, failed: true });
-        continue;
-      }
-      const entry = values.get(index);
-      for (const coin of job.coins) {
-        const balance = entry ? entry.get(coin.id) : undefined;
-        reads[index].push({ coin, balance: balance ?? 0, failed: balance === undefined });
-      }
-    }
-  }
   return reads;
 }
 
@@ -334,8 +354,8 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
     }
     if (!batch.length || isCancelled?.()) return;
 
-    const reads = await readBatch(batch);
-    batch.forEach((wallet, index) => report(toResult(wallet, reads[index], prices)));
+    // Each wallet is reported as soon as its own chains have answered.
+    await readBatch(batch, (index, walletReads) => report(toResult(batch[index], walletReads, prices)));
   };
 
   const launch = (entries) => {
