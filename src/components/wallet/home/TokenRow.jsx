@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import CoinAvatar from "@/components/wallet/CoinAvatar";
+import { chains } from "@/lib/chains/config";
 import { formatPct, formatUsd } from "@/lib/format";
 
 function compactAmount(value) {
@@ -12,13 +13,10 @@ function compactAmount(value) {
 export default function TokenRow({ item }) {
   const up = item.change24h >= 0;
   const empty = item.value === 0;
+  const network = chains[item.chain]?.name;
 
-  return (
-    <Link
-      to="/receive"
-      search={{ coin: item.id }}
-      className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-foreground/[0.03]"
-    >
+  const body = (
+    <>
       <CoinAvatar symbol={item.symbol} color={item.color} logo={item.logo} />
       <div className="min-w-0 flex-1">
         <p className="truncate font-heading text-[13px] font-medium leading-tight">{item.name}</p>
@@ -31,16 +29,27 @@ export default function TokenRow({ item }) {
       </div>
       <div className="shrink-0 text-right">
         <p className={`text-[13px] font-semibold leading-tight num ${empty ? "text-muted-foreground/70" : ""}`}>
-          {formatUsd(item.value)}
+          {item.discovered ? "—" : formatUsd(item.value)}
         </p>
         <p
           className={`mt-1 inline-flex rounded px-1 py-px text-[10px] font-medium leading-tight num ${
             empty ? "text-muted-foreground/60" : up ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
           }`}
         >
-          {empty ? "—" : formatPct(item.change24h)}
+          {item.discovered ? network || "on-chain" : empty ? "—" : formatPct(item.change24h)}
         </p>
       </div>
+    </>
+  );
+
+  const className = "flex w-full items-center gap-3 px-4 py-3.5";
+
+  // A token found on-chain has no receive page of its own, so the row is a label.
+  if (item.discovered) return <div className={className}>{body}</div>;
+
+  return (
+    <Link to="/receive" search={{ coin: item.id }} className={`${className} transition-colors hover:bg-foreground/[0.03]`}>
+      {body}
     </Link>
   );
 }

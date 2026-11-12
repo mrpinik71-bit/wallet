@@ -5,6 +5,7 @@ import TokenRow from "@/components/wallet/home/TokenRow";
 export default function TokensList({ holdings, loading, onRefresh }) {
   const empty = !loading && holdings.length === 0;
   const owned = holdings.filter((item) => item.value > 0).length;
+  const discovered = holdings.filter((item) => item.discovered).length;
 
   return (
     <section className="mt-6">
@@ -77,6 +78,13 @@ export default function TokensList({ holdings, loading, onRefresh }) {
             Receive
           </Link>
         </div>
+      ) : null}
+
+      {discovered > 0 ? (
+        <p className="mt-2.5 px-1 text-[10px] leading-relaxed text-muted-foreground/60">
+          {discovered} other token{discovered === 1 ? "" : "s"} found on your addresses, including airdrops and meme
+          tokens — they carry no price quote yet, so only the amount is shown.
+        </p>
       ) : null}
 
       {!loading && owned === 0 && holdings.length > 0 ? (
