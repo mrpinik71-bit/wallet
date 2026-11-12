@@ -22,15 +22,7 @@ export default function PhraseInput({
   return (
     <section className="lux noise relative overflow-hidden p-5">
       <div className="relative">
-        <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-muted-foreground/70">
-          Recovery phrases
-        </p>
-        <p className="mt-2 font-display text-[24px] leading-tight">Find your funded wallets</p>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/85">
-          Paste your list or open the text file. Addresses are derived here on this device — phrases are never uploaded.
-        </p>
-
-        <div className="mt-4">
+        <div>
           <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-muted-foreground/60">Phrase length</p>
           <div className="mt-2 flex gap-1.5">
             {SIZES.map((size) => (
