@@ -95,6 +95,13 @@ export default function PhraseInput({
           )}
         </p>
 
+        {!scanning && value.trim() && count === 0 ? (
+          <p className="mt-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[10.5px] leading-relaxed text-destructive">
+            No recovery phrase detected in this text — a phrase is 12, 15, 18, 21 or 24 words on one line, so nothing
+            is being scanned yet.
+          </p>
+        ) : null}
+
         {error && !scanning ? (
           <p className="mt-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
             {error}
