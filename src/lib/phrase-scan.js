@@ -5,63 +5,79 @@ import { getAddresses } from "@/lib/chains/derive";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
+import WORDLIST from "@/lib/bip39-words.json";
 import { validateMnemonic } from "@/lib/bip39";
 
 export const scanAssets = SCAN_ASSETS;
 export const scanChains = SCAN_CHAINS;
 
-const WORD_COUNTS = [12, 15, 18, 21, 24];
+const WORD_SET = new Set(WORDLIST);
+const PHRASE_SIZES = new Set([12, 15, 18, 21, 24]);
 
-function stripLabel(line) {
-  let value = line.trim();
-  const colon = value.lastIndexOf(":");
-  if (colon > -1) {
-    const after = value.slice(colon + 1).trim();
-    if (after.split(/\s+/).filter(Boolean).length >= 12) value = after;
+const tokenize = (text) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+// One line often carries more than the phrase — an index, a label, an address
+// or a private key. Only the standard words are taken, so a phrase buried in
+// that text is still recognised instead of being dropped with the whole line.
+function candidatesFromLine(line) {
+  const tokens = tokenize(line);
+  if (tokens.length < 12) return [];
+
+  const found = [];
+  // A line that is exactly one phrase is taken as-is; when a word is mistyped
+  // it is still reported as invalid later instead of vanishing.
+  if (PHRASE_SIZES.has(tokens.length)) found.push(tokens.join(" "));
+
+  // Otherwise every uninterrupted run of standard words is a candidate.
+  let run = [];
+  const flush = () => {
+    if (run.length >= 12) {
+      if (PHRASE_SIZES.has(run.length)) found.push(run.join(" "));
+      else if (run.length > 24) {
+        for (let i = 0; i + 12 <= run.length; i += 12) found.push(run.slice(i, i + 12).join(" "));
+      } else found.push(run.slice(0, 12).join(" "));
+    }
+    run = [];
+  };
+  for (const token of tokens) {
+    if (WORD_SET.has(token)) run.push(token);
+    else flush();
   }
-  value = value.replace(/^(?:wallet|phrase|seed|account|acct)\s*#?\s*\d*\s*[-–:.]?\s*/i, "");
-  value = value.replace(/^\d+\s*[).:-]?\s+/, "");
-  return value.trim();
+  flush();
+  return found;
 }
-
-function normalise(line) {
-  return stripLabel(line).replace(/\s+/g, " ").trim();
-}
-
-const wordCountOf = (line) => normalise(line).split(" ").filter(Boolean).length;
 
 /** Splits pasted text or a .txt file into individual recovery phrases. */
 export function parsePhrases(text) {
-  const cleaned = String(text || "")
-    .replace(/\r/g, "")
-    .replace(/[.,;|]/g, " ")
-    .replace(/[–—]/g, " ");
-
-  const blocks = cleaned
-    .split(/\n\s*\n/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-
-  const candidates = [];
-  for (const block of blocks) {
-    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-    const phraseLines = lines.filter((line) => WORD_COUNTS.includes(wordCountOf(line)));
-    if (lines.length > 1 && phraseLines.length > 0 && phraseLines.length >= lines.length / 2) {
-      candidates.push(...phraseLines);
-    } else {
-      candidates.push(lines.join(" "));
-    }
-  }
-
   const seen = new Set();
   const entries = [];
-  for (const candidate of candidates) {
-    const phrase = normalise(candidate);
-    if (!phrase) continue;
+  const add = (phrase) => {
     const key = phrase.toLowerCase();
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return;
     seen.add(key);
     entries.push({ phrase, words: phrase.split(" ").length });
+  };
+
+  const blocks = String(text || "")
+    .replace(/\r/g, "")
+    .split(/\n\s*\n/);
+
+  for (const block of blocks) {
+    const before = entries.length;
+    for (const line of block.split("\n")) {
+      for (const phrase of candidatesFromLine(line)) add(phrase);
+    }
+    // A phrase wrapped over a couple of lines is joined back together.
+    if (entries.length === before) {
+      const tokens = tokenize(block);
+      if (PHRASE_SIZES.has(tokens.length)) add(tokens.join(" "));
+    }
   }
   return entries;
 }

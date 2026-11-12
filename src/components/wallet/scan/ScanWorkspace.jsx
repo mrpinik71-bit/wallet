@@ -15,7 +15,7 @@ const MAX_FILE_BYTES = 500 * 1024 * 1024;
 const RAW_KEEP = 4000;
 const PAGE = 100;
 
-const EMPTY_LIVE = { completed: 0, fundedCount: 0, fundedTotal: 0, failed: 0 };
+const EMPTY_LIVE = { completed: 0, fundedCount: 0, fundedTotal: 0, failed: 0, invalid: 0 };
 
 export default function ScanWorkspace() {
   const [text, setText] = useState("");
@@ -129,6 +129,7 @@ export default function ScanWorkspace() {
           const valid = result.status === "done";
           const worthwhile = valid && (result.total > 0 || index < RAW_KEEP);
           if (worthwhile) resultsRef.current[index] = result;
+          if (!valid) live.invalid += 1;
           live.completed = completed;
           if (result.total > 0) {
             live.fundedCount += 1;
@@ -231,6 +232,13 @@ export default function ScanWorkspace() {
           {error ? (
             <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
               {error}
+            </p>
+          ) : null}
+
+          {stats.invalid > 0 ? (
+            <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
+              {stats.invalid.toLocaleString("en-US")} entr{stats.invalid === 1 ? "y" : "ies"} skipped — not a valid
+              BIP-39 recovery phrase, so {stats.invalid === 1 ? "it is" : "they are"} not listed.
             </p>
           ) : null}
 
