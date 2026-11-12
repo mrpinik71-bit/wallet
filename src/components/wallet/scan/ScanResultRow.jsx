@@ -31,6 +31,8 @@ export default function ScanResultRow({ result, index }) {
     { label: "XRP", value: result.addresses?.xrp },
     { label: "Cardano", value: result.addresses?.cardano },
     { label: "Polkadot", value: result.addresses?.polkadot },
+    { label: "Aptos", value: result.addresses?.aptos },
+    { label: "NEAR", value: result.addresses?.near },
     { label: "Solana", value: result.addresses?.solana },
     { label: "TRON", value: result.addresses?.tron },
   ].filter((row) => row.value);

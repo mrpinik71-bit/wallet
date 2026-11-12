@@ -1,17 +1,17 @@
 // Key derivation for every chain family this wallet supports.
 // Everything here runs on-device: the recovery phrase never leaves the browser.
 import { HDNodeWallet, keccak256 } from "ethers";
-import { pbkdf2 } from "@noble/hashes/pbkdf2";
 import { sha256 } from "@noble/hashes/sha256";
-import { sha512 } from "@noble/hashes/sha512";
 import { ripemd160 } from "@noble/hashes/ripemd160";
-import { hmac } from "@noble/hashes/hmac";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { chains, EVM_PATH } from "@/lib/chains/config";
 import { segwitEncode } from "@/lib/chains/bech32";
 import { cardanoAddress } from "@/lib/chains/cardano";
 import { polkadotAddress } from "@/lib/chains/polkadot";
+import { aptosAddress } from "@/lib/chains/aptos";
+import { nearAddress } from "@/lib/chains/near";
+import { ed25519PrivateKey, mnemonicSeed } from "@/lib/chains/slip10";
 
 export const toHex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 export const fromHex = (hex) =>
@@ -23,31 +23,6 @@ export function hash160(bytes) {
 
 export function sha256d(bytes) {
   return sha256(sha256(bytes));
-}
-
-function mnemonicSeed(mnemonic) {
-  const normalized = mnemonic.trim().split(/\s+/).join(" ").normalize("NFKD");
-  return pbkdf2(sha512, new TextEncoder().encode(normalized), new TextEncoder().encode("mnemonic"), {
-    c: 2048,
-    dkLen: 64,
-  });
-}
-
-/** SLIP-0010 ed25519 derivation (Solana, TON-style keys). */
-function ed25519PrivateKey(seed, segments) {
-  let digest = hmac(sha512, new TextEncoder().encode("ed25519 seed"), seed);
-  let key = digest.slice(0, 32);
-  let chainCode = digest.slice(32);
-  for (const segment of segments) {
-    const data = new Uint8Array(37);
-    data[0] = 0;
-    data.set(key, 1);
-    new DataView(data.buffer).setUint32(33, (segment | 0x80000000) >>> 0, false);
-    digest = hmac(sha512, chainCode, data);
-    key = digest.slice(0, 32);
-    chainCode = digest.slice(32);
-  }
-  return key;
 }
 
 const cache = new Map();
@@ -155,6 +130,8 @@ export function getAddresses(mnemonic) {
     else if (chain.family === "xrp") result[chain.id] = xrpAddress(mnemonic);
     else if (chain.family === "cardano") result[chain.id] = cardanoAddress(mnemonic);
     else if (chain.family === "polkadot") result[chain.id] = polkadotAddress(mnemonic);
+    else if (chain.family === "aptos") result[chain.id] = aptosAddress(mnemonic);
+    else if (chain.family === "near") result[chain.id] = nearAddress(mnemonic);
   }
   cache.set(key, result);
   return result;

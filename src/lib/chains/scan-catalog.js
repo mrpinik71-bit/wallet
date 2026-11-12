@@ -35,6 +35,8 @@ const COINGECKO = {
   xrp: "ripple",
   cardano: "cardano",
   polkadot: "polkadot",
+  aptos: "aptos",
+  near: "near",
 };
 
 const LOGO = {
@@ -48,6 +50,8 @@ const LOGO = {
   xrp: cdn("xrp"),
   cardano: cdn("ada"),
   polkadot: cdn("dot"),
+  aptos: "https://assets.coingecko.com/coins/images/26455/large/aptos_round.png",
+  near: "https://assets.coingecko.com/coins/images/10365/large/near.jpg",
   solana: "https://assets.coingecko.com/coins/images/4128/large/solana.png",
   avalanche: "https://assets.coingecko.com/coins/images/12559/large/avax.png",
   polygon: "https://assets.coingecko.com/coins/images/4713/large/polygon.png",

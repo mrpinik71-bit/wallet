@@ -321,6 +321,28 @@ export const chains = {
     color: "#E6007A",
     decimals: 10,
   },
+  aptos: {
+    id: "aptos",
+    name: "Aptos",
+    family: "aptos",
+    api: "https://fullnode.mainnet.aptoslabs.com/v1",
+    explorer: "https://explorer.aptoslabs.com",
+    path: "m/44'/637'/0'/0'/0'",
+    symbol: "APT",
+    color: "#2DD8A3",
+    decimals: 8,
+  },
+  near: {
+    id: "near",
+    name: "NEAR Protocol",
+    family: "near",
+    rpc: "https://rpc.mainnet.near.org",
+    explorer: "https://nearblocks.io",
+    path: "m/44'/397'/0'",
+    symbol: "NEAR",
+    color: "#00C08B",
+    decimals: 24,
+  },
 };
 
 const token = (chain, id, symbol, name, address, decimals, coingecko, color, logo) => ({
@@ -412,6 +434,8 @@ export function explorerAddress(chainId, address) {
   if (chain.family === "xrp") return `${chain.explorer}/account/${address}`;
   if (chain.family === "cardano") return `${chain.explorer}/address/${address}`;
   if (chain.family === "polkadot") return `${chain.explorer}/account/${address}`;
+  if (chain.family === "aptos") return `${chain.explorer}/account/${address}?network=mainnet`;
+  if (chain.family === "near") return `${chain.explorer}/address/${address}`;
   if (chain.family === "solana") return `${chain.explorer}/account/${address}`;
   return `${chain.explorer}/#/address/${address}`;
 }

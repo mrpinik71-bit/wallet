@@ -31,6 +31,48 @@ export async function cardanoBalance(addresses) {
   return lovelace / 1e6;
 }
 
+/** APT balance in octas via the coin module's balance view (Aptos fullnode REST API). */
+export async function aptosBalance(address) {
+  const response = await fetch(`${chains.aptos.api}/view`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      function: "0x1::coin::balance",
+      type_arguments: ["0x1::aptos_coin::AptosCoin"],
+      arguments: [address],
+    }),
+  });
+  // An address that has never been funded has no balance to report.
+  if (response.status === 400 || response.status === 404) return 0;
+  if (!response.ok) throw new Error(`Aptos network error (${response.status}).`);
+
+  const [octas] = await response.json();
+  return Number(octas || 0) / 1e8;
+}
+
+/** NEAR balance for this implicit account, in NEAR (1e24 yoctoNEAR per NEAR). */
+export async function nearBalance(address) {
+  const response = await fetch(chains.near.rpc, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "query",
+      params: { request_type: "view_account", finality: "final", account_id: address },
+    }),
+  });
+  if (!response.ok) throw new Error(`NEAR network error (${response.status}).`);
+
+  const data = await response.json();
+  const amount = data?.result?.amount;
+  if (amount !== undefined) return Number(amount) / 1e24;
+  // The account does not exist on chain yet, so it holds nothing.
+  const message = `${data?.error?.cause?.name || ""} ${data?.error?.data || ""}`.toLowerCase();
+  if (message.includes("unknown_account") || message.includes("does not exist")) return 0;
+  throw new Error("NEAR network error.");
+}
+
 const DOT_ENDPOINTS = [chains.polkadot.rpc, "https://rpc.polkadot.io"];
 const XRP_ENDPOINTS = [chains.xrp.api, "https://xrpl.ws"];
 
