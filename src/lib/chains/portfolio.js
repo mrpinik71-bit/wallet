@@ -7,7 +7,7 @@ import { solanaBalance } from "@/lib/chains/solana";
 import { tronBalance, trc20Balance } from "@/lib/chains/tron";
 import { changeOf, fetchPrices, priceOf } from "@/lib/chains/prices";
 
-async function readBalance(coin, address) {
+export async function readBalance(coin, address) {
   if (!address) return 0;
   if (coin.family === "evm") {
     return coin.kind === "token" ? evmTokenBalance(coin.chain, address, coin) : evmNativeBalance(coin.chain, address);

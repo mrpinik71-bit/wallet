@@ -1,0 +1,94 @@
+import { useRef } from "react";
+import { FileText, ScanSearch, X } from "lucide-react";
+
+export default function PhraseInput({ value, onChange, onFile, onScan, onCancel, scanning, count }) {
+  const fileRef = useRef(null);
+
+  return (
+    <section className="lux noise relative overflow-hidden p-5">
+      <div className="relative">
+        <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-muted-foreground/70">
+          Recovery phrases
+        </p>
+        <p className="mt-2 font-display text-[24px] leading-tight">Find your funded wallets</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/85">
+          Paste your list or open the text file. Addresses are derived here on this device — phrases are never uploaded.
+        </p>
+
+        <div className="relative mt-4">
+          <textarea
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            rows={7}
+            spellCheck={false}
+            autoCapitalize="none"
+            disabled={scanning}
+            placeholder={"word one two three …\nword one two three …"}
+            className="w-full resize-none rounded-2xl border border-foreground/[0.08] bg-foreground/[0.025] p-3.5 font-mono text-[11.5px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/40 disabled:opacity-60"
+          />
+          {value && !scanning ? (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              aria-label="Clear phrases"
+              className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full bg-background/80 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={scanning}
+            className="inline-flex items-center gap-1.5 rounded-full border border-foreground/[0.1] bg-foreground/[0.03] px-3 py-1.5 text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
+            Open .txt file
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".txt,text/plain"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onFile(file);
+              event.target.value = "";
+            }}
+          />
+          <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/60 num">
+            {count} {count === 1 ? "phrase" : "phrases"}
+          </p>
+        </div>
+
+        {scanning ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-destructive/40 text-[12.5px] font-semibold text-destructive"
+          >
+            <X className="h-4 w-4" />
+            Stop scan
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onScan}
+            disabled={count === 0}
+            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-[12.5px] font-semibold text-primary-foreground shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] transition-opacity disabled:opacity-35"
+          >
+            <ScanSearch className="h-4 w-4" strokeWidth={2} />
+            Scan balances
+          </button>
+        )}
+
+        <p className="mt-3 text-center text-[9.5px] uppercase tracking-[0.16em] text-muted-foreground/45">
+          14 assets · 8 chains per wallet
+        </p>
+      </div>
+    </section>
+  );
+}
