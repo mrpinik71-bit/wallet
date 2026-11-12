@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import HomeHeader from "@/components/wallet/home/HomeHeader";
 import BalanceBlock from "@/components/wallet/home/BalanceBlock";
 import ActionsRow from "@/components/wallet/home/ActionsRow";
-import ScanCard from "@/components/wallet/home/ScanCard";
+import ScanWorkspace from "@/components/wallet/scan/ScanWorkspace";
 import TokensList from "@/components/wallet/home/TokensList";
 import AllocationCard from "@/components/wallet/home/AllocationCard";
 import SecurityNote from "@/components/wallet/home/SecurityNote";
@@ -46,7 +46,6 @@ function Overview() {
               chains={chains}
             />
             <ActionsRow />
-            <ScanCard />
           </div>
 
           <div className="lg:col-start-2 lg:row-span-3 lg:row-start-1">
@@ -59,6 +58,10 @@ function Overview() {
           <div className="lg:col-start-1 lg:row-start-3">
             <TokensList holdings={holdings} loading={loading} onRefresh={refresh} />
           </div>
+        </div>
+
+        <div className="mt-8">
+          <ScanWorkspace />
         </div>
 
         <p className="mt-9 text-center text-[8.5px] font-medium uppercase tracking-[0.24em] text-muted-foreground/40">
