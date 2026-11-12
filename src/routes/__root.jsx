@@ -11,7 +11,13 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      // viewport-fit=cover lets the app paint edge to edge on phones.
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      // Standalone launch: added to the home screen, the wallet opens full screen.
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "Helix" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { title: "Helix — Multichain Wallet" },
       {
         name: "description",
@@ -21,6 +27,7 @@ export const Route = createRootRoute({
     ],
     // No icon link: the platform adds the app's logo when serving.
     links: [
+      { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import BackButton from "@/components/wallet/BackButton";
 import BrandMark from "@/components/wallet/BrandMark";
 import VaultBackdrop from "@/components/wallet/VaultBackdrop";
 import ScanWorkspace from "@/components/wallet/scan/ScanWorkspace";
@@ -11,14 +11,7 @@ export default function PhraseCheckScreen({ onClose }) {
       <div className="relative mx-auto flex min-h-dvh w-full max-w-[452px] flex-col px-5 pb-10 pt-8">
         <header className="flex items-center justify-between">
           <BrandMark caption="On-device" />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close phrase checker"
-            className="grid h-9 w-9 place-items-center rounded-full border border-foreground/[0.09] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <X className="h-4 w-4" strokeWidth={1.8} />
-          </button>
+          <BackButton onClick={onClose} />
         </header>
 
         <div className="mt-7">

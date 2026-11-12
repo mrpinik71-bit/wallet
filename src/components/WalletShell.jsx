@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -11,6 +11,7 @@ import {
   Repeat,
   ScanSearch,
 } from "lucide-react";
+import BackButton from "@/components/wallet/BackButton";
 import { useWallet } from "@/lib/WalletContext";
 
 const nav = [
@@ -63,6 +64,7 @@ function NavLink({ item }) {
 
 export default function WalletShell({ children }) {
   const { wallet, lock } = useWallet();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   return (
     <div className="min-h-dvh bg-background">
@@ -100,6 +102,11 @@ export default function WalletShell({ children }) {
 
       <div className="lg:pl-[248px]">
         <main className="mx-auto w-full max-w-[1180px] px-5 pb-32 pt-[max(1.25rem,env(safe-area-inset-top))] lg:px-10 lg:pb-14 lg:pt-10">
+          {pathname !== "/" ? (
+            <div className="mb-4 lg:hidden">
+              <BackButton onClick={() => window.history.back()} />
+            </div>
+          ) : null}
           {children}
         </main>
       </div>

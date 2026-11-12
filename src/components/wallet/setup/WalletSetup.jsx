@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, KeyRound, Plus, Search, ShieldCheck } from "lucide-react";
 import BrandMark from "@/components/wallet/BrandMark";
@@ -26,8 +26,22 @@ export default function WalletSetup() {
   const [mode, setMode] = useState("choose");
   const [checker, setChecker] = useState(false);
 
+  // The checker gets its own history entry, so the phone's back button and the
+  // header back control both return to wallet setup.
+  function openChecker() {
+    window.history.pushState({ phraseChecker: true }, "");
+    setChecker(true);
+  }
+
+  useEffect(() => {
+    if (!checker) return undefined;
+    const onPop = () => setChecker(false);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [checker]);
+
   if (checker) {
-    return <PhraseCheckScreen onClose={() => setChecker(false)} />;
+    return <PhraseCheckScreen onClose={() => window.history.back()} />;
   }
 
   return (
@@ -94,7 +108,7 @@ export default function WalletSetup() {
 
             <button
               type="button"
-              onClick={() => setChecker(true)}
+              onClick={openChecker}
               className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/[0.12] py-3 text-[11.5px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
             >
               <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
