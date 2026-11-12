@@ -5,7 +5,6 @@ import { getAddresses } from "@/lib/chains/derive";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
-import { validateMnemonic } from "@/lib/bip39";
 import { parsePhrases, phrasesFromLines } from "@/lib/phrase-lines";
 import { readLines } from "@/lib/scan-file";
 
@@ -15,8 +14,13 @@ export { parsePhrases };
 
 async function scanOne(entry, prices) {
   const base = { phrase: entry.phrase, words: entry.words, addresses: {}, funded: [], total: 0, failed: 0, error: null };
-  const check = await validateMnemonic(entry.phrase);
-  if (!check.valid) return { ...base, status: "invalid", error: check.reason };
+  // A wallet exists for any phrase of a standard length: addresses derive from
+  // the words alone, so a failed checksum must not hide a wallet that holds
+  // funds. Only a line that cannot be a phrase at all is unreadable.
+  const size = entry.words || entry.phrase.trim().split(/\s+/).length;
+  if (![12, 15, 18, 21, 24].includes(size)) {
+    return { ...base, status: "invalid", error: "A recovery phrase has 12 or 24 words." };
+  }
 
   let addresses = {};
   try {
