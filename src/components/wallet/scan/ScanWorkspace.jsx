@@ -11,7 +11,7 @@ import { entriesFromList, parsePhrases, phrasesFromFile, scanAssets, scanPhraseS
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 const PAGE = 100;
 
-const EMPTY_LIVE = { completed: 0, fundedCount: 0, fundedTotal: 0, failed: 0, invalid: 0 };
+const EMPTY_LIVE = { completed: 0, started: 0, fundedCount: 0, fundedTotal: 0, failed: 0, invalid: 0 };
 
 export default function ScanWorkspace() {
   const [text, setText] = useState("");
@@ -25,9 +25,11 @@ export default function ScanWorkspace() {
   const [page, setPage] = useState(1);
   const [onlyFunded, setOnlyFunded] = useState(false);
   const [error, setError] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   const [version, setVersion] = useState(0);
 
   const resultsRef = useRef([]);
+  const startedAtRef = useRef(0);
   const liveRef = useRef({ ...EMPTY_LIVE });
   const cancelledRef = useRef(false);
   const countRef = useRef(0);
@@ -51,6 +53,16 @@ export default function ScanWorkspace() {
     },
     [],
   );
+
+  // A batch can take seconds on a busy node: the clock keeps ticking so a slow
+  // scan still shows that work is moving.
+  useEffect(() => {
+    if (!scanning) return undefined;
+    const tick = () => setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [scanning]);
 
   // The listed count is the truth: it is how many phrases were actually found
   // and checked, so the number on screen always matches the rows below it.
@@ -109,6 +121,9 @@ export default function ScanWorkspace() {
         onCount: (value) => {
           countRef.current = value;
           setCount(value);
+          // The detected total grows with the file, so "processed / total" is real
+          // from the first batch instead of waiting for the whole file.
+          setTotal(value);
         },
       }),
     );
@@ -131,13 +146,20 @@ export default function ScanWorkspace() {
     setEditing(false);
     setError("");
     setStats({ ...EMPTY_LIVE });
+    startedAtRef.current = Date.now();
+    setElapsed(0);
     setScanning(true);
     setVersion((value) => value + 1);
 
     const live = liveRef.current;
 
     try {
-      const prices = await fetchPricesFor(scanAssets);
+      // Prices only feed the USD total: a slow or blocked price feed must never
+      // hold the scan at zero.
+      const prices = await Promise.race([
+        fetchPricesFor(scanAssets),
+        new Promise((resolve) => setTimeout(() => resolve({}), 4000)),
+      ]);
       await scanPhraseStream(source, {
         prices,
         isCancelled: () => cancelledRef.current,
@@ -157,8 +179,9 @@ export default function ScanWorkspace() {
           if (result.failed) live.failed += result.failed;
           scheduleFlush();
         },
-        onProgress: ({ completed }) => {
+        onProgress: ({ completed, started: begun }) => {
           live.completed = completed;
+          if (begun !== undefined) live.started = begun;
           // The processed counter ticks on its own, so a slow batch still shows
           // that work is moving.
           scheduleFlush();
@@ -197,6 +220,7 @@ export default function ScanWorkspace() {
     setPage(1);
     setOnlyFunded(false);
     setError("");
+    setElapsed(0);
     setEditing(true);
   }
 
@@ -265,6 +289,8 @@ export default function ScanWorkspace() {
           <ScanProgress
             completed={Math.max(stats.completed, foundCount)}
             total={total}
+            started={stats.started}
+            elapsed={elapsed}
             detected={count}
             found={foundCount}
             funded={fundedTotalCount}

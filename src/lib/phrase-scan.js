@@ -26,7 +26,8 @@ export async function* phrasesFromFile(file, { onCount, words } = {}) {
     // repeat is simply scanned again instead of exhausting browser memory.
     if (seen.size < DEDUPE_LIMIT) seen.add(phrase);
     count += 1;
-    if (count - reported >= 5000) {
+    // Reported often, so the detected total on screen grows while the file is read.
+    if (count - reported >= 200) {
       reported = count;
       onCount?.(count);
     }

@@ -7,8 +7,21 @@ const Cell = ({ label, value, tone }) => (
   </div>
 );
 
-export default function ScanProgress({ completed, total, detected, found, funded, fundedTotal, invalid, failed, finished }) {
+export default function ScanProgress({
+  completed,
+  total,
+  detected,
+  started = 0,
+  elapsed = 0,
+  found,
+  funded,
+  fundedTotal,
+  invalid,
+  failed,
+  finished,
+}) {
   const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  const inflight = Math.max(0, started - completed);
 
   return (
     <section className="rounded-[18px] border border-foreground/[0.07] bg-foreground/[0.025] px-3.5 py-3">
@@ -30,12 +43,17 @@ export default function ScanProgress({ completed, total, detected, found, funded
         />
       </div>
 
-      {!finished && !total ? (
-        <p className="mt-2 text-[10px] text-muted-foreground/65 num">
-          {detected > 0
-            ? `${detected.toLocaleString("en-US")} phrases read from the file so far`
-            : "Reading the file line by line…"}
-        </p>
+      {!finished ? (
+        <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/65 num">
+          <span className="truncate">
+            {inflight > 0
+              ? `${inflight.toLocaleString("en-US")} wallet${inflight === 1 ? "" : "s"} being checked`
+              : detected === 0
+                ? "Reading the file line by line…"
+                : "Waiting for the chains to answer…"}
+          </span>
+          <span className="shrink-0">{elapsed}s</span>
+        </div>
       ) : null}
 
       <div className="mt-2.5 grid grid-cols-2 gap-1.5">

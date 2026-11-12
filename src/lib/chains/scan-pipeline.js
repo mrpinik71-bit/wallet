@@ -214,7 +214,12 @@ async function readBatch(batch) {
         const values = new Map();
         await Promise.all(
           items.map(async (item) => {
-            values.set(item.index, await limit(host, () => readBalance(coin, item.address)));
+            // Timed out individually too: a node that never answers must not hold
+            // this host's request slot for the rest of the scan.
+            values.set(
+              item.index,
+              await limit(host, () => withTimeout(readBalance(coin, item.address), JOB_TIMEOUT)),
+            );
           }),
         );
         return new Map([...values].map(([index, balance]) => [index, new Map([[coin.id, balance]])]));
@@ -288,16 +293,22 @@ function toResult(wallet, reads, prices) {
 /** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
 export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled } = {}) {
   let completed = 0;
+  let started = 0;
   const active = new Set();
   let buffer = [];
 
   const report = (result) => {
     completed += 1;
     onResult?.(result);
-    onProgress?.({ completed, result });
+    onProgress?.({ completed, started, result });
   };
 
   const runBatch = async (entries) => {
+    // Announced before the reads start, so the page shows wallets being checked
+    // while a slow node is still answering.
+    started += entries.length;
+    onProgress?.({ completed, started });
+
     const batch = [];
     for (let position = 0; position < entries.length; position += 1) {
       if (isCancelled?.()) return;
