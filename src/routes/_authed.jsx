@@ -40,15 +40,5 @@ function WalletGate() {
     );
   }
 
-  return (
-    <div className="min-h-dvh bg-background px-5 py-10">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <p className="font-heading text-sm font-semibold tracking-tight">Helix</p>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Multichain wallet</p>
-        </div>
-        <WalletSetup />
-      </div>
-    </div>
-  );
+  return <WalletSetup />;
 }

@@ -128,4 +128,56 @@
       transparent 70%
     );
   }
+
+  /* Premium surface: layered gradient, hairline edge, inner top highlight */
+  .lux {
+    position: relative;
+    border-radius: 26px;
+    border: 1px solid hsl(var(--foreground) / 0.07);
+    background-image: linear-gradient(
+      168deg,
+      hsl(var(--card)) 0%,
+      hsl(var(--background)) 100%
+    );
+    box-shadow: 0 40px 80px -60px hsl(0 0% 0% / 0.9);
+  }
+
+  .lux::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.07),
+      inset 0 -1px 0 hsl(0 0% 0% / 0.45);
+  }
+
+  .hairline {
+    height: 1px;
+    width: 100%;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.14),
+      transparent
+    );
+  }
+
+  /* Fine film grain, adds depth to large flat surfaces */
+  .noise::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E");
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
 }

@@ -4,11 +4,11 @@ import { Delete } from "lucide-react";
 const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "blank", "0", "delete"];
 
 const keyClass =
-  "grid h-[58px] place-items-center rounded-[20px] border border-border/60 bg-gradient-to-b from-card/90 to-card/40 font-heading text-[21px] font-medium tabular text-foreground shadow-[inset_0_1px_0_hsl(var(--foreground)/0.07)] backdrop-blur transition-colors hover:border-border hover:from-card disabled:opacity-40";
+  "relative grid h-[60px] place-items-center rounded-[19px] border border-foreground/[0.07] bg-gradient-to-b from-foreground/[0.055] to-foreground/[0.015] font-heading text-[21px] font-medium num text-foreground transition-colors hover:border-foreground/15 hover:from-foreground/10 disabled:opacity-40";
 
 export default function PinKeypad({ onDigit, onDelete, disabled, canDelete }) {
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-3 gap-2.5">
       {keys.map((key) => {
         if (key === "blank") return <span key="blank" />;
 
@@ -21,9 +21,9 @@ export default function PinKeypad({ onDigit, onDelete, disabled, canDelete }) {
               onClick={onDelete}
               disabled={disabled || !canDelete}
               aria-label="Delete last digit"
-              className="grid h-[58px] place-items-center rounded-[20px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+              className="grid h-[60px] place-items-center rounded-[19px] text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground disabled:opacity-25"
             >
-              <Delete className="h-5 w-5" strokeWidth={1.8} />
+              <Delete className="h-[18px] w-[18px]" strokeWidth={1.7} />
             </motion.button>
           );
         }

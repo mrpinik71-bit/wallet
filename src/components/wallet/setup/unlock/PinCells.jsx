@@ -7,32 +7,33 @@ export default function PinCells({ length, error }) {
     <motion.div
       animate={error ? { x: [0, -9, 9, -6, 6, 0] } : { x: 0 }}
       transition={{ duration: 0.42, ease: "easeInOut" }}
-      className="flex items-center justify-center gap-3"
+      className="flex items-center justify-center gap-2.5"
     >
       {cells.map((index) => {
         const filled = index < length;
         const tone = error
-          ? "border-destructive/50 bg-destructive/10"
+          ? "border-destructive/45 bg-destructive/[0.08]"
           : filled
-            ? "border-primary/55 bg-primary/10 shadow-[0_0_24px_-8px_hsl(var(--primary)/0.8)]"
-            : "border-border/70 bg-card/50";
+            ? "border-primary/40 bg-primary/[0.08] shadow-[0_0_28px_-10px_hsl(var(--primary)/0.9)]"
+            : "border-foreground/[0.08] bg-foreground/[0.025]";
 
         return (
           <div
             key={index}
-            className={`grid h-[58px] w-[52px] place-items-center rounded-[18px] border backdrop-blur transition-colors duration-200 ${tone}`}
+            className={`relative grid h-[62px] w-[55px] place-items-center rounded-[19px] border transition-colors duration-200 ${tone}`}
           >
+            <span className="pointer-events-none absolute inset-x-2 top-0 h-px bg-gradient-to-r from-transparent via-foreground/15 to-transparent" />
             {filled ? (
               <motion.span
                 initial={{ scale: 0.35, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 520, damping: 24 }}
-                className={`h-2.5 w-2.5 rounded-full ${
-                  error ? "bg-destructive" : "bg-primary shadow-[0_0_12px_hsl(var(--primary)/0.8)]"
+                className={`h-[9px] w-[9px] rounded-full ${
+                  error ? "bg-destructive" : "bg-primary shadow-[0_0_14px_hsl(var(--primary)/0.9)]"
                 }`}
               />
             ) : (
-              <span className="h-1.5 w-1.5 rounded-full bg-border" />
+              <span className="h-[5px] w-[5px] rounded-full bg-foreground/15" />
             )}
           </div>
         );

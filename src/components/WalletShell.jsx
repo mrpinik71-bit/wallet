@@ -36,8 +36,8 @@ function Brand({ compact = false }) {
       </span>
       {!compact && (
         <div className="leading-none">
-          <p className="font-heading text-[15px] font-semibold tracking-tight">Helix</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Multichain</p>
+          <p className="font-display text-[19px] leading-none">Helix</p>
+          <p className="mt-1.5 text-[9px] font-medium uppercase tracking-[0.28em] text-muted-foreground/75">Multichain</p>
         </div>
       )}
     </div>

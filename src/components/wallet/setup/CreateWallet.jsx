@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
+import { ArrowRight, Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SeedGrid from "./SeedGrid";
 import SeedVerify from "./SeedVerify";
 import PinForm from "./PinForm";
+import SetupStepHeader from "./SetupStepHeader";
 import { generateMnemonic } from "@/lib/bip39";
 import { useWallet } from "@/lib/WalletContext";
+
+const options = [
+  { count: 12, title: "12 words", blurb: "128-bit entropy — the everyday choice for most wallets." },
+  { count: 24, title: "24 words", blurb: "256-bit entropy — the strongest option available." },
+];
 
 export default function CreateWallet({ onCancel }) {
   const { create } = useWallet();
@@ -42,34 +48,30 @@ export default function CreateWallet({ onCancel }) {
   if (step === "choose") {
     return (
       <div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" /> Back
-        </button>
-        <h2 className="mt-4 font-heading text-xl font-semibold tracking-tight">Create a new wallet</h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-          Pick how long your recovery phrase should be. Both are generated on this device with your
-          browser&apos;s secure random generator.
-        </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {[
-            { count: 12, title: "12 words", blurb: "128-bit entropy — the everyday choice for most wallets." },
-            { count: 24, title: "24 words", blurb: "256-bit entropy — the strongest option available." },
-          ].map((option) => (
+        <SetupStepHeader
+          title="Create a new wallet"
+          description="Pick how long your recovery phrase should be. Both are generated on this device with your browser's secure random generator."
+          onBack={onCancel}
+        />
+
+        <div className="mt-5 space-y-2">
+          {options.map((option) => (
             <button
               key={option.count}
               type="button"
               onClick={() => start(option.count)}
               disabled={busy}
-              className="group rounded-2xl border border-border/70 bg-secondary/25 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-secondary/50 disabled:opacity-60"
+              className="group flex w-full items-center gap-3.5 rounded-2xl border border-foreground/[0.07] bg-foreground/[0.025] px-4 py-3.5 text-left transition-colors hover:border-primary/30 disabled:opacity-60"
             >
-              <p className="font-heading text-sm font-semibold">{option.title}</p>
-              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{option.blurb}</p>
-              <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-primary">
-                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Generate phrase
+              <span className="font-mono text-[15px] font-medium text-primary num">{option.count}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-heading text-[13px] font-semibold tracking-tight">{option.title}</span>
+                <span className="mt-0.5 block text-[10.5px] leading-relaxed text-muted-foreground">
+                  {option.blurb}
+                </span>
+              </span>
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-foreground/10 text-muted-foreground transition-colors group-hover:border-primary/40 group-hover:text-foreground">
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.8} />}
               </span>
             </button>
           ))}
@@ -81,26 +83,37 @@ export default function CreateWallet({ onCancel }) {
   if (step === "phrase") {
     return (
       <div>
-        <p className="eyebrow">Step 1 of 3</p>
-        <h2 className="mt-2 font-heading text-lg font-semibold tracking-tight">Write this down</h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-          This is the only key to your wallet. Store it offline — never share it, never type it into a
-          website, and never send it to anyone.
-        </p>
-        <div className="mt-4">
+        <SetupStepHeader
+          step={1}
+          title="Write this down"
+          description="This is the only key to your wallet. Store it offline — never share it or type it into a website."
+          onBack={() => setStep("choose")}
+          backLabel="Word count"
+        />
+
+        <div className="mt-5">
           <SeedGrid mnemonic={mnemonic} />
         </div>
-        <div className="mt-4 flex gap-2.5 rounded-xl border border-destructive/25 bg-destructive/5 p-3">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-          <p className="text-[12px] leading-relaxed text-muted-foreground">
+
+        <div className="mt-3 flex gap-2.5 rounded-2xl border border-destructive/20 bg-destructive/[0.06] p-3">
+          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" strokeWidth={1.9} />
+          <p className="text-[10.5px] leading-relaxed text-muted-foreground">
             Anyone with these words controls your funds. Helix cannot recover them for you.
           </p>
         </div>
+
         <div className="mt-5 flex items-center gap-2">
-          <Button onClick={() => setStep("verify")} className="flex-1 rounded-xl">
+          <Button
+            onClick={() => setStep("verify")}
+            className="h-11 flex-1 rounded-xl text-[12.5px] font-semibold shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)]"
+          >
             I&apos;ve written it down
           </Button>
-          <Button variant="ghost" onClick={() => setStep("choose")} className="rounded-xl">
+          <Button
+            variant="ghost"
+            onClick={() => setStep("choose")}
+            className="h-11 rounded-xl px-3 text-[11.5px] text-muted-foreground"
+          >
             Start over
           </Button>
         </div>
@@ -109,8 +122,22 @@ export default function CreateWallet({ onCancel }) {
   }
 
   if (step === "verify") {
-    return <SeedVerify mnemonic={mnemonic} onVerified={() => setStep("pin")} onBack={() => setStep("phrase")} />;
+    return (
+      <SeedVerify
+        mnemonic={mnemonic}
+        onVerified={() => setStep("pin")}
+        onBack={() => setStep("phrase")}
+      />
+    );
   }
 
-  return <PinForm submitLabel="Create wallet" onSubmit={finish} busy={busy} error={error} />;
+  return (
+    <PinForm
+      submitLabel="Create wallet"
+      onSubmit={finish}
+      busy={busy}
+      error={error}
+      onBack={() => setStep("verify")}
+    />
+  );
 }

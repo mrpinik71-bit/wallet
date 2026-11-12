@@ -13,40 +13,44 @@ export default function SeedGrid({ mnemonic }) {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <p className="eyebrow">Recovery phrase · {words.length} words</p>
-        <div className="flex items-center gap-1">
+    <div className="rounded-2xl border border-foreground/[0.07] bg-foreground/[0.02] p-3">
+      <div className="flex items-center justify-between px-0.5">
+        <p className="text-[9px] font-medium uppercase tracking-[0.24em] text-muted-foreground/70">
+          Recovery phrase · {words.length} words
+        </p>
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
-            onClick={() => setHidden((v) => !v)}
-            className="rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            onClick={() => setHidden((value) => !value)}
+            className="rounded-lg px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             {hidden ? "Show" : "Hide"}
           </button>
           <button
             type="button"
             onClick={copy}
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-2.5 w-2.5 text-primary" /> : <Copy className="h-2.5 w-2.5" />}
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
       </div>
 
       <div
-        className={`mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 ${
-          hidden ? "blur-sm select-none" : ""
-        } transition-all`}
+        className={`mt-2.5 grid grid-cols-2 gap-1.5 transition-all sm:grid-cols-3 ${
+          hidden ? "select-none blur-[6px]" : ""
+        }`}
       >
         {words.map((word, index) => (
           <div
             key={`${word}-${index}`}
-            className="flex items-center gap-2 rounded-xl border border-border/70 bg-secondary/30 px-2.5 py-2"
+            className="flex items-baseline gap-2 rounded-xl border border-foreground/[0.05] bg-foreground/[0.03] px-2.5 py-1.5"
           >
-            <span className="w-4 text-right font-mono text-[10px] text-muted-foreground">{index + 1}</span>
-            <span className="font-mono text-[12px] tracking-tight">{word}</span>
+            <span className="w-3.5 shrink-0 text-right font-mono text-[9px] text-muted-foreground/60">
+              {index + 1}
+            </span>
+            <span className="truncate font-mono text-[11.5px] tracking-tight">{word}</span>
           </div>
         ))}
       </div>

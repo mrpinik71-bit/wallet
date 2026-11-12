@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, LockKeyhole, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
+import SetupStepHeader from "./SetupStepHeader";
 import PinCells from "./unlock/PinCells";
 import PinKeypad from "./unlock/PinKeypad";
 
-export default function PinForm({ submitLabel, onSubmit, busy, error }) {
+export default function PinForm({ submitLabel, onSubmit, busy, error, onBack, total = 3, backLabel = "Back" }) {
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
   const [phase, setPhase] = useState("pin");
@@ -56,31 +57,31 @@ export default function PinForm({ submitLabel, onSubmit, busy, error }) {
 
   return (
     <div>
-      <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/15 ring-1 ring-inset ring-primary/25">
-        <LockKeyhole className="h-4 w-4 text-primary" strokeWidth={1.7} />
-      </span>
-      <h2 className="mt-4 font-heading text-xl font-semibold tracking-tight">Set a 4-digit PIN</h2>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-        Your recovery phrase is encrypted with this PIN (AES-256) and kept only on this device. You will
-        enter it every time you open the wallet.
-      </p>
+      <SetupStepHeader
+        step={total}
+        total={total}
+        title="Set a 4-digit PIN"
+        description="Your recovery phrase is encrypted with this PIN (AES-256) and kept only on this device."
+        onBack={onBack}
+        backLabel={backLabel}
+      />
 
-      <p className="mt-6 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+      <p className="mt-6 text-center text-[9px] font-medium uppercase tracking-[0.3em] text-muted-foreground/70">
         {phase === "pin" ? "Choose your PIN" : "Confirm your PIN"}
       </p>
 
-      <div className="mt-3">
+      <div className="mt-4">
         <PinCells length={value.length} error={Boolean(shown)} />
       </div>
 
-      <div className="mt-3 flex h-5 items-center justify-center gap-1.5 px-2">
+      <div className="mt-4 flex h-5 items-center justify-center gap-1.5 px-2">
         {shown ? (
           <>
             <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" strokeWidth={2} />
-            <p className="text-[12px] font-medium text-destructive">{shown}</p>
+            <p className="text-[11.5px] font-medium text-destructive">{shown}</p>
           </>
         ) : (
-          <p className="text-[11px] text-muted-foreground/70">
+          <p className="text-[10.5px] tracking-wide text-muted-foreground/70">
             {phase === "confirm" ? "Enter the same 4 digits again" : "Tap the keypad below"}
           </p>
         )}
@@ -94,7 +95,7 @@ export default function PinForm({ submitLabel, onSubmit, busy, error }) {
         type="button"
         onClick={() => onSubmit(pin)}
         disabled={busy || !ready}
-        className="mx-auto mt-5 flex h-11 w-full max-w-[302px] items-center justify-center gap-2 rounded-xl bg-primary text-[13px] font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
+        className="mx-auto mt-5 flex h-11 w-full max-w-[302px] items-center justify-center gap-2 rounded-xl bg-primary text-[12.5px] font-semibold text-primary-foreground shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] transition-opacity disabled:opacity-35"
       >
         {busy && <Loader2 className="h-4 w-4 animate-spin" />}
         {submitLabel}

@@ -17,25 +17,25 @@ export default function TokenRow({ item }) {
     <Link
       to="/receive"
       search={{ coin: item.id }}
-      className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/30"
+      className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-foreground/[0.03]"
     >
       <CoinAvatar symbol={item.symbol} color={item.color} logo={item.logo} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13.5px] font-medium leading-tight">{item.name}</p>
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
-          <span className="truncate tabular">{compactAmount(item.balance)}</span>
-          <span className="rounded bg-secondary/80 px-1 py-px text-[9px] font-semibold uppercase tracking-wide">
+        <p className="truncate font-heading text-[13px] font-medium leading-tight">{item.name}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-[10.5px] leading-tight text-muted-foreground/80">
+          <span className="truncate num">{compactAmount(item.balance)}</span>
+          <span className="rounded border border-foreground/[0.08] px-1 py-px text-[8.5px] font-semibold uppercase tracking-[0.08em]">
             {item.symbol}
           </span>
         </p>
       </div>
       <div className="shrink-0 text-right">
-        <p className={`text-[13.5px] font-semibold leading-tight tabular ${empty ? "text-muted-foreground" : ""}`}>
+        <p className={`text-[13px] font-semibold leading-tight num ${empty ? "text-muted-foreground/70" : ""}`}>
           {formatUsd(item.value)}
         </p>
         <p
-          className={`mt-1 inline-flex items-center rounded px-1 py-px text-[10.5px] font-medium leading-tight tabular ${
-            empty ? "text-muted-foreground" : up ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
+          className={`mt-1 inline-flex rounded px-1 py-px text-[10px] font-medium leading-tight num ${
+            empty ? "text-muted-foreground/60" : up ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
           }`}
         >
           {empty ? "—" : formatPct(item.change24h)}

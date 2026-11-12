@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import PinForm from "./PinForm";
+import SetupStepHeader from "./SetupStepHeader";
 import { validateMnemonic } from "@/lib/bip39";
 import { useWallet } from "@/lib/WalletContext";
 
@@ -45,22 +46,29 @@ export default function ImportWallet({ onCancel }) {
   }
 
   if (step === "pin") {
-    return <PinForm submitLabel="Restore wallet" onSubmit={finish} busy={busy} error={error} />;
+    return (
+      <PinForm
+        submitLabel="Restore wallet"
+        onSubmit={finish}
+        busy={busy}
+        error={error}
+        onBack={() => setStep("phrase")}
+        total={2}
+        backLabel="Phrase"
+      />
+    );
   }
 
   return (
     <form onSubmit={checkPhrase}>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-3 w-3" /> Back
-      </button>
-      <h2 className="mt-4 font-heading text-lg font-semibold tracking-tight">Restore from a phrase</h2>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-        Enter your 12 or 24 words separated by spaces. Typing it here keeps it on this device only.
-      </p>
+      <SetupStepHeader
+        step={1}
+        total={2}
+        title="Restore a wallet"
+        description="Enter your 12 or 24 words separated by spaces. Typing it here keeps it on this device only."
+        onBack={onCancel}
+      />
+
       <Textarea
         value={phrase}
         onChange={(event) => setPhrase(event.target.value)}
@@ -68,10 +76,16 @@ export default function ImportWallet({ onCancel }) {
         spellCheck={false}
         autoCapitalize="none"
         placeholder="word one two three …"
-        className="mt-4 resize-none bg-secondary/40 font-mono text-[13px] leading-relaxed"
+        className="mt-5 resize-none rounded-2xl border-foreground/[0.08] bg-foreground/[0.025] font-mono text-[12.5px] leading-relaxed focus-visible:border-primary/40 focus-visible:ring-0"
       />
-      {error && <p className="mt-3 text-[12px] text-destructive">{error}</p>}
-      <Button type="submit" disabled={busy || !phrase.trim()} className="mt-5 w-full rounded-xl">
+
+      {error && <p className="mt-3 text-[11.5px] text-destructive">{error}</p>}
+
+      <Button
+        type="submit"
+        disabled={busy || !phrase.trim()}
+        className="mt-5 h-11 w-full rounded-xl text-[12.5px] font-semibold shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)]"
+      >
         {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Continue
       </Button>
