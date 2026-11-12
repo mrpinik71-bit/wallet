@@ -5,83 +5,13 @@ import { getAddresses } from "@/lib/chains/derive";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
-import WORDLIST from "@/lib/bip39-words.json";
 import { validateMnemonic } from "@/lib/bip39";
+import { parsePhrases, phrasesFromLines } from "@/lib/phrase-lines";
 import { readLines } from "@/lib/scan-file";
 
 export const scanAssets = SCAN_ASSETS;
 export const scanChains = SCAN_CHAINS;
-
-const WORD_SET = new Set(WORDLIST);
-const PHRASE_SIZES = new Set([12, 15, 18, 21, 24]);
-
-const tokenize = (text) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z]+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean);
-
-// One line often carries more than the phrase — an index, a label, an address
-// or a private key. Only the standard words are taken, so a phrase buried in
-// that text is still recognised instead of being dropped with the whole line.
-function candidatesFromLine(line) {
-  const tokens = tokenize(line);
-  if (tokens.length < 12) return [];
-
-  const found = [];
-  // A line that is exactly one phrase is taken as-is; when a word is mistyped
-  // it is still reported as invalid later instead of vanishing.
-  if (PHRASE_SIZES.has(tokens.length)) found.push(tokens.join(" "));
-
-  // Otherwise every uninterrupted run of standard words is a candidate.
-  let run = [];
-  const flush = () => {
-    if (run.length >= 12) {
-      if (PHRASE_SIZES.has(run.length)) found.push(run.join(" "));
-      else if (run.length > 24) {
-        for (let i = 0; i + 12 <= run.length; i += 12) found.push(run.slice(i, i + 12).join(" "));
-      } else found.push(run.slice(0, 12).join(" "));
-    }
-    run = [];
-  };
-  for (const token of tokens) {
-    if (WORD_SET.has(token)) run.push(token);
-    else flush();
-  }
-  flush();
-  return found;
-}
-
-/** Splits pasted text or a .txt file into individual recovery phrases. */
-export function parsePhrases(text) {
-  const seen = new Set();
-  const entries = [];
-  const add = (phrase) => {
-    const key = phrase.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    entries.push({ phrase, words: phrase.split(" ").length });
-  };
-
-  const blocks = String(text || "")
-    .replace(/\r/g, "")
-    .split(/\n\s*\n/);
-
-  for (const block of blocks) {
-    const before = entries.length;
-    for (const line of block.split("\n")) {
-      for (const phrase of candidatesFromLine(line)) add(phrase);
-    }
-    // A phrase wrapped over a couple of lines is joined back together.
-    if (entries.length === before) {
-      const tokens = tokenize(block);
-      if (PHRASE_SIZES.has(tokens.length)) add(tokens.join(" "));
-    }
-  }
-  return entries;
-}
+export { parsePhrases };
 
 async function scanOne(entry, prices) {
   const base = { phrase: entry.phrase, words: entry.words, addresses: {}, funded: [], total: 0, failed: 0, error: null };
@@ -145,43 +75,6 @@ async function scanOne(entry, prices) {
 }
 
 const DEDUPE_LIMIT = 300000;
-
-/** Streams the phrases out of a text file as its lines arrive, so a list of
- * millions never has to sit in memory. */
-export async function* phrasesFromLines(lines) {
-  let pending = [];
-
-  const flush = () => {
-    const out = [];
-    if (PHRASE_SIZES.has(pending.length)) out.push(pending.join(" "));
-    else if (pending.length > 24) {
-      for (let i = 0; i + 12 <= pending.length; i += 12) out.push(pending.slice(i, i + 12).join(" "));
-    } else if (pending.length >= 12) out.push(pending.slice(0, 12).join(" "));
-    pending = [];
-    return out;
-  };
-
-  for await (const line of lines) {
-    const tokens = tokenize(line);
-    if (tokens.length === 0) {
-      for (const phrase of flush()) yield phrase;
-      continue;
-    }
-    // A line that carries a whole phrase is taken on its own, even when it also
-    // carries an index, a label or an address.
-    const direct = candidatesFromLine(line);
-    if (direct.length) {
-      pending = [];
-      for (const phrase of direct) yield phrase;
-      continue;
-    }
-    // Otherwise it may be part of a phrase wrapped over several lines.
-    pending.push(...tokens);
-    if (pending.length >= 24) for (const phrase of flush()) yield phrase;
-  }
-
-  for (const phrase of flush()) yield phrase;
-}
 
 /** Reads a .txt file and streams its phrases, de-duplicated. */
 export async function* phrasesFromFile(file, { onCount } = {}) {
