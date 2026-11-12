@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { FileText, ScanSearch, X } from "lucide-react";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 
-export default function PhraseInput({ value, fileName, onChange, onFile, onScan, onCancel, scanning, count }) {
+export default function PhraseInput({ value, fileName, onChange, onFile, onScan, onCancel, scanning, count, error }) {
   const fileRef = useRef(null);
 
   return (
@@ -69,9 +69,15 @@ export default function PhraseInput({ value, fileName, onChange, onFile, onScan,
           {fileName ? (
             <span className="text-primary/85">{fileName} — scan starts automatically</span>
           ) : (
-            "Uploading a file starts the balance scan right away."
+            "Uploading a file (.txt, up to 500 MB) starts the balance scan right away."
           )}
         </p>
+
+        {error && !scanning ? (
+          <p className="mt-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+            {error}
+          </p>
+        ) : null}
 
         {scanning ? (
           <button

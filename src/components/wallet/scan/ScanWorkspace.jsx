@@ -7,6 +7,8 @@ import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
 import { fetchPricesFor } from "@/lib/chains/prices";
 import { parsePhrases, scanAssets, scanPhrases } from "@/lib/phrase-scan";
 
+const MAX_FILE_BYTES = 500 * 1024 * 1024;
+
 export default function ScanWorkspace() {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
@@ -26,6 +28,11 @@ export default function ScanWorkspace() {
   const visible = onlyFunded ? rows.filter((row) => row.slot.total > 0) : rows;
 
   async function readFile(file) {
+    setError("");
+    if (file.size > MAX_FILE_BYTES) {
+      setError("That file is larger than 500 MB. Split it into smaller .txt files.");
+      return;
+    }
     const content = await file.text();
     setText(content);
     setFileName(file.name);
@@ -83,6 +90,7 @@ export default function ScanWorkspace() {
             setFileName("");
           }}
           onFile={readFile}
+          error={error}
           onScan={() => start()}
           onCancel={() => {
             cancelledRef.current = true;
