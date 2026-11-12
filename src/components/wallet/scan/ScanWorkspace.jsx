@@ -116,13 +116,14 @@ export default function ScanWorkspace() {
         prices,
         isCancelled: () => cancelledRef.current,
         onResult: (result) => {
-          // Phrases that fail validation are never listed: only readable
-          // phrases appear, with their derived chain addresses.
+          // Every detected line is listed, so the results always add up to the
+          // phrases that were found — an unreadable entry is shown as such
+          // instead of quietly disappearing from the list.
+          if (result.total > 0 || resultsRef.current.length < RAW_KEEP) resultsRef.current.push(result);
           if (result.status !== "done") {
             live.invalid += 1;
             return;
           }
-          if (result.total > 0 || resultsRef.current.length < RAW_KEEP) resultsRef.current.push(result);
           if (result.total > 0) {
             live.fundedCount += 1;
             live.fundedTotal += result.total;
@@ -241,8 +242,8 @@ export default function ScanWorkspace() {
 
           {stats.invalid > 0 ? (
             <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
-              {stats.invalid.toLocaleString("en-US")} entr{stats.invalid === 1 ? "y" : "ies"} skipped — not a valid
-              BIP-39 recovery phrase, so {stats.invalid === 1 ? "it is" : "they are"} not listed.
+              {stats.invalid.toLocaleString("en-US")} entr{stats.invalid === 1 ? "y is" : "ies are"} not a valid BIP-39
+              recovery phrase — {stats.invalid === 1 ? "it is" : "they are"} listed as unreadable.
             </p>
           ) : null}
 
