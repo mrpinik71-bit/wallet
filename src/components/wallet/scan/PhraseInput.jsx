@@ -10,7 +10,6 @@ export default function PhraseInput({
   fileName,
   onChange,
   onFile,
-  onScan,
   onCancel,
   scanning,
   count,
@@ -130,15 +129,10 @@ export default function PhraseInput({
             Stop scan
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={onScan}
-            disabled={count === 0}
-            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-[12.5px] font-semibold text-primary-foreground shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] transition-opacity disabled:opacity-35"
-          >
-            <ScanSearch className="h-4 w-4" strokeWidth={2} />
-            Scan balances
-          </button>
+          <p className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2.5 text-center text-[10.5px] font-medium text-primary/90">
+            <ScanSearch className="h-3.5 w-3.5" strokeWidth={2} />
+            {count > 0 ? "Scanning your lines on its own — no button needed" : "Scanning starts by itself as you paste or type"}
+          </p>
         )}
 
         {!scanning ? <TelegramPanel /> : null}
