@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import FundedExport from "@/components/wallet/scan/FundedExport";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
+import ScanProgress from "@/components/wallet/scan/ScanProgress";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
 import { fetchPricesFor } from "@/lib/chains/prices";
@@ -158,6 +159,9 @@ export default function ScanWorkspace() {
         },
         onProgress: ({ completed }) => {
           live.completed = completed;
+          // The processed counter ticks on its own, so a slow batch still shows
+          // that work is moving.
+          scheduleFlush();
         },
       });
     } catch {
@@ -255,6 +259,18 @@ export default function ScanWorkspace() {
               setOnlyFunded((value) => !value);
               setPage(1);
             }}
+            finished={!scanning}
+          />
+
+          <ScanProgress
+            completed={Math.max(stats.completed, foundCount)}
+            total={total}
+            detected={count}
+            found={foundCount}
+            funded={fundedTotalCount}
+            fundedTotal={stats.fundedTotal}
+            invalid={stats.invalid}
+            failed={stats.failed}
             finished={!scanning}
           />
 
