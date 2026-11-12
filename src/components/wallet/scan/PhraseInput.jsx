@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { FileText, ScanSearch, X } from "lucide-react";
+import TelegramPanel from "@/components/wallet/scan/TelegramPanel";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 
 export default function PhraseInput({ value, fileName, onChange, onFile, onScan, onCancel, scanning, count, error }) {
@@ -99,6 +100,8 @@ export default function PhraseInput({ value, fileName, onChange, onFile, onScan,
             Scan balances
           </button>
         )}
+
+        {!scanning ? <TelegramPanel /> : null}
 
         <p className="mt-3 text-center text-[9.5px] uppercase tracking-[0.16em] text-muted-foreground/45">
           {SCAN_CHAINS.length} chains · {SCAN_ASSETS.length} assets per wallet
