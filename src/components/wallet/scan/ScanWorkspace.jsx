@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, ShieldCheck } from "lucide-react";
-import { downloadFundedPhrases } from "@/lib/download-funded";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
+import FundedExport from "@/components/wallet/scan/FundedExport";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
@@ -156,9 +156,8 @@ export default function ScanWorkspace() {
     setEditing(true);
   }
 
-  function downloadFunded() {
-    const funded = resultsRef.current.filter((slot) => slot && slot.total > 0);
-    if (funded.length > 0) downloadFundedPhrases(funded);
+  function getFunded() {
+    return resultsRef.current.filter((slot) => slot && slot.total > 0);
   }
 
   const hasFunds = stats.fundedCount > 0;
@@ -212,16 +211,7 @@ export default function ScanWorkspace() {
             finished={!scanning}
           />
 
-          {!scanning && hasFunds ? (
-            <button
-              type="button"
-              onClick={downloadFunded}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-[11.5px] font-semibold text-primary-foreground shadow-[0_18px_40px_-24px_hsl(var(--primary)/0.9)] active:opacity-90"
-            >
-              <Download className="h-3.5 w-3.5" strokeWidth={2.1} />
-              Download {stats.fundedCount} funded phrase{stats.fundedCount === 1 ? "" : "s"}
-            </button>
-          ) : null}
+          {!scanning && hasFunds ? <FundedExport getFunded={getFunded} scanned={stats.total} /> : null}
 
           {scanning ? (
             <button

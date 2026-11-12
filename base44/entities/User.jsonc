@@ -7,6 +7,14 @@
         "admin",
         "user"
       ]
+    },
+    "telegram_chat_id": {
+      "type": "string",
+      "description": "Chat id of the account's own Telegram chat with the scan bot"
+    },
+    "telegram_username": {
+      "type": "string",
+      "description": "Telegram username shown for the linked chat"
     }
   },
   "required": [
