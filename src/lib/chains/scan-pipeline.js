@@ -264,6 +264,7 @@ function toResult(wallet, reads, prices) {
   return {
     phrase: wallet.entry.phrase,
     words: wallet.words,
+    line: wallet.entry.line,
     addresses: wallet.addresses,
     funded,
     total: funded.reduce((sum, item) => sum + item.value, 0),
@@ -296,6 +297,7 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
         report({
           phrase: entry.phrase,
           words: entry.words,
+          line: entry.line,
           addresses: {},
           funded: [],
           total: 0,

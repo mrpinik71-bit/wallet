@@ -17,21 +17,22 @@ export async function* phrasesFromFile(file, { onCount, words } = {}) {
   let count = 0;
   let reported = 0;
 
-  for await (const phrase of phrasesFromLines(readLines(file))) {
+  // Each line of the file is one phrase, so a line is checked on its own.
+  for await (const { phrase, line } of phrasesFromLines(readLines(file))) {
+    const size = phrase.split(" ").length;
     // Only phrases of the chosen length are scanned; the rest of the file is
     // skipped rather than checked and thrown away.
-    if (words && phrase.split(" ").length !== words) continue;
-    const key = phrase.toLowerCase();
-    if (seen.has(key)) continue;
+    if (words && size !== words) continue;
+    if (seen.has(phrase)) continue;
     // The de-duplication set is capped: past a few hundred thousand entries a
     // repeat is simply scanned again instead of exhausting browser memory.
-    if (seen.size < DEDUPE_LIMIT) seen.add(key);
+    if (seen.size < DEDUPE_LIMIT) seen.add(phrase);
     count += 1;
     if (count - reported >= 5000) {
       reported = count;
       onCount?.(count);
     }
-    yield { phrase, words: phrase.split(" ").length };
+    yield { phrase, words: size, line };
   }
 
   onCount?.(count);
