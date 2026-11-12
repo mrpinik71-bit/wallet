@@ -80,12 +80,19 @@ async function scanOne(entry, prices) {
   const reads = await Promise.all(
     scanAssets.map(async (coin) => {
       const price = priceOf(prices, coin);
-      try {
-        const balance = await readBalance(coin, addresses[coin.chain] || "");
-        return { coin, balance, price, failed: false };
-      } catch {
-        return { coin, balance: 0, price, failed: true };
+      const address = addresses[coin.chain] || "";
+      // Public nodes rate-limit bursts, so a failed read is retried once before
+      // it is reported as a failure — a chain is never silently counted as zero.
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const balance = await readBalance(coin, address);
+          return { coin, balance, price, failed: false };
+        } catch {
+          if (attempt === 1) break;
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
       }
+      return { coin, balance: 0, price, failed: true };
     }),
   );
 
@@ -110,6 +117,7 @@ async function scanOne(entry, prices) {
     funded,
     total: funded.reduce((sum, item) => sum + item.value, 0),
     failed: reads.filter((read) => read.failed).length,
+    failedChains: reads.filter((read) => read.failed).map((read) => read.coin.symbol),
   };
 }
 

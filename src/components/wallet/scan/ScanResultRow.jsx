@@ -102,7 +102,13 @@ export default function ScanResultRow({ result, index }) {
             </ul>
           ) : (
             <p className="text-[10.5px] text-muted-foreground/70">
-              Nothing found on the scanned assets{result.failed ? ` · ${result.failed} chain reads failed` : ""}.
+              Nothing found on the scanned assets
+              {result.failed
+                ? ` · ${result.failed} chain read${result.failed === 1 ? "" : "s"} failed${
+                    result.failedChains?.length ? ` (${result.failedChains.slice(0, 4).join(", ")})` : ""
+                  }`
+                : ""}
+              .
             </p>
           )}
 
