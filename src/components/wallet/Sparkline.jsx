@@ -1,6 +1,7 @@
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 
 export default function Sparkline({ data, positive = true, height = 32 }) {
+  if (!data || data.length < 2) return <div style={{ height }} className="w-full" />;
   const stroke = positive ? "hsl(var(--primary))" : "hsl(var(--destructive))";
   return (
     <div style={{ height }} className="w-full">
