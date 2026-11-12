@@ -29,17 +29,26 @@ export default function ScanWorkspace() {
   const liveRef = useRef({ ...EMPTY_LIVE });
   const cancelledRef = useRef(false);
   const countRef = useRef(0);
+  const flushRef = useRef(null);
 
-  // A scan of millions must never trigger a render per phrase: the counters and
-  // the list are flushed to the screen a few times a second while scanning.
-  useEffect(() => {
-    if (!scanning) return undefined;
-    const timer = setInterval(() => {
+  // Never one render per phrase (a scan can hold millions), but a phrase that
+  // comes back is pushed to the list within a moment of being found — results
+  // appear one by one while the scan is still running.
+  function scheduleFlush() {
+    if (flushRef.current) return;
+    flushRef.current = setTimeout(() => {
+      flushRef.current = null;
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
-    }, 450);
-    return () => clearInterval(timer);
-  }, [scanning]);
+    }, 90);
+  }
+
+  useEffect(
+    () => () => {
+      if (flushRef.current) clearTimeout(flushRef.current);
+    },
+    [],
+  );
 
   // The listed count is the truth: it is how many phrases were actually found
   // and checked, so the number on screen always matches the rows below it.
@@ -124,6 +133,7 @@ export default function ScanWorkspace() {
           // counted instead of taking a row in the results.
           if (result.status !== "done") {
             live.invalid += 1;
+            scheduleFlush();
             return;
           }
           resultsRef.current.push(result);
@@ -132,6 +142,7 @@ export default function ScanWorkspace() {
             live.fundedTotal += result.total;
           }
           if (result.failed) live.failed += result.failed;
+          scheduleFlush();
         },
         onProgress: ({ completed }) => {
           live.completed = completed;
@@ -140,6 +151,10 @@ export default function ScanWorkspace() {
     } catch {
       setError("The scan stopped unexpectedly. Try again with fewer phrases.");
     } finally {
+      if (flushRef.current) {
+        clearTimeout(flushRef.current);
+        flushRef.current = null;
+      }
       cancelledRef.current = false;
       setScanning(false);
       // A file's phrase count is only known once it has been read through; a
@@ -152,6 +167,10 @@ export default function ScanWorkspace() {
 
   function reset() {
     cancelledRef.current = true;
+    if (flushRef.current) {
+      clearTimeout(flushRef.current);
+      flushRef.current = null;
+    }
     setScanning(false);
     resultsRef.current = [];
     liveRef.current = { ...EMPTY_LIVE };
