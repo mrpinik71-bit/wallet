@@ -26,12 +26,7 @@ export default function WalletSetup() {
           <h1 className="font-display text-[34px] leading-[1.1] tracking-[-0.02em]">
             Paste your Text Line By Line
           </h1>
-          <p className="mt-3.5 max-w-[300px] text-[12px] leading-relaxed text-muted-foreground">
-            Paste a list of recovery phrases and see which wallets hold funds across every major chain. The
-            phrases are read here on this device and never uploaded.
-          </p>
-
-          <div className="mt-8">
+          <div className="mt-6">
             <ScanWorkspace />
           </div>
 
