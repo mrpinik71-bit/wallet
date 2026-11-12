@@ -28,6 +28,18 @@ function WalletGate() {
     );
   }
 
+  if (status === "locked") {
+    return <UnlockVault />;
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-background">
+        <span className="h-9 w-9 animate-spin rounded-full border-2 border-border border-t-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-dvh bg-background px-5 py-10">
       <div className="mx-auto max-w-2xl">
@@ -35,9 +47,7 @@ function WalletGate() {
           <p className="font-heading text-sm font-semibold tracking-tight">Helix</p>
           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Multichain wallet</p>
         </div>
-        {status === "loading" && <div className="panel h-40 animate-pulse" />}
-        {status === "none" && <WalletSetup />}
-        {status === "locked" && <UnlockVault />}
+        <WalletSetup />
       </div>
     </div>
   );
