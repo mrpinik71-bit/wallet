@@ -77,8 +77,11 @@ export default function ScanResultRow({ result, index }) {
             {invalid
               ? result.error
               : hasBalance
-                ? funded.map((item) => item.symbol).join(" · ")
-                : `${addressRows.length} chain address${addressRows.length === 1 ? "" : "es"}`}
+                ? funded
+                    .slice(0, 3)
+                    .map((item) => `${compactAmount(item.balance)} ${item.symbol}`)
+                    .join(" · ") + (funded.length > 3 ? ` · +${funded.length - 3}` : "")
+                : `No balance · ${addressRows.length} chain${addressRows.length === 1 ? "" : "s"} checked`}
           </span>
         </span>
         <span className="shrink-0 text-right">
