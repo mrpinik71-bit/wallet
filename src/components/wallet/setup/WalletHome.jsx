@@ -3,15 +3,15 @@ import { CalendarDays, Eye, Lock, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import CoinAvatar from "@/components/wallet/CoinAvatar";
 import SeedGrid from "./SeedGrid";
+import { networks } from "@/lib/coin-catalog";
 import { useWallet } from "@/lib/WalletContext";
 import { openVault } from "@/lib/vault";
 
-const networks = ["Bitcoin", "Ethereum", "Solana", "Tron"];
-
 export default function WalletHome() {
   const { wallet, lock, erase } = useWallet();
-  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
   const [phrase, setPhrase] = useState("");
   const [revealError, setRevealError] = useState("");
 
@@ -19,9 +19,9 @@ export default function WalletHome() {
     event.preventDefault();
     setRevealError("");
     try {
-      const opened = await openVault(password);
+      const opened = await openVault(pin);
       setPhrase(opened.mnemonic);
-      setPassword("");
+      setPin("");
     } catch (err) {
       setRevealError(err.message);
     }
@@ -52,7 +52,7 @@ export default function WalletHome() {
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Confirm your password</DialogTitle>
+                  <DialogTitle>Confirm your PIN</DialogTitle>
                 </DialogHeader>
                 {phrase ? (
                   <SeedGrid mnemonic={phrase} />
@@ -63,14 +63,16 @@ export default function WalletHome() {
                     </p>
                     <Input
                       type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Wallet password"
-                      className="mt-3 bg-secondary/40"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={pin}
+                      onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                      placeholder="••••"
+                      className="mt-3 bg-secondary/40 text-center font-mono text-lg tracking-[0.6em]"
                       autoComplete="current-password"
                     />
                     {revealError && <p className="mt-2 text-[12px] text-destructive">{revealError}</p>}
-                    <Button type="submit" className="mt-3 w-full rounded-xl">
+                    <Button type="submit" disabled={pin.length !== 4} className="mt-3 w-full rounded-xl">
                       Reveal recovery phrase
                     </Button>
                   </form>
@@ -85,25 +87,31 @@ export default function WalletHome() {
       </section>
 
       <section className="panel overflow-hidden">
-        <div className="border-b border-border/70 px-5 py-4">
-          <h2 className="font-heading text-sm font-semibold tracking-tight">Networks</h2>
+        <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+          <h2 className="font-heading text-sm font-semibold tracking-tight">Supported networks</h2>
+          <span className="text-[11px] text-muted-foreground">{networks.length} chains</span>
         </div>
-        <ul className="divide-y divide-border/60">
+        <ul className="grid max-h-[360px] grid-cols-1 divide-y divide-border/60 overflow-y-auto sm:grid-cols-2 sm:divide-y-0">
           {networks.map((network) => (
-            <li key={network} className="flex items-center justify-between px-5 py-3.5">
-              <span className="text-[13px]">{network}</span>
-              <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
-                Not connected
+            <li key={network.id} className="flex items-center gap-3 px-5 py-3">
+              <CoinAvatar symbol={network.symbol} color={network.color} logo={network.logo} size="sm" />
+              <span className="min-w-0 flex-1 truncate text-[12px]">{network.name}</span>
+              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {network.symbol}
               </span>
             </li>
           ))}
         </ul>
+        <p className="border-t border-border/70 px-5 py-3 text-[11px] leading-relaxed text-muted-foreground">
+          Addresses for each chain are generated when the signing engine is connected. Until then no
+          funds can move from this wallet.
+        </p>
       </section>
 
       <section className="panel p-5">
         <h2 className="font-heading text-sm font-semibold tracking-tight">Encryption</h2>
         <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
-          Your phrase is sealed with AES-256-GCM using a key stretched from your password with
+          Your phrase is sealed with AES-256-GCM using a key stretched from your 4-digit PIN with
           PBKDF2-SHA256 (310,000 rounds). It is stored only on this device.
         </p>
         <Dialog>

@@ -59,7 +59,7 @@ function Overview() {
               {movers.map((coin) => (
                 <div key={coin.id} className="rounded-xl border border-border/60 bg-secondary/20 p-3">
                   <div className="flex items-center gap-2">
-                    <CoinAvatar symbol={coin.symbol} color={coin.color} size="sm" />
+                    <CoinAvatar symbol={coin.symbol} color={coin.color} logo={coin.logo} size="sm" />
                     <span className="text-[12px] font-medium">{coin.symbol}</span>
                     <span
                       className={`ml-auto text-[11px] font-medium tabular ${

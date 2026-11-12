@@ -24,7 +24,7 @@ export default function AssetList() {
         {held.map((asset) => (
           <li key={asset.id}>
             <div className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-secondary/30">
-              <CoinAvatar symbol={asset.symbol} color={asset.color} />
+              <CoinAvatar symbol={asset.symbol} color={asset.color} logo={asset.logo} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium">{asset.name}</p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">

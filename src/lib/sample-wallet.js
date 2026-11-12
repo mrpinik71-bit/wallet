@@ -1,68 +1,40 @@
-// SAMPLE DATA — placeholders used while the wallet is not yet connected to
-// live network balances. Replace with real portfolio / market data.
+// SAMPLE DATA — reference prices and placeholder balances used while the wallet
+// is not yet connected to live network balances.
 
-export const assets = [
-  {
-    id: "btc",
-    symbol: "BTC",
-    name: "Bitcoin",
-    chain: "Bitcoin",
-    color: "#F7931A",
-    price: 96284.32,
-    change24h: 2.14,
-    amount: 0.4821,
-  },
-  {
-    id: "eth",
-    symbol: "ETH",
-    name: "Ethereum",
-    chain: "Ethereum",
-    color: "#8A92B2",
-    price: 3412.55,
-    change24h: -1.32,
-    amount: 4.82,
-  },
-  {
-    id: "sol",
-    symbol: "SOL",
-    name: "Solana",
-    chain: "Solana",
-    color: "#14F195",
-    price: 214.88,
-    change24h: 5.62,
-    amount: 62.4,
-  },
-  {
-    id: "usdt",
-    symbol: "USDT",
-    name: "Tether",
-    chain: "Tron",
-    color: "#26A17B",
-    price: 1.0,
-    change24h: 0.01,
-    amount: 12480.5,
-  },
-  {
-    id: "avax",
-    symbol: "AVAX",
-    name: "Avalanche",
-    chain: "Avalanche",
-    color: "#E84142",
-    price: 38.42,
-    change24h: -0.84,
-    amount: 210.0,
-  },
-  {
-    id: "pol",
-    symbol: "POL",
-    name: "Polygon",
-    chain: "Polygon",
-    color: "#8247E5",
-    price: 0.512,
-    change24h: 3.18,
-    amount: 8400.0,
-  },
+import { coins, networkOf } from "@/lib/coin-catalog";
+
+function spark(seed, trend) {
+  const points = [];
+  let value = 50;
+  for (let i = 0; i < 12; i += 1) {
+    const wave = Math.sin((seed + 1) * (i + 1) * 1.7) * 6;
+    value = Math.max(8, Math.min(96, value + wave + trend * 1.6));
+    points.push(Number(value.toFixed(1)));
+  }
+  return points;
+}
+
+const holdings = [
+  ["btc", 0.4821],
+  ["eth", 4.82],
+  ["sol", 62.4],
+  ["usdt-tron", 12480.5],
+  ["bnb", 18.4],
+  ["ton", 640],
+  ["pol", 8400],
+  ["trx", 12400],
 ];
+
+export const assets = holdings.map(([id, amount]) => {
+  const coin = coins.find((item) => item.id === id);
+  return { ...coin, chain: networkOf(coin).name, amount };
+});
+
+export const markets = coins.map((coin, index) => ({
+  ...coin,
+  chain: networkOf(coin).name,
+  spark: spark(index, coin.change7d),
+}));
 
 export const portfolioHistory = [
   { label: "Oct 14", value: 141220 },
@@ -113,7 +85,7 @@ export const transactions = [
     amount: 480.0,
     valueUsd: 480.0,
     counterparty: "TQ5n…8pQr",
-    chain: "Tron",
+    chain: "TRON",
     status: "confirmed",
     timestamp: "2026-11-11T11:04:00Z",
   },
@@ -131,11 +103,11 @@ export const transactions = [
   {
     id: "tx-5",
     type: "send",
-    asset: "AVAX",
-    amount: 18.4,
-    valueUsd: 706.93,
-    counterparty: "0x1b9E…4A02",
-    chain: "Avalanche",
+    asset: "TON",
+    amount: 84.0,
+    valueUsd: 524.16,
+    counterparty: "UQAi…7pQk",
+    chain: "TON",
     status: "pending",
     timestamp: "2026-11-09T21:58:00Z",
   },
@@ -152,26 +124,15 @@ export const transactions = [
   },
 ];
 
-export const markets = [
-  { id: "btc", symbol: "BTC", name: "Bitcoin", price: 96284.32, change24h: 2.14, change7d: 6.84, volume: 41200000000, cap: 1910000000000, color: "#F7931A", spark: [88, 90, 89, 92, 94, 93, 96, 95, 98, 97, 100, 102] },
-  { id: "eth", symbol: "ETH", name: "Ethereum", price: 3412.55, change24h: -1.32, change7d: 2.11, volume: 18400000000, cap: 411000000000, color: "#8A92B2", spark: [96, 95, 97, 94, 93, 95, 92, 94, 91, 90, 92, 91] },
-  { id: "sol", symbol: "SOL", name: "Solana", price: 214.88, change24h: 5.62, change7d: 12.4, volume: 6100000000, cap: 102000000000, color: "#14F195", spark: [70, 73, 72, 78, 80, 79, 84, 88, 87, 92, 96, 100] },
-  { id: "bnb", symbol: "BNB", name: "BNB", price: 684.12, change24h: 0.94, change7d: 3.24, volume: 2100000000, cap: 99000000000, color: "#F3BA2F", spark: [90, 91, 93, 92, 94, 93, 95, 96, 95, 97, 98, 99] },
-  { id: "xrp", symbol: "XRP", name: "XRP", price: 2.42, change24h: -2.71, change7d: -4.12, volume: 3900000000, cap: 138000000000, color: "#23292F", spark: [100, 98, 99, 96, 94, 95, 92, 90, 91, 88, 87, 86] },
-  { id: "ada", symbol: "ADA", name: "Cardano", price: 0.842, change24h: 1.62, change7d: 4.02, volume: 780000000, cap: 30000000000, color: "#0033AD", spark: [85, 86, 88, 87, 89, 91, 90, 92, 94, 93, 95, 96] },
-  { id: "avax", symbol: "AVAX", name: "Avalanche", price: 38.42, change24h: -0.84, change7d: -1.24, volume: 520000000, cap: 16000000000, color: "#E84142", spark: [94, 93, 95, 92, 91, 92, 90, 91, 89, 90, 88, 89] },
-  { id: "dot", symbol: "DOT", name: "Polkadot", price: 6.14, change24h: 3.04, change7d: 7.9, volume: 310000000, cap: 9400000000, color: "#E6007A", spark: [78, 80, 79, 82, 84, 83, 86, 88, 90, 89, 93, 95] },
-];
-
 export const featuredApps = [
   { name: "Uniswap", category: "DEX", chain: "Ethereum", blurb: "Swap tokens across deep liquidity pools.", url: "https://app.uniswap.org", color: "#FF3E8F" },
   { name: "Jupiter", category: "DEX", chain: "Solana", blurb: "Best-route swaps on Solana.", url: "https://jup.ag", color: "#14F195" },
+  { name: "PancakeSwap", category: "DEX", chain: "BNB Chain", blurb: "The largest DEX on BNB Smart Chain.", url: "https://pancakeswap.finance", color: "#1FC7D4" },
+  { name: "STON.fi", category: "DEX", chain: "TON", blurb: "Native swaps inside The Open Network.", url: "https://ston.fi", color: "#0098EA" },
   { name: "Aave", category: "Lending", chain: "Multichain", blurb: "Supply and borrow across chains.", url: "https://app.aave.com", color: "#B6509E" },
-  { name: "Curve", category: "Stable swaps", chain: "Multichain", blurb: "Low-slippage stablecoin liquidity.", url: "https://curve.fi", color: "#E6C64A" },
-  { name: "OpenSea", category: "NFT", chain: "Ethereum", blurb: "Trade collectibles and digital art.", url: "https://opensea.io", color: "#2081E2" },
-  { name: "Lido", category: "Staking", chain: "Ethereum", blurb: "Liquid staking for ETH.", url: "https://stake.lido.fi", color: "#00A3FF" },
+  { name: "OpenSea", category: "NFT", chain: "Multichain", blurb: "Trade collectibles and digital art.", url: "https://opensea.io", color: "#2081E2" },
 ];
 
 export function totalBalance() {
-  return assets.reduce((sum, a) => sum + a.price * a.amount, 0);
+  return assets.reduce((sum, item) => sum + item.price * item.amount, 0);
 }

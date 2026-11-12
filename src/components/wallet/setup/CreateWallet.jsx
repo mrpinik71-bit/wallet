@@ -3,7 +3,7 @@ import { ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SeedGrid from "./SeedGrid";
 import SeedVerify from "./SeedVerify";
-import PasswordForm from "./PasswordForm";
+import PinForm from "./PinForm";
 import { generateMnemonic } from "@/lib/bip39";
 import { useWallet } from "@/lib/WalletContext";
 
@@ -27,11 +27,11 @@ export default function CreateWallet({ onCancel }) {
     }
   }
 
-  async function finish(password) {
+  async function finish(pin) {
     setBusy(true);
     setError("");
     try {
-      await create({ mnemonic, wordCount, password });
+      await create({ mnemonic, wordCount, pin });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -109,8 +109,8 @@ export default function CreateWallet({ onCancel }) {
   }
 
   if (step === "verify") {
-    return <SeedVerify mnemonic={mnemonic} onVerified={() => setStep("password")} onBack={() => setStep("phrase")} />;
+    return <SeedVerify mnemonic={mnemonic} onVerified={() => setStep("pin")} onBack={() => setStep("phrase")} />;
   }
 
-  return <PasswordForm submitLabel="Create wallet" onSubmit={finish} busy={busy} error={error} />;
+  return <PinForm submitLabel="Create wallet" onSubmit={finish} busy={busy} error={error} />;
 }

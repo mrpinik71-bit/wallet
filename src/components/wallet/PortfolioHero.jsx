@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { useState } from "react";
 import { formatUsd } from "@/lib/format";
-import { portfolioHistory, totalBalance } from "@/lib/sample-wallet";
+import { assets, portfolioHistory, totalBalance } from "@/lib/sample-wallet";
 
 const actions = [
   { label: "Send", to: "/send", icon: ArrowUpRight },
@@ -44,7 +44,7 @@ export default function PortfolioHero() {
           </div>
 
           <p className="mt-2.5 text-[13px] text-muted-foreground">
-            Six assets across Bitcoin, Ethereum, Solana and Tron
+            {assets.length} assets across {new Set(assets.map((asset) => asset.chain)).size} networks
           </p>
 
           <div className="mt-6 grid max-w-md grid-cols-4 gap-2">

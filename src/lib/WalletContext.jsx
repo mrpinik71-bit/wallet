@@ -14,13 +14,13 @@ export function WalletProvider({ children }) {
   const value = {
     status,
     wallet,
-    async create({ mnemonic, wordCount, password }) {
-      const opened = await saveVault({ mnemonic, wordCount, password });
+    async create({ mnemonic, wordCount, pin }) {
+      const opened = await saveVault({ mnemonic, wordCount, pin });
       setWallet(opened);
       setStatus("unlocked");
     },
-    async unlock(password) {
-      const opened = await openVault(password);
+    async unlock(pin) {
+      const opened = await openVault(pin);
       setWallet(opened);
       setStatus("unlocked");
       return opened;

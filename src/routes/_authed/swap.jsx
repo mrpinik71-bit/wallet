@@ -65,7 +65,7 @@ function Swap() {
                 placeholder="0.00"
               />
               <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-2">
-                <CoinAvatar symbol={from.symbol} color={from.color} size="sm" />
+                <CoinAvatar symbol={from.symbol} color={from.color} logo={from.logo} size="sm" />
                 <select
                   value={fromId}
                   onChange={(event) => setFromId(event.target.value)}
@@ -102,7 +102,7 @@ function Swap() {
                 {received ? received.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "0.00"}
               </span>
               <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-2">
-                <CoinAvatar symbol={to.symbol} color={to.color} size="sm" />
+                <CoinAvatar symbol={to.symbol} color={to.color} logo={to.logo} size="sm" />
                 <select
                   value={toId}
                   onChange={(event) => setToId(event.target.value)}

@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, Search, TrendingDown, TrendingUp } from "
 import PageHeader from "@/components/wallet/PageHeader";
 import CoinAvatar from "@/components/wallet/CoinAvatar";
 import Sparkline from "@/components/wallet/Sparkline";
+import { networks } from "@/lib/coin-catalog";
 import { markets } from "@/lib/sample-wallet";
 import { formatPct, formatUsd } from "@/lib/format";
 
@@ -33,17 +34,19 @@ const stats = [
 function Markets() {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("all");
+  const [network, setNetwork] = useState("all");
 
   const rows = useMemo(() => {
+    const term = query.toLowerCase();
     const filtered = markets.filter(
       (coin) =>
-        coin.name.toLowerCase().includes(query.toLowerCase()) ||
-        coin.symbol.toLowerCase().includes(query.toLowerCase()),
+        (network === "all" || coin.network === network) &&
+        (coin.name.toLowerCase().includes(term) || coin.symbol.toLowerCase().includes(term)),
     );
     if (tab === "gainers") return [...filtered].sort((a, b) => b.change24h - a.change24h);
     if (tab === "losers") return [...filtered].sort((a, b) => a.change24h - b.change24h);
     return filtered;
-  }, [query, tab]);
+  }, [query, tab, network]);
 
   return (
     <>
@@ -81,6 +84,21 @@ function Markets() {
               className="w-full rounded-xl border border-border/70 bg-secondary/30 py-2 pl-9 pr-3 text-[13px] outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50"
             />
           </div>
+          <select
+            value={network}
+            onChange={(event) => setNetwork(event.target.value)}
+            aria-label="Filter by network"
+            className="rounded-xl border border-border/70 bg-secondary/30 px-3 py-2 text-[12px] outline-none sm:w-44"
+          >
+            <option value="all" className="bg-card">
+              All networks
+            </option>
+            {networks.map((item) => (
+              <option key={item.id} value={item.id} className="bg-card">
+                {item.name}
+              </option>
+            ))}
+          </select>
           <div className="flex gap-1 rounded-xl bg-secondary/40 p-1">
             {tabs.map((item) => (
               <button
@@ -112,7 +130,7 @@ function Markets() {
               className="grid grid-cols-[1.6fr_1fr_0.8fr] items-center gap-3 px-5 py-3.5 transition-colors hover:bg-secondary/30 sm:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_1fr]"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <CoinAvatar symbol={coin.symbol} color={coin.color} />
+                <CoinAvatar symbol={coin.symbol} color={coin.color} logo={coin.logo} />
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-medium">{coin.name}</p>
                   <p className="text-[11px] text-muted-foreground">{coin.symbol}</p>

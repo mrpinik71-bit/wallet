@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import PasswordForm from "./PasswordForm";
+import PinForm from "./PinForm";
 import { validateMnemonic } from "@/lib/bip39";
 import { useWallet } from "@/lib/WalletContext";
 
@@ -26,17 +26,17 @@ export default function ImportWallet({ onCancel }) {
       }
       setPhrase(phrase.trim().toLowerCase().split(/\s+/).join(" "));
       setWordCount(result.wordCount);
-      setStep("password");
+      setStep("pin");
     } finally {
       setBusy(false);
     }
   }
 
-  async function finish(password) {
+  async function finish(pin) {
     setBusy(true);
     setError("");
     try {
-      await create({ mnemonic: phrase, wordCount, password });
+      await create({ mnemonic: phrase, wordCount, pin });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,8 +44,8 @@ export default function ImportWallet({ onCancel }) {
     }
   }
 
-  if (step === "password") {
-    return <PasswordForm submitLabel="Restore wallet" onSubmit={finish} busy={busy} error={error} />;
+  if (step === "pin") {
+    return <PinForm submitLabel="Restore wallet" onSubmit={finish} busy={busy} error={error} />;
   }
 
   return (

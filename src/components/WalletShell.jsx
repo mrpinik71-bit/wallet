@@ -7,10 +7,10 @@ import {
   KeyRound,
   LayoutDashboard,
   LineChart,
-  LogOut,
+  Lock,
   Repeat,
 } from "lucide-react";
-import { useAuth } from "@/lib/AuthContext";
+import { useWallet } from "@/lib/WalletContext";
 
 const nav = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
@@ -60,8 +60,7 @@ function NavLink({ item }) {
 }
 
 export default function WalletShell({ children }) {
-  const { user, logout } = useAuth();
-  const initials = (user?.full_name || user?.email || "H").trim().slice(0, 2).toUpperCase();
+  const { wallet, lock } = useWallet();
 
   return (
     <div className="min-h-dvh bg-background">
@@ -76,20 +75,22 @@ export default function WalletShell({ children }) {
         </nav>
         <div className="mt-6 rounded-2xl border border-border/70 bg-secondary/30 p-3">
           <div className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
-              {initials}
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary">
+              <KeyRound className="h-3.5 w-3.5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium">{user?.full_name || "Account"}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{user?.email}</p>
+              <p className="truncate text-[13px] font-medium">Self-custody vault</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {wallet?.wordCount || 12}-word phrase · PIN protected
+              </p>
             </div>
             <button
               type="button"
-              onClick={() => logout()}
-              aria-label="Sign out"
+              onClick={lock}
+              aria-label="Lock wallet"
               className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <Lock className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
@@ -98,9 +99,13 @@ export default function WalletShell({ children }) {
       <div className="lg:pl-[248px]">
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border/70 bg-background/80 px-5 py-3.5 backdrop-blur-xl lg:hidden">
           <Brand />
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
-            {initials}
-          </span>
+          <button
+            type="button"
+            onClick={lock}
+            className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] font-medium text-muted-foreground"
+          >
+            <Lock className="h-3 w-3" /> Lock
+          </button>
         </header>
         <main className="mx-auto w-full max-w-[1180px] px-5 pb-28 pt-6 lg:px-10 lg:pb-14 lg:pt-10">
           {children}

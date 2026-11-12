@@ -44,7 +44,7 @@ function Send() {
             Asset
           </label>
           <div className="mt-2 flex items-center gap-3 rounded-xl border border-border/70 bg-secondary/25 p-2.5">
-            <CoinAvatar symbol={asset.symbol} color={asset.color} />
+            <CoinAvatar symbol={asset.symbol} color={asset.color} logo={asset.logo} />
             <select
               id="send-asset"
               value={assetId}
