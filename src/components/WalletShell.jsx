@@ -23,7 +23,7 @@ const nav = [
   { to: "/wallet", label: "Wallet", icon: KeyRound },
 ];
 
-const mobileNav = [nav[0], nav[1], nav[5], nav[6], nav[7]];
+const mobileNav = [nav[0], nav[1], nav[6], nav[7]];
 
 function Brand({ compact = false }) {
   return (
@@ -97,23 +97,13 @@ export default function WalletShell({ children }) {
       </aside>
 
       <div className="lg:pl-[248px]">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border/70 bg-background/80 px-5 py-3.5 backdrop-blur-xl lg:hidden">
-          <Brand />
-          <button
-            type="button"
-            onClick={lock}
-            className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] font-medium text-muted-foreground"
-          >
-            <Lock className="h-3 w-3" /> Lock
-          </button>
-        </header>
-        <main className="mx-auto w-full max-w-[1180px] px-5 pb-28 pt-6 lg:px-10 lg:pb-14 lg:pt-10">
+        <main className="mx-auto w-full max-w-[1180px] px-5 pb-32 pt-[max(1.25rem,env(safe-area-inset-top))] lg:px-10 lg:pb-14 lg:pt-10">
           {children}
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background/90 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden">
-        <div className="flex items-center justify-between">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(0.85rem,env(safe-area-inset-bottom))] lg:hidden">
+        <div className="flex w-full max-w-[420px] items-center justify-between rounded-full border border-border/70 bg-card/95 px-3 py-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl">
           {mobileNav.map((item) => (
             <NavLinkMobile key={item.to} item={item} />
           ))}
@@ -129,11 +119,11 @@ function NavLinkMobile({ item }) {
     <Link
       to={item.to}
       activeOptions={{ exact: item.to === "/" }}
-      className="flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] text-muted-foreground transition-colors"
-      activeProps={{ className: "text-primary" }}
+      aria-label={item.label}
+      className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground transition-colors"
+      activeProps={{ className: "bg-secondary text-foreground" }}
     >
-      <Icon className="h-5 w-5" strokeWidth={1.75} />
-      <span>{item.label}</span>
+      <Icon className="h-5 w-5" strokeWidth={1.8} />
     </Link>
   );
 }

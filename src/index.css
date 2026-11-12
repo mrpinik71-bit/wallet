@@ -28,6 +28,10 @@
     --chart-3: 35 85% 66%;
     --chart-4: 200 70% 64%;
     --chart-5: 350 70% 66%;
+    --action: 0 0% 100%;
+    --action-foreground: 220 24% 7%;
+    --brand: 238 92% 65%;
+    --brand-foreground: 0 0% 100%;
     --radius: 1rem;
     --font-heading: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
     --font-body: "Inter Tight", ui-sans-serif, system-ui, sans-serif;

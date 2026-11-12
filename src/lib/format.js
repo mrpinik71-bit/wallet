@@ -21,6 +21,13 @@ export function formatAmount(value, symbol) {
   return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(value)} ${symbol}`;
 }
 
+export function formatCrypto(value) {
+  if (!value) return "0";
+  if (value < 0.0001) return Number(value.toPrecision(4)).toString();
+  if (value < 1) return Number(value.toFixed(6)).toString();
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: value < 1000 ? 4 : 2 }).format(value);
+}
+
 export function formatPct(value) {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
