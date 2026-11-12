@@ -41,9 +41,15 @@ export default function ScanWorkspace() {
     return () => clearInterval(timer);
   }, [scanning]);
 
-  const rows = useMemo(() => {
+  // The listed count is the truth: it is how many phrases were actually found
+  // and checked, so the number on screen always matches the rows below it.
+  const { rows, foundCount, fundedTotalCount } = useMemo(() => {
     const list = resultsRef.current;
-    return onlyFunded ? list.filter((slot) => slot.total > 0) : list;
+    return {
+      foundCount: list.length,
+      fundedTotalCount: list.reduce((sum, slot) => sum + (slot.total > 0 ? 1 : 0), 0),
+      rows: onlyFunded ? list.filter((slot) => slot.total > 0) : list,
+    };
   }, [version, onlyFunded]);
 
   const visible = rows.slice(0, page * PAGE);
@@ -135,8 +141,9 @@ export default function ScanWorkspace() {
     } finally {
       cancelledRef.current = false;
       setScanning(false);
-      // A file's phrase count is only known once it has been read through.
-      setTotal((current) => current || countRef.current);
+      // A file's phrase count is only known once it has been read through; a
+      // stopped scan reports how many phrases were actually found.
+      setTotal((current) => current || Math.max(countRef.current, resultsRef.current.length));
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
     }
@@ -161,8 +168,8 @@ export default function ScanWorkspace() {
     return resultsRef.current.filter((slot) => slot.total > 0);
   }
 
-  const hasFunds = stats.fundedCount > 0;
-  const scannedTotal = total || stats.completed;
+  const hasFunds = fundedTotalCount > 0;
+  const scannedTotal = total || stats.completed || foundCount;
 
   return (
     <div className="relative">
@@ -187,7 +194,8 @@ export default function ScanWorkspace() {
             <p className="text-[9px] font-medium uppercase tracking-[0.3em] text-muted-foreground/70">Batch scan</p>
             <p className="mt-1.5 font-display text-[22px] leading-none">Results</p>
             <p className="mt-1 text-[10px] text-muted-foreground/70 num">
-              {count.toLocaleString("en-US")} phrases detected
+              {foundCount.toLocaleString("en-US")} wallet{foundCount === 1 ? "" : "s"} found
+              {total && total !== foundCount ? ` · ${total.toLocaleString("en-US")} phrases detected` : ""}
             </p>
           </div>
           <button
@@ -205,8 +213,8 @@ export default function ScanWorkspace() {
         <div className="mt-4 space-y-2.5">
           <ScanSummary
             total={total}
-            progress={{ completed: stats.completed, total }}
-            fundedCount={stats.fundedCount}
+            progress={{ completed: Math.max(stats.completed, foundCount), total }}
+            fundedCount={fundedTotalCount}
             fundedTotal={stats.fundedTotal}
             onlyFunded={onlyFunded}
             onToggleFilter={() => {
@@ -259,7 +267,7 @@ export default function ScanWorkspace() {
             </button>
           ) : null}
 
-          {!scanning && stats.completed > 0 && stats.fundedCount === 0 ? (
+          {!scanning && foundCount > 0 && fundedTotalCount === 0 ? (
             <div className="lux noise relative p-4 text-center">
               <p className="relative font-display text-[18px] leading-tight">No funds on these wallets</p>
               <p className="relative mx-auto mt-1.5 max-w-[300px] text-[10.5px] leading-relaxed text-muted-foreground/80">
@@ -271,7 +279,7 @@ export default function ScanWorkspace() {
 
           {!scanning && hasFunds ? (
             <p className="px-1 pt-1 text-[10.5px] leading-relaxed text-muted-foreground/70">
-              {stats.fundedCount} wallet{stats.fundedCount === 1 ? "" : "s"} with funds — open one to copy its addresses.
+              {fundedTotalCount} wallet{fundedTotalCount === 1 ? "" : "s"} with funds — open one to copy its addresses.
             </p>
           ) : null}
         </div>
