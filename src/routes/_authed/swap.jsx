@@ -1,179 +1,182 @@
-import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDown, Info, Loader2, Repeat } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowDown, Loader2 } from "lucide-react";
 import PageHeader from "@/components/wallet/PageHeader";
-import CoinAvatar from "@/components/wallet/CoinAvatar";
-import { assets } from "@/lib/sample-wallet";
-import { formatAmount, formatUsd } from "@/lib/format";
+import SwapAmount from "@/components/swap/SwapAmount";
+import QuotePanel from "@/components/swap/QuotePanel";
+import usePortfolio from "@/hooks/usePortfolio";
+import { dexSwapLink } from "@/lib/dex-links";
+import { networkLabel } from "@/lib/markets";
+import { formatCrypto } from "@/lib/format";
 
 export const Route = createFileRoute("/_authed/swap")({
   head: () => ({
     meta: [
       { title: "Swap — Helix" },
-      { name: "description", content: "Swap between assets with an upfront rate, fee and slippage preview." },
+      { name: "description", content: "Quote a swap against live prices and your on-chain balances before you trade." },
     ],
   }),
   component: Swap,
 });
 
-const FEE_RATE = 0.006;
+const FEE_RATE = 0.003;
+
+function pickTarget(list, baseId) {
+  const base = list.find((item) => item.id === baseId);
+  if (!base) return null;
+  const partners = list.filter((item) => item.chain === base.chain && item.id !== base.id);
+  return partners.find((item) => item.balance > 0) || partners[0] || null;
+}
 
 function Swap() {
-  const [fromId, setFromId] = useState("eth");
-  const [toId, setToId] = useState("usdt");
-  const [amount, setAmount] = useState("1");
+  const { holdings, loading } = usePortfolio();
+  const [fromId, setFromId] = useState(null);
+  const [toId, setToId] = useState(null);
+  const [amount, setAmount] = useState("");
   const [slippage, setSlippage] = useState("0.5");
 
-  const from = assets.find((item) => item.id === fromId);
-  const to = assets.find((item) => item.id === toId);
-  const numericAmount = Number(amount) || 0;
+  const tradable = useMemo(
+    () => holdings.filter((item) => holdings.some((other) => other.chain === item.chain && other.id !== item.id)),
+    [holdings],
+  );
 
-  const rate = from.price / to.price;
-  const gross = numericAmount * rate;
+  useEffect(() => {
+    if (loading || fromId || tradable.length === 0) return;
+    const base = tradable.find((item) => item.balance > 0) || tradable[0];
+    const target = pickTarget(holdings, base.id);
+    if (!target) return;
+    setFromId(base.id);
+    setToId(target.id);
+  }, [loading, tradable, holdings, fromId]);
+
+  const from = holdings.find((item) => item.id === fromId) || null;
+  const to = holdings.find((item) => item.id === toId) || null;
+
+  const fromOptions = tradable;
+  const toOptions = useMemo(
+    () => (from ? tradable.filter((item) => item.chain === from.chain && item.id !== from.id) : []),
+    [tradable, from],
+  );
+
+  const numeric = Number(amount) || 0;
+  const rate = from && to && to.price > 0 ? from.price / to.price : 0;
+  const gross = numeric * rate;
   const fee = gross * FEE_RATE;
   const received = Math.max(0, gross - fee);
-  const tooMuch = numericAmount > from.amount;
+  const minReceived = received * (1 - Number(slippage) / 100);
+  const link = dexSwapLink(from, to);
+
+  const overBalance = Boolean(from) && numeric > from.balance;
+  const ready = Boolean(link) && numeric > 0 && !overBalance;
+  const error = overBalance
+    ? `You only hold ${formatCrypto(from.balance)} ${from.symbol}.`
+    : numeric > 0 && !link
+      ? "This network has no supported route yet."
+      : "";
+
+  function pickFrom(id) {
+    setFromId(id);
+    const target = pickTarget(holdings, id);
+    if (target && target.id !== toId) setToId(target.id);
+    setAmount("");
+  }
+
+  function pickTo(id) {
+    setToId(id);
+  }
 
   function flip() {
-    setFromId(toId);
-    setToId(fromId);
+    if (!from || !to) return;
+    setFromId(to.id);
+    setToId(from.id);
+    setAmount(received ? formatCrypto(received).replace(/,/g, "") : "");
+  }
+
+  function useMax() {
+    if (!from) return;
+    setAmount(from.balance ? String(Number(from.balance.toFixed(8))) : "");
+  }
+
+  if (!loading && tradable.length === 0) {
+    return (
+      <div className="mx-auto w-full max-w-[460px]">
+        <PageHeader eyebrow="Exchange" title="Swap" />
+        <div className="rounded-2xl border border-foreground/[0.07] bg-card/60 p-6 text-center">
+          <p className="text-[12.5px] font-medium">Nothing to swap yet</p>
+          <p className="mx-auto mt-2 max-w-[280px] text-[11px] leading-relaxed text-muted-foreground">
+            Swaps need two assets on the same network. Receive funds first, then come back to trade.
+          </p>
+          <Link
+            to="/receive"
+            className="mt-4 inline-flex rounded-xl bg-action px-4 py-2.5 text-[11.5px] font-semibold text-action-foreground"
+          >
+            Receive assets
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <>
-      <PageHeader
-        eyebrow="Exchange"
-        title="Swap"
-        description="Routing and rates are quoted before anything is signed, so the amount you receive is never a surprise."
-      />
+    <div className="mx-auto w-full max-w-[480px]">
+      <PageHeader eyebrow="Exchange" title="Swap" />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="panel p-5">
-          <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4">
-            <div className="flex items-center justify-between">
-              <p className="eyebrow">You pay</p>
-              <span className="text-[11px] text-muted-foreground tabular">
-                {formatAmount(from.amount, from.symbol)} available
-              </span>
-            </div>
-            <div className="mt-2.5 flex items-center gap-3">
-              <input
-                inputMode="decimal"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value.replace(/[^0-9.]/g, ""))}
-                className="min-w-0 flex-1 bg-transparent font-display text-3xl tabular outline-none"
-                placeholder="0.00"
-              />
-              <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-2">
-                <CoinAvatar symbol={from.symbol} color={from.color} logo={from.logo} size="sm" />
-                <select
-                  value={fromId}
-                  onChange={(event) => setFromId(event.target.value)}
-                  className="bg-transparent text-[12px] font-medium outline-none"
-                >
-                  {assets.map((item) => (
-                    <option key={item.id} value={item.id} className="bg-card">
-                      {item.symbol}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground tabular">
-              ≈ {formatUsd(numericAmount * from.price)}
-            </p>
-          </div>
+      {loading && !from ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-foreground/[0.07] bg-card/60 py-16 text-[11px] text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading balances…
+        </div>
+      ) : null}
 
-          <div className="relative z-10 -my-3 flex justify-center">
+      {from && to ? (
+        <div className="space-y-2.5">
+          <SwapAmount
+            label="You pay"
+            amount={amount}
+            onAmount={setAmount}
+            coin={from}
+            options={fromOptions}
+            onPick={pickFrom}
+            balance={from.balance}
+            onMax={useMax}
+            usd={numeric * from.price}
+          />
+
+          <div className="relative z-10 -my-4 flex justify-center">
             <button
               type="button"
               onClick={flip}
               aria-label="Switch assets"
-              className="rounded-full border border-border/70 bg-card p-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              className="grid h-8 w-8 place-items-center rounded-full border border-foreground/[0.1] bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
             >
               <ArrowDown className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4">
-            <p className="eyebrow">You receive</p>
-            <div className="mt-2.5 flex items-center gap-3">
-              <span className="min-w-0 flex-1 font-display text-3xl tabular text-primary">
-                {received ? received.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "0.00"}
-              </span>
-              <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-2">
-                <CoinAvatar symbol={to.symbol} color={to.color} logo={to.logo} size="sm" />
-                <select
-                  value={toId}
-                  onChange={(event) => setToId(event.target.value)}
-                  className="bg-transparent text-[12px] font-medium outline-none"
-                >
-                  {assets.map((item) => (
-                    <option key={item.id} value={item.id} className="bg-card">
-                      {item.symbol}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground tabular">≈ {formatUsd(received * to.price)}</p>
-          </div>
+          <SwapAmount
+            label="You receive"
+            amount={received ? formatCrypto(received) : ""}
+            coin={to}
+            options={toOptions}
+            onPick={pickTo}
+            balance={to.balance}
+            usd={received * to.price}
+          />
 
-          {tooMuch && <p className="mt-3 text-[11px] text-destructive">You do not hold that much {from.symbol}.</p>}
-        </section>
-
-        <aside className="panel h-fit p-5">
-          <h2 className="font-heading text-sm font-semibold tracking-tight">Quote</h2>
-          <dl className="mt-4 space-y-3 text-[12px]">
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Rate</dt>
-              <dd className="tabular">
-                1 {from.symbol} = {rate.toLocaleString("en-US", { maximumFractionDigits: 4 })} {to.symbol}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Liquidity fee</dt>
-              <dd className="tabular">{(FEE_RATE * 100).toFixed(1)}%</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Slippage</dt>
-              <dd>
-                <select
-                  value={slippage}
-                  onChange={(event) => setSlippage(event.target.value)}
-                  className="rounded-lg border border-border/70 bg-secondary/40 px-2 py-1 text-[11px] outline-none"
-                >
-                  <option value="0.1">0.1%</option>
-                  <option value="0.5">0.5%</option>
-                  <option value="1">1.0%</option>
-                </select>
-              </dd>
-            </div>
-            <div className="flex items-center justify-between border-t border-border/60 pt-3">
-              <dt className="text-muted-foreground">Route</dt>
-              <dd className="inline-flex items-center gap-1.5">
-                {from.symbol} <Repeat className="h-3 w-3 text-muted-foreground" /> {to.symbol}
-              </dd>
-            </div>
-          </dl>
-
-          <button
-            type="button"
-            disabled
-            className="mt-5 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary/25 px-4 py-3 text-[13px] font-semibold text-primary/70"
-          >
-            <Loader2 className="h-4 w-4" /> Swap
-          </button>
-
-          <div className="mt-3 flex gap-2 rounded-xl border border-border/70 bg-secondary/20 p-3">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Swaps execute once routing is connected to live liquidity. The quote above uses current
-              reference prices.
-            </p>
-          </div>
-        </aside>
-      </div>
-    </>
+          <QuotePanel
+            from={from}
+            to={to}
+            rate={rate}
+            fee={fee}
+            minReceived={minReceived}
+            slippage={slippage}
+            onSlippage={setSlippage}
+            network={networkLabel(from.chain)}
+            link={link}
+            error={error}
+            ready={ready}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

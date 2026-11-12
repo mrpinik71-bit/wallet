@@ -16,6 +16,20 @@ export function formatUsd(value, { compact = false } = {}) {
   }).format(value);
 }
 
+/** Prices with the precision small-cap assets need (PEPE, SHIB, …). */
+export function formatPrice(value) {
+  const abs = Math.abs(value);
+  if (!abs) return "$0.00";
+  if (abs >= 1) return formatUsd(value);
+  const digits = Math.min(8, Math.max(2, Math.ceil(-Math.log10(abs)) + 3));
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
 export function formatAmount(value, symbol) {
   const digits = value >= 1000 ? 2 : value >= 1 ? 3 : 5;
   return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(value)} ${symbol}`;

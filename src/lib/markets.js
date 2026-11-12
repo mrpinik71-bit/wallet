@@ -74,6 +74,13 @@ async function getJson(url) {
 
 const fresh = (entry) => entry.at && Date.now() - entry.at < TTL;
 
+/** 168 hourly points are more than a 78px sparkline needs — keep ~28. */
+function sample(points, target = 28) {
+  if (!points || points.length <= target) return points || [];
+  const step = Math.ceil(points.length / target);
+  return points.filter((_, index) => index % step === 0);
+}
+
 /** Live prices, 24h/7d changes, volume, market cap and a 7-day sparkline. */
 export async function fetchMarkets({ force = false } = {}) {
   if (!force && fresh(marketsCache) && marketsCache.rows) return marketsCache.rows;
@@ -97,7 +104,7 @@ export async function fetchMarkets({ force = false } = {}) {
       volume: row.total_volume ?? 0,
       marketCap: row.market_cap ?? 0,
       rank: row.market_cap_rank ?? null,
-      spark: row.sparkline_in_7d?.price || [],
+      spark: sample(row.sparkline_in_7d?.price),
     };
   });
   marketsCache = { at: Date.now(), rows };

@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import CoinAvatar from "@/components/wallet/CoinAvatar";
 import Sparkline from "@/components/wallet/Sparkline";
-import { formatPct, formatUsd } from "@/lib/format";
+import { formatPct, formatPrice, formatUsd } from "@/lib/format";
 import { networkLabel } from "@/lib/markets";
 
 export default function MarketRow({ coin }) {
@@ -27,7 +27,7 @@ export default function MarketRow({ coin }) {
       </div>
 
       <div className="text-right">
-        <p className="text-[12.5px] font-medium leading-tight num">{formatUsd(coin.price)}</p>
+        <p className="text-[12.5px] font-medium leading-tight num">{formatPrice(coin.price)}</p>
         <p
           className={`mt-1 inline-flex items-center justify-end gap-0.5 text-[10.5px] font-medium num ${
             up ? "text-primary" : "text-destructive"

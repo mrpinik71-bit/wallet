@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import HomeHeader from "@/components/wallet/home/HomeHeader";
 import BalanceBlock from "@/components/wallet/home/BalanceBlock";
 import ActionsRow from "@/components/wallet/home/ActionsRow";
+import MarketPulse from "@/components/wallet/home/MarketPulse";
 import ScanWorkspace from "@/components/wallet/scan/ScanWorkspace";
 import TokensList from "@/components/wallet/home/TokensList";
 import AllocationCard from "@/components/wallet/home/AllocationCard";
@@ -46,6 +47,7 @@ function Overview() {
               chains={chains}
             />
             <ActionsRow />
+            <MarketPulse />
           </div>
 
           <div className="lg:col-start-2 lg:row-span-3 lg:row-start-1">

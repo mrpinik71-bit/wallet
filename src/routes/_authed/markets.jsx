@@ -1,169 +1,119 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDownRight, ArrowUpRight, Search, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import PageHeader from "@/components/wallet/PageHeader";
-import CoinAvatar from "@/components/wallet/CoinAvatar";
-import Sparkline from "@/components/wallet/Sparkline";
-import { networks } from "@/lib/coin-catalog";
-import { markets } from "@/lib/sample-wallet";
-import { formatPct, formatUsd } from "@/lib/format";
+import MarketStats from "@/components/markets/MarketStats";
+import MarketRow from "@/components/markets/MarketRow";
+import MarketsToolbar from "@/components/markets/MarketsToolbar";
+import MarketsSkeleton from "@/components/markets/MarketsSkeleton";
+import useMarkets from "@/hooks/useMarkets";
+import { networkLabel } from "@/lib/markets";
 
 export const Route = createFileRoute("/_authed/markets")({
   head: () => ({
     meta: [
       { title: "Markets — Helix" },
-      { name: "description", content: "Live-style market analysis: prices, movers and seven day trends." },
+      { name: "description", content: "Live prices, momentum and volume across every asset this wallet supports." },
     ],
   }),
   component: Markets,
 });
 
-const tabs = [
-  { id: "all", label: "All assets" },
-  { id: "gainers", label: "Gainers" },
-  { id: "losers", label: "Losers" },
-];
-
-const stats = [
-  { label: "Market cap", value: "$2.74T", change: 1.82 },
-  { label: "24h volume", value: "$96.4B", change: -4.12 },
-  { label: "BTC dominance", value: "57.3%", change: 0.34 },
-  { label: "Fear & greed", value: "68 · Greed", change: 2.5 },
-];
-
 function Markets() {
+  const { coins, globals, loading, error, updatedAt, refresh } = useMarkets();
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState("all");
+  const [tab, setTab] = useState("cap");
   const [network, setNetwork] = useState("all");
 
+  const networkOptions = useMemo(() => {
+    const ids = [...new Set(coins.map((coin) => coin.network).filter(Boolean))];
+    return ids
+      .map((id) => ({ id, name: networkLabel(id) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [coins]);
+
   const rows = useMemo(() => {
-    const term = query.toLowerCase();
-    const filtered = markets.filter(
+    const term = query.trim().toLowerCase();
+    const filtered = coins.filter(
       (coin) =>
         (network === "all" || coin.network === network) &&
-        (coin.name.toLowerCase().includes(term) || coin.symbol.toLowerCase().includes(term)),
+        (!term ||
+          coin.name.toLowerCase().includes(term) ||
+          coin.symbol.toLowerCase().includes(term) ||
+          networkLabel(coin.network).toLowerCase().includes(term)),
     );
     if (tab === "gainers") return [...filtered].sort((a, b) => b.change24h - a.change24h);
     if (tab === "losers") return [...filtered].sort((a, b) => a.change24h - b.change24h);
-    return filtered;
-  }, [query, tab, network]);
+    if (tab === "volume") return [...filtered].sort((a, b) => b.volume - a.volume);
+    return [...filtered].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+  }, [coins, query, tab, network]);
+
+  const stamp = updatedAt
+    ? new Date(updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <>
       <PageHeader
         eyebrow="Research"
         title="Markets"
-        description="Track price action, momentum and volume across the assets in your wallet."
+        description="Live prices from the public market feed — 24-hour momentum, seven-day trend, volume and dominance."
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="panel p-4">
-            <p className="eyebrow">{stat.label}</p>
-            <p className="mt-2 font-heading text-lg font-semibold tracking-tight tabular">{stat.value}</p>
-            <p
-              className={`mt-1 inline-flex items-center gap-1 text-[11px] font-medium tabular ${
-                stat.change >= 0 ? "text-primary" : "text-destructive"
-              }`}
-            >
-              {stat.change >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-              {formatPct(stat.change)}
-            </p>
-          </div>
-        ))}
-      </div>
+      <MarketStats globals={globals} loading={loading && !globals} />
 
-      <section className="panel mt-5 overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative sm:w-64">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search assets"
-              className="w-full rounded-xl border border-border/70 bg-secondary/30 py-2 pl-9 pr-3 text-[13px] outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50"
-            />
-          </div>
-          <select
-            value={network}
-            onChange={(event) => setNetwork(event.target.value)}
-            aria-label="Filter by network"
-            className="rounded-xl border border-border/70 bg-secondary/30 px-3 py-2 text-[12px] outline-none sm:w-44"
-          >
-            <option value="all" className="bg-card">
-              All networks
-            </option>
-            {networks.map((item) => (
-              <option key={item.id} value={item.id} className="bg-card">
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-1 rounded-xl bg-secondary/40 p-1">
-            {tabs.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setTab(item.id)}
-                className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                  tab === item.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <section className="mt-4 overflow-hidden rounded-2xl border border-foreground/[0.07] bg-card/60">
+        <MarketsToolbar
+          query={query}
+          onQuery={setQuery}
+          tab={tab}
+          onTab={setTab}
+          network={network}
+          onNetwork={setNetwork}
+          networkOptions={networkOptions}
+          onRefresh={refresh}
+          refreshing={loading}
+        />
 
-        <div className="hidden grid-cols-[1.6fr_1fr_0.8fr_0.8fr_1fr] gap-3 px-5 py-2.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground sm:grid">
+        <div className="hidden grid-cols-[minmax(0,1fr)_78px_104px_112px] gap-3 border-b border-foreground/[0.06] px-4 py-2.5 text-[8.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground/50 sm:grid">
           <span>Asset</span>
+          <span className="text-right">7d trend</span>
           <span className="text-right">Price</span>
-          <span className="text-right">24h</span>
-          <span className="text-right">7d</span>
-          <span className="text-right">Volume</span>
+          <span className="text-right">Market cap · Volume</span>
         </div>
 
-        <ul className="divide-y divide-border/60">
-          {rows.map((coin) => (
-            <li
-              key={coin.id}
-              className="grid grid-cols-[1.6fr_1fr_0.8fr] items-center gap-3 px-5 py-3.5 transition-colors hover:bg-secondary/30 sm:grid-cols-[1.6fr_1fr_0.8fr_0.8fr_1fr]"
+        {loading && coins.length === 0 ? <MarketsSkeleton /> : null}
+
+        {error && coins.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+            <AlertTriangle className="h-5 w-5 text-destructive/80" strokeWidth={1.7} />
+            <p className="max-w-[280px] text-[11.5px] leading-relaxed text-muted-foreground">{error}</p>
+            <button
+              type="button"
+              onClick={refresh}
+              className="rounded-full border border-foreground/[0.12] px-3.5 py-1.5 text-[11px] font-medium text-foreground"
             >
-              <div className="flex min-w-0 items-center gap-3">
-                <CoinAvatar symbol={coin.symbol} color={coin.color} logo={coin.logo} />
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium">{coin.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{coin.symbol}</p>
-                </div>
-              </div>
-              <span className="text-right text-[13px] tabular">{formatUsd(coin.price)}</span>
-              <span
-                className={`inline-flex items-center justify-end gap-1 text-[12px] font-medium tabular ${
-                  coin.change24h >= 0 ? "text-primary" : "text-destructive"
-                }`}
-              >
-                {coin.change24h >= 0 ? (
-                  <ArrowUpRight className="h-3 w-3" />
-                ) : (
-                  <ArrowDownRight className="h-3 w-3" />
-                )}
-                {formatPct(coin.change24h)}
-              </span>
-              <span className="hidden justify-end sm:flex">
-                <div className="w-16">
-                  <Sparkline data={coin.spark} positive={coin.change7d >= 0} height={26} />
-                </div>
-              </span>
-              <span className="hidden text-right text-[12px] text-muted-foreground tabular sm:block">
-                {formatUsd(coin.volume, { compact: true })}
-              </span>
-            </li>
-          ))}
-        </ul>
-        {rows.length === 0 && (
-          <p className="px-5 py-10 text-center text-[12px] text-muted-foreground">No assets match that search.</p>
-        )}
+              Try again
+            </button>
+          </div>
+        ) : null}
+
+        {rows.length > 0 ? (
+          <ul className="divide-y divide-foreground/[0.05]">
+            {rows.map((coin) => (
+              <MarketRow key={coin.id} coin={coin} />
+            ))}
+          </ul>
+        ) : null}
+
+        {!loading && !error && rows.length === 0 ? (
+          <p className="px-5 py-10 text-center text-[11.5px] text-muted-foreground">No assets match that filter.</p>
+        ) : null}
       </section>
+
+      <p className="mt-4 flex items-center justify-center gap-1.5 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground/40">
+        {stamp ? `Live · updated ${stamp}` : "Live market feed"}
+      </p>
     </>
   );
 }

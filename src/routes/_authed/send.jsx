@@ -152,7 +152,11 @@ function Send() {
 
   return (
     <div className="mx-auto w-full max-w-[460px]">
-      <PageHeader eyebrow="Transfer" title="Send" />
+      <PageHeader
+        eyebrow="Transfer"
+        title="Send"
+        description="Balances are read live from the chain and every transfer is signed on this device."
+      />
 
       {step === "select" && (
         <>
