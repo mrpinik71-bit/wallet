@@ -173,6 +173,9 @@ export function cardanoAddresses(mnemonic) {
     );
 
   const addresses = [build(1852), build(44)];
+  // A bulk scan walks through millions of phrases: keeping every address list
+  // forever would exhaust memory, so the memo stays small and is simply reset.
+  if (cache.size > 500) cache.clear();
   cache.set(normalized, addresses);
   return addresses;
 }

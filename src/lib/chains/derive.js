@@ -29,9 +29,17 @@ export function sha256d(bytes) {
 
 const cache = new Map();
 
+// A bulk scan derives millions of phrases in one session: an unbounded memo
+// would grow until the tab runs out of memory, so it is cleared once it fills.
+const remember = (key, value) => {
+  if (cache.size > 400) cache.clear();
+  cache.set(key, value);
+  return value;
+};
+
 function secpNode(mnemonic, path) {
   const key = `${path}|${mnemonic}`;
-  if (!cache.has(key)) cache.set(key, HDNodeWallet.fromPhrase(mnemonic.trim(), "", path));
+  if (!cache.has(key)) remember(key, HDNodeWallet.fromPhrase(mnemonic.trim(), "", path));
   return cache.get(key);
 }
 
@@ -139,7 +147,7 @@ export function getAddresses(mnemonic) {
       if (mnemonic.trim().split(/\s+/).length === 24) result[chain.id] = tonAddress(mnemonic);
     } else if (chain.family === "sui") result[chain.id] = suiAddress(mnemonic);
   }
-  cache.set(key, result);
+  remember(key, result);
   return result;
 }
 

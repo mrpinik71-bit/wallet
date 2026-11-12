@@ -4,6 +4,7 @@ import { cardanoAddresses } from "@/lib/chains/cardano";
 import { evmAddress, getAddresses } from "@/lib/chains/derive";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
+import { evmChainBalances } from "@/lib/chains/scan-batch";
 import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 import { parsePhrases, phrasesFromLines } from "@/lib/phrase-lines";
 import { readLines } from "@/lib/scan-file";
@@ -38,34 +39,72 @@ async function scanOne(entry, prices) {
   // TON wallet v4R2 only exists for 24-word phrases, so other lengths skip it.
   const scanned = scanAssets.filter((coin) => coin.chain !== "ton" || entry.words === 24);
 
-  const reads = await Promise.all(
-    scanned.map(async (coin) => {
-      const price = priceOf(prices, coin);
-      let address = addresses[coin.chain] || "";
-      // Cardano holds funds on several base addresses for one phrase, so its
-      // reader takes the whole list and totals them — and a failure there must
-      // not take the whole wallet down with it.
-      if (coin.chain === "cardano") {
-        try {
-          address = cardanoAddresses(entry.phrase);
-        } catch {
-          address = "";
-        }
+  // EVM chains are asked one wallet at a time, batched per chain, while every
+  // other family keeps its own single reader.
+  const evmByChain = new Map();
+  const others = [];
+  for (const coin of scanned) {
+    if (coin.family === "evm") {
+      const list = evmByChain.get(coin.chain) || [];
+      list.push(coin);
+      evmByChain.set(coin.chain, list);
+    } else {
+      others.push(coin);
+    }
+  }
+
+  const readOther = async (coin) => {
+    const price = priceOf(prices, coin);
+    let address = addresses[coin.chain] || "";
+    // Cardano holds funds on several base addresses for one phrase, so its
+    // reader takes the whole list and totals them — and a failure there must
+    // not take the whole wallet down with it.
+    if (coin.chain === "cardano") {
+      try {
+        address = cardanoAddresses(entry.phrase);
+      } catch {
+        address = "";
       }
-      // Public nodes rate-limit bursts, so a failed read is retried once before
-      // it is reported as a failure — a chain is never silently counted as zero.
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          const balance = await readBalance(coin, address);
-          return { coin, balance, price, failed: false };
-        } catch {
-          if (attempt === 1) break;
-          await new Promise((resolve) => setTimeout(resolve, 600));
-        }
+    }
+    // Public nodes rate-limit bursts, so a failed read is retried once before
+    // it is reported as a failure — a chain is never silently counted as zero.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const balance = await readBalance(coin, address);
+        return { coin, balance, price, failed: false };
+      } catch {
+        if (attempt === 1) break;
+        await new Promise((resolve) => setTimeout(resolve, 400));
       }
-      return { coin, balance: 0, price, failed: true };
-    }),
-  );
+    }
+    return { coin, balance: 0, price, failed: true };
+  };
+
+  const readEvmChain = async ([chainId, coins]) => {
+    const address = addresses[chainId] || "";
+    if (!address) return coins.map((coin) => ({ coin, balance: 0, price: priceOf(prices, coin), failed: false }));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const balances = await evmChainBalances(chainId, address, coins);
+        return coins.map((coin) => ({
+          coin,
+          balance: balances.get(coin.id) ?? 0,
+          price: priceOf(prices, coin),
+          failed: !balances.has(coin.id),
+        }));
+      } catch {
+        if (attempt === 1) break;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+    }
+    return coins.map((coin) => ({ coin, balance: 0, price: priceOf(prices, coin), failed: true }));
+  };
+
+  const [evmReads, otherReads] = await Promise.all([
+    Promise.all([...evmByChain].map(readEvmChain)),
+    Promise.all(others.map(readOther)),
+  ]);
+  const reads = [...evmReads.flat(), ...otherReads];
 
   const funded = reads
     .filter((read) => read.balance > 0)
@@ -118,7 +157,7 @@ export async function* phrasesFromFile(file, { onCount } = {}) {
 }
 
 /** Scans phrases as they stream in with a worker pool; reports each result. */
-export async function scanPhraseStream(source, { prices, onResult, onProgress, isCancelled, concurrency = 8 } = {}) {
+export async function scanPhraseStream(source, { prices, onResult, onProgress, isCancelled, concurrency = 16 } = {}) {
   let completed = 0;
 
   async function worker() {
