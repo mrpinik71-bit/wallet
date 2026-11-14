@@ -12,13 +12,13 @@ import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
 import { cardanoBalancesMany, polkadotBalancesMany, solanaBalancesMany, suiBalancesMany } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 10; // wallets per batch round — small enough that rows keep arriving
-// A phone browser allows only a handful of connections per host, so extra
-// parallelism does not go faster — the requests just queue, their timers run out
-// while waiting, and public nodes start refusing the burst. These stay low
-// enough that every request actually leaves the browser.
-const INFLIGHT = 6; // batch rounds kept in flight
-const PER_HOST = 6; // simultaneous requests to one public endpoint
-const JOB_TIMEOUT = 20000; // a stalled node must not hold a whole batch back
+// Speed comes from many batch rounds in flight at once; a single host only
+// answers so many requests before it starts refusing the burst (429) or stalls,
+// and then every read on it times out — so per-host stays moderate while the
+// rounds stay high.
+const INFLIGHT = 24; // batch rounds kept in flight
+const PER_HOST = 10; // simultaneous requests to one public endpoint
+const JOB_TIMEOUT = 18000; // a stalled node must not hold a whole batch back
 const WORD_COUNTS = [12, 15, 18, 21, 24];
 
 // Assets are routed by how their chain can be asked: EVM chains per network,
