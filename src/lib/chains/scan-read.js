@@ -52,37 +52,64 @@ export async function aptosBalance(address) {
 
 /** NEAR balance for this implicit account, in NEAR (1e24 yoctoNEAR per NEAR). */
 export async function nearBalance(address) {
-  const response = await fetch(chains.near.rpc, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "query",
-      params: { request_type: "view_account", finality: "final", account_id: address },
-    }),
-  });
-  if (!response.ok) throw new Error(`NEAR network error (${response.status}).`);
+  // The mainnet node takes seconds per answer; FastNEAR answers the same query
+  // in tens of milliseconds, so it is asked first and the node is the fallback.
+  const endpoints = ["https://free.rpc.fastnear.com", chains.near.rpc];
+  let lastStatus = null;
 
-  const data = await response.json();
-  const amount = data?.result?.amount;
-  if (amount !== undefined) return Number(amount) / 1e24;
-  // The account does not exist on chain yet, so it holds nothing.
-  const message = `${data?.error?.cause?.name || ""} ${data?.error?.data || ""}`.toLowerCase();
-  if (message.includes("unknown_account") || message.includes("does not exist")) return 0;
-  throw new Error("NEAR network error.");
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "query",
+          params: { request_type: "view_account", finality: "final", account_id: address },
+        }),
+      });
+      if (!response.ok) {
+        lastStatus = response.status;
+        continue;
+      }
+
+      const data = await response.json();
+      const amount = data?.result?.amount;
+      if (amount !== undefined) return Number(amount) / 1e24;
+      // The account does not exist on chain yet, so it holds nothing.
+      const message = `${data?.error?.cause?.name || ""} ${data?.error?.data || ""}`.toLowerCase();
+      if (message.includes("unknown_account") || message.includes("does not exist")) return 0;
+    } catch {
+      // Try the next endpoint.
+    }
+  }
+
+  throw new Error(lastStatus ? `NEAR network error (${lastStatus}).` : "NEAR network error.");
 }
 
 /** TON balance in nanotons for a v4R2 wallet address. */
 export async function tonBalance(address) {
   if (!address) return 0;
-  const response = await fetch(`${chains.ton.api}/getAddressBalance?address=${encodeURIComponent(address)}`);
-  if (!response.ok) throw new Error(`TON network error (${response.status}).`);
 
-  const data = await response.json();
-  if (!data?.ok) throw new Error("TON network error.");
+  // Toncenter refuses a burst of five after the first, so a busy answer is
+  // retried on TonAPI, which takes the same load — together they stay fast
+  // instead of stalling one wallet at a time.
+  try {
+    const response = await fetch(`${chains.ton.api}/getAddressBalance?address=${encodeURIComponent(address)}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.ok) return Number(data.result || 0) / 1e9;
+    }
+  } catch {
+    // Fall through to the second endpoint.
+  }
+
+  const fallback = await fetch(`https://tonapi.io/v2/accounts/${encodeURIComponent(address)}`);
+  if (!fallback.ok) throw new Error(`TON network error (${fallback.status}).`);
+  const account = await fallback.json();
   // An address that has never been funded simply reports no balance.
-  return Number(data.result || 0) / 1e9;
+  return Number(account?.balance || 0) / 1e9;
 }
 
 /** SUI balance in MIST, read through the Sui GraphQL endpoint. */
