@@ -4,52 +4,38 @@ import { useNavigate } from "@tanstack/react-router";
 import { Check, Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { askAssistant } from "@/lib/assistant-fns";
 import useSpeech from "@/hooks/useSpeech";
+import useAssistantActions from "@/hooks/useAssistantActions";
+import { useWallet } from "@/lib/WalletContext";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
 
-const HINTS = ["What's my biggest holding?", "How is my portfolio today?", "Refresh my balances"];
-
-const SCREENS = { send: "/send", receive: "/receive", swap: "/swap", markets: "/markets", activity: "/activity" };
+const HINTS = ["Open the swap screen", "Copy my address", "How is my portfolio today?"];
 
 export default function AssistantCard({ holdings, total, changePct, onRefresh, address }) {
   const call = useServerFn(askAssistant);
   const navigate = useNavigate();
+  const wallet = useWallet();
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [did, setDid] = useState("");
   const askRef = useRef(null);
   const bottom = useRef(null);
 
-  // The small tasks the assistant may carry out for the user.
-  async function perform(action, label) {
-    if (!action || action === "none") return;
-    if (action === "refresh") {
-      await onRefresh?.();
-      setDid(label || "Balances refreshed");
-      return;
-    }
-    if (action === "copy_address") {
-      try {
-        await navigator.clipboard.writeText(address || "");
-        setDid(label || "Address copied");
-      } catch {
-        setDid("This browser blocked the clipboard — copy it from Receive");
-      }
-      return;
-    }
-    if (SCREENS[action]) {
-      navigate({ to: SCREENS[action] });
-      setDid(label || `Opened ${action}`);
-    }
-  }
-
   const speech = useSpeech({ onFinal: (text) => askRef.current?.(text) });
+  const { perform, done: did, reset: clearDid } = useAssistantActions({
+    navigate,
+    wallet,
+    onRefresh,
+    address,
+    speech,
+  });
 
   // Only the balances already on screen are sent along as context.
   const snapshot = useMemo(
     () => ({
       total: Number(total) || 0,
       changePct: Number(changePct) || 0,
+      account: wallet.account,
+      accounts: wallet.accounts,
       holdings: holdings
         .filter((item) => item.value > 0)
         .slice(0, 12)
@@ -61,7 +47,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
           value: Number(item.value) || 0,
         })),
     }),
-    [holdings, total, changePct],
+    [holdings, total, changePct, wallet.account, wallet.accounts],
   );
 
   const ask = useCallback(
@@ -70,13 +56,13 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
       if (!question || busy) return;
       const next = [...messages, { role: "user", text: question }];
       setMessages(next);
-      setDid("");
+      clearDid();
       setBusy(true);
       try {
-        const { answer, action, actionLabel } = await call({ data: { context: snapshot, history: next.slice(-10) } });
+        const { answer, actions } = await call({ data: { context: snapshot, history: next.slice(-10) } });
         setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
         speech.speak(answer);
-        await perform(action, actionLabel);
+        await perform(actions);
       } catch {
         setMessages((prev) => [
           ...prev,
@@ -86,7 +72,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
         setBusy(false);
       }
     },
-    [busy, messages, snapshot, call, speech],
+    [busy, messages, snapshot, call, speech, perform, clearDid],
   );
 
   useEffect(() => {
@@ -116,7 +102,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
 
       {messages.length === 0 ? (
         <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
-          Ask about your portfolio, a chain or how a screen works — type or tap the mic.
+          Ask about your portfolio or tell me what to do — open Swap, copy my address, lock the wallet. Type or tap the mic.
         </p>
       ) : (
         <div className="mt-2 max-h-60 space-y-1.5 overflow-y-auto pr-0.5">
