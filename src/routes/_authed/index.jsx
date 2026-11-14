@@ -7,6 +7,7 @@ import MarketPulse from "@/components/wallet/home/MarketPulse";
 import TokensList from "@/components/wallet/home/TokensList";
 import AllocationCard from "@/components/wallet/home/AllocationCard";
 import SecurityNote from "@/components/wallet/home/SecurityNote";
+import AssistantCard from "@/components/wallet/home/AssistantCard";
 import usePortfolio from "@/hooks/usePortfolio";
 
 export const Route = createFileRoute("/_authed/")({
@@ -48,6 +49,7 @@ function Overview() {
               chains={chains}
             />
             <ActionsRow />
+            <AssistantCard holdings={holdings} total={total} changePct={changePct} />
             <MarketPulse />
           </div>
 
