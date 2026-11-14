@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
-import { Check, Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Check, Loader2, Settings2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { askAssistant } from "@/lib/assistant-fns";
+import { askWithOwnProvider } from "@/lib/ask-assistant";
 import useSpeech from "@/hooks/useSpeech";
 import useAssistantActions from "@/hooks/useAssistantActions";
 import { useWallet } from "@/lib/WalletContext";
@@ -60,7 +61,9 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
       clearDid();
       setBusy(true);
       try {
-        const { answer, actions } = await call({ data: { context: snapshot, history: next.slice(-10) } });
+        const payload = { context: snapshot, history: next.slice(-10) };
+        // Their own API key answers first; the built-in model only stands in when none is set.
+        const { answer, actions } = (await askWithOwnProvider(payload)) || (await call({ data: payload }));
         setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
         speech.speak(answer);
         await perform(actions);
@@ -91,14 +94,24 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
           <Sparkles className="h-3.5 w-3.5 text-primary" strokeWidth={1.9} />
           <h2 className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">Helix assistant</h2>
         </div>
-        <button
-          type="button"
-          onClick={() => speech.setVoiceOn((on) => !on)}
-          aria-label={speech.voiceOn ? "Mute spoken replies" : "Unmute spoken replies"}
-          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {speech.voiceOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => speech.setVoiceOn((on) => !on)}
+            aria-label={speech.voiceOn ? "Mute spoken replies" : "Unmute spoken replies"}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {speech.voiceOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/ai-settings" })}
+            aria-label="AI provider settings"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {messages.length === 0 ? (

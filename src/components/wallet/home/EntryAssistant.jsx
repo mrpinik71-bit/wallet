@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { askAssistant } from "@/lib/assistant-fns";
+import { askWithOwnProvider } from "@/lib/ask-assistant";
 import useSpeech from "@/hooks/useSpeech";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
@@ -27,7 +28,9 @@ export default function EntryAssistant() {
       setMessages(next);
       setBusy(true);
       try {
-        const { answer } = await call({ data: { context: EMPTY, history: next.slice(-10) } });
+        const payload = { context: EMPTY, history: next.slice(-10) };
+        const own = await askWithOwnProvider(payload);
+        const { answer } = own || (await call({ data: payload }));
         setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
         speech.speak(answer);
       } catch {
