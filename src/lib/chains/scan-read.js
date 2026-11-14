@@ -172,10 +172,12 @@ export async function polkadotBalance(address) {
   throw lastError || new Error("Polkadot network error.");
 }
 
-export async function xrpBalance(address) {
+export async function xrpBalance(address, base) {
   let lastError = null;
+  // The scan hands in the mirror it wants first; the rest stay as fallbacks.
+  const endpoints = base ? [base, ...XRP_ENDPOINTS.filter((item) => item !== base)] : XRP_ENDPOINTS;
 
-  for (const endpoint of XRP_ENDPOINTS) {
+  for (const endpoint of endpoints) {
     try {
       const response = await fetch(endpoint, {
         method: "POST",

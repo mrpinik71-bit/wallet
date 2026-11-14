@@ -52,14 +52,16 @@ function derEncode(r, s) {
   return Uint8Array.from([0x30, parts[0].length + parts[1].length, ...parts[0], ...parts[1]]);
 }
 
-async function request(chainId, path, init) {
-  const response = await fetch(`${chains[chainId].api}${path}`, init);
+// `base` lets a caller read through a mirror of the same API; without it the
+// chain's configured endpoint is used.
+async function request(chainId, path, init, base) {
+  const response = await fetch(`${base || chains[chainId].api}${path}`, init);
   if (!response.ok) throw new Error(`${chains[chainId].name} network error (${response.status}).`);
   return response;
 }
 
-export async function utxoBalance(chainId, address) {
-  const data = await (await request(chainId, `/address/${address}`)).json();
+export async function utxoBalance(chainId, address, base) {
+  const data = await (await request(chainId, `/address/${address}`, undefined, base)).json();
   const stats = data.chain_stats || {};
   const sats = (stats.funded_txo_sum || 0) - (stats.spent_txo_sum || 0);
   return sats / 1e8;

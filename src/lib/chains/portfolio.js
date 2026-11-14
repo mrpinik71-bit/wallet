@@ -20,14 +20,16 @@ import { babylonBalance } from "@/lib/chains/babylon";
 import { changeOf, fetchPrices, priceOf } from "@/lib/chains/prices";
 import { colorForToken, discoverTokens, DISCOVERY_NETWORKS } from "@/lib/chains/token-discovery";
 
-export async function readBalance(coin, address) {
+export async function readBalance(coin, address, endpoint) {
   if (!address) return 0;
   if (coin.family === "evm") {
     return coin.kind === "token" ? evmTokenBalance(coin.chain, address, coin) : evmNativeBalance(coin.chain, address);
   }
-  if (coin.family === "utxo") return utxoBalance(coin.chain, address);
+  // `endpoint` is only passed by the bulk scan, which spreads its burst over
+  // every mirror of a chain; the wallet itself always uses the configured one.
+  if (coin.family === "utxo") return utxoBalance(coin.chain, address, endpoint);
   if (coin.family === "blockcypher") return blockcypherBalance(coin.chain, address);
-  if (coin.family === "xrp") return xrpBalance(address);
+  if (coin.family === "xrp") return xrpBalance(address, endpoint);
   if (coin.family === "cardano") return cardanoBalance(address);
   if (coin.family === "polkadot") return polkadotBalance(address);
   if (coin.family === "aptos") return aptosBalance(address);
