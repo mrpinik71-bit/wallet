@@ -9,6 +9,7 @@ import VaultEmblem from "@/components/wallet/setup/unlock/VaultEmblem";
 import PinCells from "@/components/wallet/setup/unlock/PinCells";
 import PinKeypad from "@/components/wallet/setup/unlock/PinKeypad";
 import PhraseCheckScreen from "@/components/wallet/scan/PhraseCheckScreen";
+import EntryAssistant from "@/components/wallet/home/EntryAssistant";
 
 const rise = { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 } };
 
@@ -117,6 +118,10 @@ export default function UnlockVault() {
             </div>
           </div>
         </motion.div>
+
+        <div className="mt-4">
+          <EntryAssistant />
+        </div>
 
         <div className="mt-auto pt-7 text-center">
           <div className="flex items-center justify-center gap-2 text-[10px] tracking-wide text-muted-foreground/60">

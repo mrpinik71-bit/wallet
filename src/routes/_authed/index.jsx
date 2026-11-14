@@ -7,6 +7,7 @@ import MarketPulse from "@/components/wallet/home/MarketPulse";
 import TokensList from "@/components/wallet/home/TokensList";
 import AllocationCard from "@/components/wallet/home/AllocationCard";
 import SecurityNote from "@/components/wallet/home/SecurityNote";
+import AssistantCard from "@/components/wallet/home/AssistantCard";
 import usePortfolio from "@/hooks/usePortfolio";
 
 export const Route = createFileRoute("/_authed/")({
@@ -36,6 +37,14 @@ function Overview() {
       <div className="relative">
         <HomeHeader address={addresses.tron} />
         <AccountSwitcher />
+
+        <AssistantCard
+          holdings={holdings}
+          total={total}
+          changePct={changePct}
+          onRefresh={refresh}
+          address={addresses.tron}
+        />
 
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start lg:gap-6">
           <div className="lg:col-start-1 lg:row-start-1">
