@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "build:vercel": "vite build --config vite.vercel.config.js",
+    "build:vercel": "vite build --config vite.vercel.config.js && node vercel/postbuild.mjs",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "preview": "vite preview"
