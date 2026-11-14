@@ -2,12 +2,12 @@
 // asked about a whole batch of wallets at once: a batch of 20 wallets costs a
 // few round trips per chain instead of a fresh set for each wallet, and the
 // next batch is already in flight while the current one is answered.
-import { cardanoAddresses } from "@/lib/chains/cardano";
 import { chains } from "@/lib/chains/config";
-import { evmAddress, getAddresses } from "@/lib/chains/derive";
+import { createDerivePool } from "@/lib/chains/derive-pool";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS } from "@/lib/chains/scan-catalog";
+import { prepare } from "@/lib/chains/scan-derive";
 import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
 import {
   cardanoBalancesMany,
@@ -73,8 +73,6 @@ function lowerCap(host) {
   hostFailures.delete(host);
   hostWins.delete(host);
 }
-const WORD_COUNTS = [12, 15, 18, 21, 24];
-
 // Assets are routed by how their chain can be asked: EVM chains per network,
 // the multi-address chains together, everything else one wallet at a time.
 const EVM_COINS = new Map();
@@ -152,44 +150,6 @@ function noteHost(host, ok, weight = 1) {
   const misses = (hostFailures.get(host) || 0) + weight;
   hostFailures.set(host, misses);
   if (misses >= DEAD_AFTER) deadHosts.add(host);
-}
-
-/** Derives every address this phrase controls, on this device. */
-function prepare(entry) {
-  // Any standard length is accepted — a phrase is never dropped just because it
-  // differs from the selector, so every real phrase gets derived and checked.
-  const size = entry.phrase.trim().split(/\s+/).filter(Boolean).length;
-  if (!WORD_COUNTS.includes(size)) {
-    return { invalid: true, error: "A recovery phrase has 12, 15, 18, 21 or 24 words." };
-  }
-
-  let addresses = {};
-  try {
-    addresses = getAddresses(entry.phrase);
-  } catch {
-    // One chain failing to derive must not hide the wallet: the EVM address
-    // alone still shows funds on every EVM network.
-    try {
-      addresses = { ethereum: evmAddress(entry.phrase) };
-    } catch {
-      return { invalid: true, error: "Addresses could not be derived from this phrase." };
-    }
-  }
-
-  // No address at all means nothing could be checked — say so instead of
-  // reporting an empty wallet as if it had been scanned.
-  if (!Object.keys(addresses).length) {
-    return { invalid: true, error: "Addresses could not be derived from this phrase." };
-  }
-
-  let cardano = [];
-  try {
-    cardano = cardanoAddresses(entry.phrase);
-  } catch {
-    cardano = [];
-  }
-
-  return { entry, words: size, addresses, cardano };
 }
 
 const withTimeout = (promise, ms) =>
@@ -491,17 +451,33 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
     onProgress?.({ completed, started, result });
   };
 
+  // Without worker threads a phrase is derived on this thread, yielding often
+  // enough that the page keeps painting.
+  const prepareInline = async (entries) => {
+    const wallets = new Array(entries.length);
+    for (let position = 0; position < entries.length; position += 1) {
+      if (isCancelled?.()) break;
+      wallets[position] = prepare(entries[position]);
+      if (position % 25 === 24) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return wallets;
+  };
+
+  // Derivation, spread over the device's cores for this whole scan.
+  const pool = createDerivePool();
+
   const runBatch = async (entries) => {
     // Announced before the reads start, so the page shows wallets being checked
-    // while a slow node is still answering.
+    // while they are still being derived.
     started += entries.length;
     onProgress?.({ completed, started });
 
+    const wallets = pool ? await pool.map(entries, isCancelled) : await prepareInline(entries);
+
     const batch = [];
-    for (let position = 0; position < entries.length; position += 1) {
-      if (isCancelled?.()) return;
+    wallets.forEach((wallet, position) => {
+      if (!wallet) return;
       const entry = entries[position];
-      const wallet = prepare(entry);
       if (wallet.invalid) {
         report({
           phrase: entry.phrase,
@@ -514,12 +490,10 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
           status: "invalid",
           error: wallet.error,
         });
-        continue;
+        return;
       }
       batch.push(wallet);
-      // A long run must not freeze the page while it derives.
-      if (position % 25 === 24) await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+    });
     if (!batch.length || isCancelled?.()) return;
 
     // Each wallet is reported as soon as its own chains have answered.
@@ -551,4 +525,5 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   }
   if (buffer.length && !isCancelled?.()) launch(buffer);
   await Promise.all(active);
+  pool?.close();
 }
