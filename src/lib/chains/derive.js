@@ -49,12 +49,24 @@ const remember = (key, value) => {
   return value;
 };
 
+// The HD tree is built once per phrase and every chain's path derives from that
+// same root: rebuilding it for each of a dozen paths was pure repeated work.
+const roots = new Map();
+function rootNode(mnemonic) {
+  const cached = roots.get(mnemonic);
+  if (cached) return cached;
+  const root = HDNodeWallet.fromSeed(mnemonicSeed(mnemonic));
+  if (roots.size > 64) roots.clear();
+  roots.set(mnemonic, root);
+  return root;
+}
+
 // Keys come from the phrase's seed, not from a checksum-validated mnemonic:
 // a phrase whose checksum fails still controls real addresses, so it must
 // derive and scan instead of being thrown away as unreadable.
 function secpNode(mnemonic, path) {
   const key = `${path}|${mnemonic}`;
-  if (!cache.has(key)) remember(key, HDNodeWallet.fromSeed(mnemonicSeed(mnemonic)).derivePath(path));
+  if (!cache.has(key)) remember(key, rootNode(mnemonic).derivePath(path));
   return cache.get(key);
 }
 

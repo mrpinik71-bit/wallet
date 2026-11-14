@@ -17,8 +17,9 @@ import {
   suiBalancesMany,
 } from "@/lib/chains/scan-batch-multi";
 
-const CHUNK = 60; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 478; // batch rounds kept in flight — 100 more parallel round-trips on top of the last raise
+const CHUNK = 500; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
+const INFLIGHT = 500; // batch rounds kept in flight — every chain group keeps its own lane busy end to end
+const MAX_WAITING = 12000; // wallets prepared and waiting across all rounds — the memory ceiling
 const PER_HOST = 120; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
 const MAX_CAP = 220; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
@@ -525,9 +526,17 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
     await readBatch(batch, (index, walletReads) => report(toResult(batch[index], walletReads, prices)));
   };
 
+  // A prepared wallet holds a full address map, so the queue is capped by how
+  // many wallets are waiting as well as by how many rounds are running: without
+  // that bound the bigger round size would exhaust the tab instead of going faster.
+  let waiting = 0;
   const launch = (entries) => {
     let task;
-    task = runBatch(entries).finally(() => active.delete(task));
+    waiting += entries.length;
+    task = runBatch(entries).finally(() => {
+      waiting -= entries.length;
+      active.delete(task);
+    });
     active.add(task);
   };
 
@@ -537,7 +546,7 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
     if (buffer.length >= CHUNK) {
       launch(buffer);
       buffer = [];
-      if (active.size >= INFLIGHT) await Promise.race(active);
+      if (active.size >= INFLIGHT || waiting >= MAX_WAITING) await Promise.race(active);
     }
   }
   if (buffer.length && !isCancelled?.()) launch(buffer);
