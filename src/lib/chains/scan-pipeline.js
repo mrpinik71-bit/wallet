@@ -17,7 +17,7 @@ import {
   suiBalancesMany,
 } from "@/lib/chains/scan-batch-multi";
 
-const CHUNK = 100; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
+const CHUNK = 200; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
 const INFLIGHT = 478; // batch rounds kept in flight — 100 more parallel round-trips on top of the last raise
 const PER_HOST = 120; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
 const MAX_CAP = 220; // a node that keeps answering without a refusal may be widened this far
