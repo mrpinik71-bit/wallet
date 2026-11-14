@@ -43,11 +43,17 @@ export async function readBalance(coin, address) {
   return 0;
 }
 
+// An indexer that stops answering must not hold the whole portfolio back: a slow
+// one is dropped for this read and the rest still show.
+const SETTLE_MS = 6000;
+const settle = (work) =>
+  Promise.race([work, new Promise((resolve) => setTimeout(() => resolve([]), SETTLE_MS))]);
+
 async function discoverHeld(addresses, known) {
   const found = await Promise.all(
     DISCOVERY_NETWORKS.map(async (chainId) => {
       try {
-        const tokens = await discoverTokens(chainId, addresses[chainId]);
+        const tokens = await settle(discoverTokens(chainId, addresses[chainId]));
         return tokens.map((token) => ({ ...token, chain: chainId }));
       } catch {
         return [];
@@ -87,6 +93,18 @@ export async function loadPortfolio(mnemonic, account = 0) {
   const addresses = getAddresses(mnemonic, account);
   const prices = await fetchPrices();
 
+  // Tokens this wallet already knows about, so discovery only adds the rest.
+  const known = new Set(
+    assets
+      .filter((coin) => coin.kind === "token" && coin.address)
+      .map((coin) => `${coin.chain}|${coin.address.toLowerCase()}`),
+  );
+
+  // Discovery runs alongside the balance reads instead of after them: it asks a
+  // different set of indexers, so doing the two in turn only added their
+  // latencies together.
+  const discoveredTask = discoverHeld(addresses, known);
+
   const holdings = await Promise.all(
     assets.map(async (coin) => {
       const address = addresses[coin.chain] || "";
@@ -115,10 +133,7 @@ export async function loadPortfolio(mnemonic, account = 0) {
 
   // Anything else sitting on the address — airdrops, meme tokens — is added as
   // an unpriced holding, after the assets this wallet already knows.
-  const known = new Set(
-    holdings.filter((item) => item.kind === "token" && item.address).map((item) => `${item.chain}|${item.address.toLowerCase()}`),
-  );
-  const discovered = await discoverHeld(addresses, known);
+  const discovered = await discoveredTask;
 
   const ordered = [...holdings, ...discovered].sort(
     (a, b) =>
