@@ -1,19 +1,47 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Check, Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { askAssistant } from "@/lib/assistant-fns";
 import useSpeech from "@/hooks/useSpeech";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
 
-const HINTS = ["What's my biggest holding?", "How is my portfolio today?", "How do I send tokens?"];
+const HINTS = ["What's my biggest holding?", "How is my portfolio today?", "Refresh my balances"];
 
-export default function AssistantCard({ holdings, total, changePct }) {
+const SCREENS = { send: "/send", receive: "/receive", swap: "/swap", markets: "/markets", activity: "/activity" };
+
+export default function AssistantCard({ holdings, total, changePct, onRefresh, address }) {
   const call = useServerFn(askAssistant);
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [did, setDid] = useState("");
   const askRef = useRef(null);
   const bottom = useRef(null);
+
+  // The small tasks the assistant may carry out for the user.
+  async function perform(action, label) {
+    if (!action || action === "none") return;
+    if (action === "refresh") {
+      await onRefresh?.();
+      setDid(label || "Balances refreshed");
+      return;
+    }
+    if (action === "copy_address") {
+      try {
+        await navigator.clipboard.writeText(address || "");
+        setDid(label || "Address copied");
+      } catch {
+        setDid("This browser blocked the clipboard — copy it from Receive");
+      }
+      return;
+    }
+    if (SCREENS[action]) {
+      navigate({ to: SCREENS[action] });
+      setDid(label || `Opened ${action}`);
+    }
+  }
 
   const speech = useSpeech({ onFinal: (text) => askRef.current?.(text) });
 
@@ -42,11 +70,13 @@ export default function AssistantCard({ holdings, total, changePct }) {
       if (!question || busy) return;
       const next = [...messages, { role: "user", text: question }];
       setMessages(next);
+      setDid("");
       setBusy(true);
       try {
-        const { answer } = await call({ data: { context: snapshot, history: next.slice(-10) } });
+        const { answer, action, actionLabel } = await call({ data: { context: snapshot, history: next.slice(-10) } });
         setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
         speech.speak(answer);
+        await perform(action, actionLabel);
       } catch {
         setMessages((prev) => [
           ...prev,
@@ -102,6 +132,13 @@ export default function AssistantCard({ holdings, total, changePct }) {
           <div ref={bottom} />
         </div>
       )}
+
+      {did ? (
+        <p className="mt-2 flex items-center gap-1.5 text-[10px] font-medium text-primary">
+          <Check className="h-3 w-3" strokeWidth={2.4} />
+          {did}
+        </p>
+      ) : null}
 
       {messages.length === 0 ? (
         <div className="mt-2 flex flex-wrap gap-1.5">

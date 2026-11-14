@@ -49,7 +49,13 @@ function Overview() {
               chains={chains}
             />
             <ActionsRow />
-            <AssistantCard holdings={holdings} total={total} changePct={changePct} />
+            <AssistantCard
+              holdings={holdings}
+              total={total}
+              changePct={changePct}
+              onRefresh={refresh}
+              address={addresses.tron}
+            />
             <MarketPulse />
           </div>
 
