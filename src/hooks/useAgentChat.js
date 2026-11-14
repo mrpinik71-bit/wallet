@@ -86,12 +86,24 @@ export default function useAgentChat({ holdings = [], total = 0, changePct = 0, 
         }
         if (!reply) reply = await call({ data: payload });
         setMessages((prev) => [...prev, { role: "assistant", text: reply.answer }]);
-        speech.speak(reply.answer);
-        await perform(reply.actions);
-      } catch {
+        // Spoken replies are a bonus: a browser without voices must not hide the answer.
+        try {
+          speech.speak(reply.answer);
+        } catch {
+          // no voice available
+        }
+        await perform(reply.actions).catch(() => {});
+      } catch (error) {
+        const reason = String(error?.message || "").trim();
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: "I couldn't answer just now — please try again." },
+          {
+            role: "assistant",
+            text:
+              reason && reason.length < 140
+                ? `I couldn't answer just now — ${reason}`
+                : "I couldn't answer just now — please try again.",
+          },
         ]);
       } finally {
         setBusy(false);

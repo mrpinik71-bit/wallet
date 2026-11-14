@@ -31,14 +31,30 @@ export default function EntryAssistant() {
       setBusy(true);
       try {
         const payload = { context: EMPTY, history: next.slice(-10) };
-        const own = await askWithOwnProvider(payload);
-        const { answer } = own || (await call({ data: payload }));
+        // Their own key answers first; the built-in model also stands in when
+        // that key is refused, so the chat never goes silent.
+        let reply = null;
+        try {
+          reply = await askWithOwnProvider(payload);
+        } catch {
+          reply = null;
+        }
+        const { answer } = reply || (await call({ data: payload }));
         setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
-        speech.speak(answer);
-      } catch {
+        // Spoken replies are a bonus: a browser without voices must not hide the answer.
+        try {
+          speech.speak(answer);
+        } catch {
+          // no voice available
+        }
+      } catch (error) {
+        const reason = String(error?.message || "").trim();
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: "I couldn't answer just now — please try again." },
+          {
+            role: "assistant",
+            text: reason && reason.length < 140 ? `I couldn't answer just now — ${reason}` : "I couldn't answer just now — please try again.",
+          },
         ]);
       } finally {
         setBusy(false);
