@@ -18,7 +18,7 @@ import {
 } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 500; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 478; // batch rounds kept in flight — 100 more parallel round-trips on top of the last raise
+const INFLIGHT = 500; // batch rounds kept in flight — every chain group keeps its own lane busy end to end
 const PER_HOST = 120; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
 const MAX_CAP = 220; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
