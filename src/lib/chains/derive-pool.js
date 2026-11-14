@@ -1,10 +1,15 @@
-// Key derivation, spread over the device's cores. A bulk scan is bound by
+// Key derivation, spread over every core the device has. A bulk scan is bound by
 // derivation rather than by the network — the same phrase has to be turned into
-// a dozen addresses before anything can be asked about it — so deriving on
-// worker threads is what actually makes a scan faster.
+// two dozen addresses before anything can be asked about it — so every core is
+// put to work, and phrases travel in waves so a worker is never left waiting on
+// a message round trip between two phrases.
 import { prepare } from "@/lib/chains/scan-derive";
 
-const MAX_WORKERS = 4;
+const MAX_WORKERS = 32; // a 16-core machine uses all 16; a phone uses whatever it reports
+
+// Phrases per message. One message per phrase left every worker idle for a full
+// round trip between phrases, which at this scale was most of the wall clock.
+const WAVE = 32;
 
 /**
  * Derives phrases in parallel. Returns null on a device that cannot run workers,
@@ -13,8 +18,8 @@ const MAX_WORKERS = 4;
 export function createDerivePool() {
   if (typeof Worker === "undefined" || typeof navigator === "undefined") return null;
 
-  // One core stays with the page, so the interface keeps painting while a scan runs.
-  const target = Math.min(MAX_WORKERS, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
+  // Every core reports in, with no lane held back.
+  const target = Math.min(MAX_WORKERS, Math.max(2, navigator.hardwareConcurrency || 2));
   const slots = [];
   for (let index = 0; index < target; index += 1) {
     try {
@@ -27,7 +32,7 @@ export function createDerivePool() {
 
   let nextId = 1;
 
-  const runOn = (slot, entry) =>
+  const runOn = (slot, entries) =>
     new Promise((resolve, reject) => {
       const id = nextId++;
       const cleanup = () => {
@@ -37,7 +42,7 @@ export function createDerivePool() {
       const onMessage = (event) => {
         if (event.data?.id !== id) return;
         cleanup();
-        resolve(event.data.wallet);
+        resolve(event.data.wallets);
       };
       const onError = () => {
         cleanup();
@@ -46,29 +51,36 @@ export function createDerivePool() {
       slot.worker.addEventListener("message", onMessage);
       slot.worker.addEventListener("error", onError);
       try {
-        slot.worker.postMessage({ id, entry });
+        slot.worker.postMessage({ id, entries });
       } catch (error) {
         cleanup();
         reject(error);
       }
     });
 
-  /** Every phrase derived, in the order it arrived. Nothing is skipped. */
-  async function map(entries, isCancelled) {
+  /**
+   * Every phrase derived, nothing skipped: each phrase is handed to a worker the
+   * moment a lane is free, and `onWallet` is called as it comes back so the
+   * network reads start while the rest are still being derived.
+   */
+  async function map(entries, isCancelled, onWallet) {
     const wallets = new Array(entries.length);
     let cursor = 0;
 
     const lane = async (slot) => {
       while (!isCancelled?.()) {
-        const position = cursor++;
-        if (position >= entries.length) return;
-        let wallet = null;
+        const start = cursor;
+        cursor += WAVE;
+        if (start >= entries.length) return;
+        const wave = entries.slice(start, start + WAVE);
+
+        let derived = null;
         if (slot.alive) {
           try {
-            wallet = await runOn(slot, entries[position]);
+            derived = await runOn(slot, wave);
           } catch {
-            // A worker that could not start or crashed is retired; this phrase
-            // and the rest of the lane are derived here instead.
+            // A worker that could not start or crashed is retired; this wave and
+            // the rest of the lane are derived here instead.
             slot.alive = false;
             try {
               slot.worker.terminate();
@@ -77,8 +89,14 @@ export function createDerivePool() {
             }
           }
         }
-        // The inline path keeps the scan complete rather than fast.
-        wallets[position] = wallet || prepare(entries[position]);
+
+        wave.forEach((entry, offset) => {
+          const position = start + offset;
+          // The inline path keeps the scan complete rather than fast.
+          const wallet = derived?.[offset] || prepare(entry);
+          wallets[position] = wallet;
+          onWallet?.(position, wallet);
+        });
       }
     };
 

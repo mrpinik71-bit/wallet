@@ -21,8 +21,9 @@ import {
 const CHUNK = 500; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
 const INFLIGHT = 500; // batch rounds kept in flight — every chain group keeps its own lane busy end to end
 const MAX_WAITING = 12000; // wallets prepared and waiting across all rounds — the memory ceiling
-const PER_HOST = 120; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
-const MAX_CAP = 220; // a node that keeps answering without a refusal may be widened this far
+const READ_CHUNK = 200; // wallets handed to the network while the rest of the round is still being derived
+const PER_HOST = 200; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
+const MAX_CAP = 400; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
@@ -33,33 +34,34 @@ const DEAD_AFTER = 20;
 // Free endpoints with a published, low request budget: asking them faster only
 // earns a 429, which used to be reported as a failed chain read.
 const HOST_CAPS = {
-  // Measured: these answer the burst below without a single 429.
-  "api.blockcypher.com": 32,
-  "mempool.space": 44,
-  "litecoinspace.org": 20,
-  "fullnode.mainnet.aptoslabs.com": 30,
-  "xrplcluster.com": 24,
+  // Measured: these answer the burst below without a single 429, so they start
+  // at twice the burst that was being used before.
+  "api.blockcypher.com": 64,
+  "mempool.space": 88,
+  "litecoinspace.org": 40,
+  "fullnode.mainnet.aptoslabs.com": 60,
+  "xrplcluster.com": 48,
   // Toncenter refuses a burst of five, but TonAPI takes the overflow, so the
   // pair together move many wallets at a time.
-  "toncenter.com": 18,
-  "tonapi.io": 18,
+  "toncenter.com": 36,
+  "tonapi.io": 36,
   // These refuse a wide burst: they start wide enough to matter, then a 429
   // halves them for the rest of the run instead of failing the read.
-  "mempool.fractalbitcoin.io": 20,
-  "blockstream.info": 14,
-  "api.mainnet.hiro.so": 16,
-  "babylon-rest.publicnode.com": 16,
-  "rpc.merlinchain.io": 18,
-  "api.koios.rest": 10,
-  "rpc.mainnet.near.org": 24,
-  "api.trongrid.io": 12,
-  "graphql.mainnet.sui.io": 18,
+  "mempool.fractalbitcoin.io": 40,
+  "blockstream.info": 28,
+  "api.mainnet.hiro.so": 32,
+  "babylon-rest.publicnode.com": 32,
+  "rpc.merlinchain.io": 36,
+  "api.koios.rest": 20,
+  "rpc.mainnet.near.org": 48,
+  "api.trongrid.io": 24,
+  "graphql.mainnet.sui.io": 36,
   // Token lists answer one wallet at a time, so these stay narrower than a
   // batch read and widen only while the indexer keeps answering.
-  "eth.blockscout.com": 18,
-  "base.blockscout.com": 18,
-  "api.binplorer.com": 10,
-  "api.mainnet-beta.solana.com": 10,
+  "eth.blockscout.com": 36,
+  "base.blockscout.com": 36,
+  "api.binplorer.com": 20,
+  "api.mainnet-beta.solana.com": 20,
 };
 
 // Burst per host, tuned while the scan runs. Endpoints listed above start at
@@ -544,17 +546,15 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
 
   // Without worker threads a phrase is derived on this thread, yielding often
   // enough that the page keeps painting.
-  const prepareInline = async (entries) => {
-    const wallets = new Array(entries.length);
+  const prepareInline = async (entries, onWallet) => {
     for (let position = 0; position < entries.length; position += 1) {
       if (isCancelled?.()) break;
-      wallets[position] = prepare(entries[position]);
+      onWallet?.(position, prepare(entries[position]));
       if (position % 25 === 24) await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    return wallets;
   };
 
-  // Derivation, spread over the device's cores for this whole scan.
+  // Derivation, spread over every core of the device for this whole scan.
   const pool = createDerivePool();
 
   const runBatch = async (entries) => {
@@ -563,11 +563,22 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
     started += entries.length;
     onProgress?.({ completed, started });
 
-    const wallets = pool ? await pool.map(entries, isCancelled) : await prepareInline(entries);
+    // Deriving and reading overlap: as soon as READ_CHUNK wallets are derived
+    // they go to the network while the rest of the round is still deriving, so
+    // the device's cores and the connections are busy at the same time instead
+    // of taking turns. Every derived wallet still ends up in exactly one read.
+    const pending = [];
+    const reads = [];
+    const handOver = () => {
+      if (!pending.length) return;
+      const part = pending.splice(0, pending.length);
+      reads.push(
+        readBatch(part, (index, walletReads) => report(toResult(part[index], walletReads, prices))),
+      );
+    };
 
-    const batch = [];
-    wallets.forEach((wallet, position) => {
-      if (!wallet) return;
+    const take = (position, wallet) => {
+      if (!wallet || isCancelled?.()) return;
       const entry = entries[position];
       if (wallet.invalid) {
         report({
@@ -583,12 +594,16 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
         });
         return;
       }
-      batch.push(wallet);
-    });
-    if (!batch.length || isCancelled?.()) return;
+      pending.push(wallet);
+      if (pending.length >= READ_CHUNK) handOver();
+    };
 
+    if (pool) await pool.map(entries, isCancelled, take);
+    else await prepareInline(entries, take);
+
+    handOver();
     // Each wallet is reported as soon as its own chains have answered.
-    await readBatch(batch, (index, walletReads) => report(toResult(batch[index], walletReads, prices)));
+    await Promise.all(reads);
   };
 
   // A prepared wallet holds a full address map, so the queue is capped by how
