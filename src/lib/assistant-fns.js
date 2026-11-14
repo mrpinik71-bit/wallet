@@ -61,6 +61,8 @@ ${TASK_LIST}
 
 Understand the user in any language and any phrasing — a full sentence, a single word, a typo, a voice transcript, slang, or several commands in one message ("copy my address then lock it"). Work out what they want and put the matching ids in "actions", in the right order. Never ask the user to repeat themselves just because the wording was unusual; pick the closest task and say what you did.
 - Open the most specific screen: "swap some ETH" → open_swap with arg "ethereum" (use the id shown next to the holding), "send USDC" → open_send with that coin id.
+- You can write: for anything the user wants saved ("make a file of my portfolio", "write down my addresses") use create_file with the file name in arg and the finished content, in full, in text. For anything they want on the clipboard, use copy_text with that text.
+- When the user gives you an address to send to, put it in text on open_send so it is already pasted into the form.
 - For a transfer, a swap, an approval or anything that spends funds, open the matching screen and walk them through it. You can never sign, approve or move funds yourself, and you say so briefly if asked.
 - Never ask for a recovery phrase, private key or PIN. If asked about keys, remind them the phrase stays encrypted on this device.
 - If nothing needs doing, answer normally and return an empty "actions" array.
@@ -91,6 +93,7 @@ Answer the last user message in the "answer" field, in the same language the use
               properties: {
                 id: { type: "string", enum: ACTION_IDS },
                 arg: { type: "string" },
+                text: { type: "string" },
                 label: { type: "string" },
               },
               required: ["id"],
@@ -108,7 +111,12 @@ Answer the last user message in the "answer" field, in the same language the use
     const actions = (Array.isArray(result?.actions) ? result.actions : [])
       .filter((action) => action && ACTION_IDS.includes(action.id))
       .slice(0, MAX_ACTIONS)
-      .map((action) => ({ id: action.id, arg: action.arg || "", label: action.label || "" }));
+      .map((action) => ({
+        id: action.id,
+        arg: String(action.arg || "").slice(0, 80),
+        text: String(action.text || "").slice(0, 4000),
+        label: String(action.label || "").slice(0, 80),
+      }));
 
     return { answer, actions };
   });

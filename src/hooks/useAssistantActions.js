@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { MAX_ACTIONS, SCREEN_ACTIONS } from "@/lib/assistant-actions";
+import { saveTextFile } from "@/lib/save-text";
 
 /**
  * Runs the tasks the assistant asked for, on this device. Anything the model
@@ -22,10 +23,13 @@ export default function useAssistantActions({ navigate, wallet, onRefresh, addre
 
         const screen = SCREEN_ACTIONS[id];
         if (screen) {
-          // A screen that takes a coin opens already pointed at that asset.
+          // A screen can open already pointed at a coin, with text pasted in.
           const arg = String(action.arg || "").trim();
-          if (screen.search && arg) navigate({ to: screen.route, search: { [screen.search]: arg } });
-          else navigate({ to: screen.route });
+          const pasted = String(action.text || "").trim();
+          const search = {};
+          if (screen.search && arg) search[screen.search] = arg;
+          if (screen.extra && pasted) search[screen.extra] = pasted;
+          navigate(Object.keys(search).length ? { to: screen.route, search } : { to: screen.route });
           message = action.label || screen.done;
           continue;
         }
@@ -40,6 +44,20 @@ export default function useAssistantActions({ navigate, wallet, onRefresh, addre
           } catch {
             message = "This browser blocked the clipboard — copy it from Receive";
           }
+        } else if (id === "copy_text") {
+          const text = String(action.text || action.arg || "");
+          if (!text) continue;
+          try {
+            await navigator.clipboard.writeText(text);
+            message = action.label || "Copied to clipboard";
+          } catch {
+            message = "This browser blocked the clipboard";
+          }
+        } else if (id === "create_file") {
+          const body = String(action.text || "").trim();
+          if (!body) continue;
+          const saved = saveTextFile(action.arg, body);
+          message = action.label || `${saved} created`;
         } else if (id === "add_account") {
           wallet?.addAccount?.();
           message = action.label || `Account ${(wallet?.accounts || 1) + 1} added`;
