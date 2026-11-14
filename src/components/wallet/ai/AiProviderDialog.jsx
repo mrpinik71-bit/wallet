@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import AiProviderForm from "@/components/wallet/ai/AiProviderForm";
-import { readAiSettings } from "@/lib/ai-settings";
+import { initialAiDraft } from "@/lib/ai-settings";
 
 // Lets the assistant's provider be changed before the vault is unlocked, so a
 // key can be set from the very first screen without opening the settings route.
 export default function AiProviderDialog({ open, onOpenChange }) {
-  const [active, setActive] = useState(() => readAiSettings());
+  const [active, setActive] = useState(() => initialAiDraft());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

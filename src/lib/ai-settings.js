@@ -6,7 +6,7 @@ export const AI_SETTINGS_EVENT = "helix-ai-settings";
 export const AI_PROVIDERS = {
   base44: {
     label: "Base44 (built in)",
-    hint: "Works out of the box and uses Base44 integration credits.",
+    hint: "Works out of the box and uses Base44 integration credits. To use your own key, pick OpenAI, Anthropic or Custom above.",
     models: [],
   },
   openai: {
@@ -50,6 +50,14 @@ export function writeAiSettings(next) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   window.dispatchEvent(new Event(AI_SETTINGS_EVENT));
+}
+
+// Draft for the settings screen: when nothing of the user's own is saved yet,
+// OpenAI is pre-selected so the API key field is visible straight away.
+export function initialAiDraft() {
+  const current = readAiSettings();
+  if (current.provider !== "base44" || current.apiKey) return current;
+  return { ...current, provider: "openai", model: current.model || AI_PROVIDERS.openai.defaultModel };
 }
 
 // True when a complete own-provider setup exists and can answer.

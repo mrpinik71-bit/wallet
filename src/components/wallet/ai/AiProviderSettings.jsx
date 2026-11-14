@@ -1,10 +1,10 @@
 import { useState } from "react";
 import PageHeader from "@/components/wallet/PageHeader";
 import AiProviderForm from "@/components/wallet/ai/AiProviderForm";
-import { readAiSettings } from "@/lib/ai-settings";
+import { initialAiDraft } from "@/lib/ai-settings";
 
 export default function AiProviderSettings() {
-  const [active, setActive] = useState(() => readAiSettings());
+  const [active, setActive] = useState(() => initialAiDraft());
 
   return (
     <>

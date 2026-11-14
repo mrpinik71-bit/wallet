@@ -9,6 +9,7 @@ import useAssistantActions from "@/hooks/useAssistantActions";
 import { useWallet } from "@/lib/WalletContext";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
+import AiProviderDialog from "@/components/wallet/ai/AiProviderDialog";
 
 const HINTS = ["Open the swap screen", "Copy my address", "How is my portfolio today?"];
 
@@ -18,6 +19,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
   const wallet = useWallet();
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [apiOpen, setApiOpen] = useState(false);
   const askRef = useRef(null);
   const bottom = useRef(null);
 
@@ -97,7 +99,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
           </h2>
           <button
             type="button"
-            onClick={() => navigate({ to: "/ai-settings" })}
+            onClick={() => setApiOpen(true)}
             aria-label="Change the AI API key"
             className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-1 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:bg-primary/15"
           >
@@ -157,6 +159,8 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
       ) : null}
 
       <AssistantComposer onSend={ask} busy={busy} mic={speech} />
+
+      <AiProviderDialog open={apiOpen} onOpenChange={setApiOpen} />
     </section>
   );
 }
