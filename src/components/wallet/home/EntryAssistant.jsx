@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Settings2, Sparkles, Volume2, VolumeX } from "lucide-react";
-import { askAssistant } from "@/lib/assistant-fns";
-import { askWithOwnProvider } from "@/lib/ask-assistant";
+import { askBuiltIn, askWithOwnProvider } from "@/lib/ask-assistant";
 import useSpeech from "@/hooks/useSpeech";
 import AiProviderDialog from "@/components/wallet/ai/AiProviderDialog";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
@@ -14,7 +12,6 @@ const EMPTY = { total: 0, changePct: 0, holdings: [] };
 const HINTS = ["What can you do?", "Explain blockchain simply", "Draft a short email for me"];
 
 export default function EntryAssistant() {
-  const call = useServerFn(askAssistant);
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const askRef = useRef(null);
@@ -39,7 +36,7 @@ export default function EntryAssistant() {
         } catch {
           reply = null;
         }
-        const { answer } = reply || (await call({ data: payload }));
+        const { answer } = reply || (await askBuiltIn(payload));
         setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
         // Spoken replies are a bonus: a browser without voices must not hide the answer.
         try {
@@ -60,7 +57,7 @@ export default function EntryAssistant() {
         setBusy(false);
       }
     },
-    [busy, messages, call, speech],
+    [busy, messages, speech],
   );
 
   useEffect(() => {

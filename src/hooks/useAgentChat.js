@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { askAssistant } from "@/lib/assistant-fns";
-import { askWithOwnProvider } from "@/lib/ask-assistant";
+import { askBuiltIn, askWithOwnProvider } from "@/lib/ask-assistant";
 import useSpeech from "@/hooks/useSpeech";
 import useAssistantActions from "@/hooks/useAssistantActions";
 import { useWallet } from "@/lib/WalletContext";
@@ -14,7 +12,6 @@ import { readThread, writeThread } from "@/lib/agent-session";
  * order, using only the actions in the shared catalogue.
  */
 export default function useAgentChat({ holdings = [], total = 0, changePct = 0, onRefresh, address }) {
-  const call = useServerFn(askAssistant);
   const navigate = useNavigate();
   const wallet = useWallet();
   const [messages, setMessages] = useState(() => readThread());
@@ -84,7 +81,7 @@ export default function useAgentChat({ holdings = [], total = 0, changePct = 0, 
         } catch {
           reply = null;
         }
-        if (!reply) reply = await call({ data: payload });
+        if (!reply) reply = await askBuiltIn(payload);
         setMessages((prev) => [...prev, { role: "assistant", text: reply.answer }]);
         // Spoken replies are a bonus: a browser without voices must not hide the answer.
         try {
@@ -109,7 +106,7 @@ export default function useAgentChat({ holdings = [], total = 0, changePct = 0, 
         setBusy(false);
       }
     },
-    [busy, messages, snapshot, call, speech, perform, reset],
+    [busy, messages, snapshot, speech, perform, reset],
   );
 
   useEffect(() => {
