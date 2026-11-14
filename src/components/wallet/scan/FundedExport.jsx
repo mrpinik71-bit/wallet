@@ -77,16 +77,16 @@ export default function FundedExport({ getFunded, getAll, scanned }) {
         <TelegramSetup onReady={(next) => setBot(next)} />
       )}
 
-      {ready ? (
-        <button
-          type="button"
-          onClick={saveLocal}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-foreground/[0.1] py-2 text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <Download className="h-3 w-3" />
-          Save the file on this device
-        </button>
-      ) : null}
+      {/* The same .txt the bot delivers is always downloadable — no chat link needed. */}
+      <button
+        type="button"
+        onClick={saveLocal}
+        disabled={checked === 0}
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-foreground/[0.1] py-2 text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+      >
+        <Download className="h-3 w-3" />
+        Download .txt · {checked.toLocaleString("en-US")} wallet{checked === 1 ? "" : "s"}
+      </button>
 
       {error ? (
         <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[10.5px] leading-relaxed text-destructive">
