@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Loader2, Settings2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { askAssistant } from "@/lib/assistant-fns";
 import { askWithOwnProvider } from "@/lib/ask-assistant";
 import useSpeech from "@/hooks/useSpeech";
+import AiProviderDialog from "@/components/wallet/ai/AiProviderDialog";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
 
@@ -18,6 +19,7 @@ export default function EntryAssistant() {
   const [busy, setBusy] = useState(false);
   const askRef = useRef(null);
   const bottom = useRef(null);
+  const [apiOpen, setApiOpen] = useState(false);
   const speech = useSpeech({ onFinal: (text) => askRef.current?.(text) });
 
   const ask = useCallback(
@@ -55,19 +57,28 @@ export default function EntryAssistant() {
 
   return (
     <section className="rounded-2xl border border-foreground/[0.08] bg-card/60 p-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-primary" strokeWidth={1.9} />
-          <h2 className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={1.9} />
+          <h2 className="truncate text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             Helix assistant
           </h2>
+          <button
+            type="button"
+            onClick={() => setApiOpen(true)}
+            aria-label="Change the AI API key"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-1 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:bg-primary/15"
+          >
+            <Settings2 className="h-3 w-3" />
+            Change API
+          </button>
         </div>
         {speech.supported ? (
           <button
             type="button"
             onClick={() => speech.setVoiceOn((on) => !on)}
             aria-label={speech.voiceOn ? "Mute spoken replies" : "Unmute spoken replies"}
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
           >
             {speech.voiceOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
           </button>
@@ -109,6 +120,8 @@ export default function EntryAssistant() {
       ) : null}
 
       <AssistantComposer onSend={ask} busy={busy} mic={speech} />
+
+      <AiProviderDialog open={apiOpen} onOpenChange={setApiOpen} />
     </section>
   );
 }
