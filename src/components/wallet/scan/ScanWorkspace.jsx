@@ -6,6 +6,7 @@ import ScanProgress from "@/components/wallet/scan/ScanProgress";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
 import { fetchPricesFor } from "@/lib/chains/prices";
+import useWakeLock from "@/hooks/useWakeLock";
 import { entriesFromList, parsePhrases, phrasesFromFile, scanAssets, scanPhraseStream } from "@/lib/phrase-scan";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
@@ -75,6 +76,10 @@ export default function ScanWorkspace() {
       if (resultsRef.current.some((slot) => slot.status === "done")) setExportReady(true);
     }, 2000);
   }
+
+  // The screen stays awake while a scan runs: a sleeping or locked phone stops
+  // the page's network work, so the scan would stall until it is unlocked.
+  useWakeLock(scanning);
 
   // A batch can take seconds on a busy node: the clock keeps ticking so a slow
   // scan still shows that work is moving.
