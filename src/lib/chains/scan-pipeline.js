@@ -12,13 +12,9 @@ import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
 import { cardanoBalancesMany, polkadotBalancesMany, solanaBalancesMany, suiBalancesMany } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 10; // wallets per batch round — small enough that rows keep arriving
-// Speed comes from many batch rounds in flight at once; a single host only
-// answers so many requests before it starts refusing the burst (429) or stalls,
-// and then every read on it times out — so per-host stays moderate while the
-// rounds stay high.
-const INFLIGHT = 24; // batch rounds kept in flight
-const PER_HOST = 10; // simultaneous requests to one public endpoint
-const JOB_TIMEOUT = 18000; // a stalled node must not hold a whole batch back
+const INFLIGHT = 61; // batch rounds kept in flight (11 + 50 extra parallel checkers)
+const PER_HOST = 40; // simultaneous requests to one public endpoint
+const JOB_TIMEOUT = 12000; // a stalled node must not hold a whole batch back
 const WORD_COUNTS = [12, 15, 18, 21, 24];
 
 // Assets are routed by how their chain can be asked: EVM chains per network,
@@ -150,6 +146,7 @@ async function readBatch(batch, onWallet) {
     collect(chainId, (items) => ({
       coins,
       targets: items.map((item) => item.index),
+      host: hostOf(chainId),
       run: async () => {
         const values = await evmChainBalancesMany(chainId, items.map((item) => item.address), coins);
         const out = new Map();
@@ -165,18 +162,21 @@ async function readBatch(batch, onWallet) {
   collect("solana", (items) => ({
     coins: MULTI.solana,
     targets: items.map((item) => item.index),
+    host: hostOf("solana"),
     run: async () => asCoinMap(await solanaBalancesMany(items.map((item) => item.address)), items, MULTI.solana),
   }));
 
   collect("sui", (items) => ({
     coins: MULTI.sui,
     targets: items.map((item) => item.index),
+    host: hostOf("sui"),
     run: async () => asCoinMap(await suiBalancesMany(items.map((item) => item.address)), items, MULTI.sui),
   }));
 
   collect("polkadot", (items) => ({
     coins: MULTI.polkadot,
     targets: items.map((item) => item.index),
+    host: hostOf("polkadot"),
     run: async () => asCoinMap(await polkadotBalancesMany(items.map((item) => item.address)), items, MULTI.polkadot),
   }));
 
@@ -189,6 +189,7 @@ async function readBatch(batch, onWallet) {
       jobs.push({
         coins: MULTI.cardano,
         targets: items.map((item) => item.index),
+        host: hostOf("cardano"),
         run: async () =>
           asCoinMap(
             await cardanoBalancesMany(items.map((item) => item.addresses)),
@@ -214,6 +215,9 @@ async function readBatch(batch, onWallet) {
     jobs.push({
       coins: [coin],
       targets: items.map((item) => item.index),
+      // Each single-address read takes its own slot on the host, so this group
+      // must not take a second one for itself.
+      inner: true,
       run: async () => {
         const values = new Map();
         await Promise.all(
@@ -255,13 +259,22 @@ async function readBatch(batch, onWallet) {
   await Promise.all(
     jobs.map(async (job) => {
       let result;
+      // A batched read waits in its host's queue first, so its clock starts only
+      // when the request actually goes out — otherwise a busy node makes every
+      // round look stalled while it was still waiting its turn.
+      const runOnce = job.inner
+        ? () => job.run()
+        : job.host
+          ? () => limit(job.host, () => withTimeout(job.run(), JOB_TIMEOUT))
+          : () => withTimeout(job.run(), JOB_TIMEOUT);
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          result = { job, values: await withTimeout(job.run(), JOB_TIMEOUT) };
+          result = { job, values: await runOnce() };
           break;
         } catch (cause) {
           if (attempt === 2) result = { job, error: cause };
-          else await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+          // Rate-limited nodes need the burst to clear: back off before retrying.
+          else await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
         }
       }
 
