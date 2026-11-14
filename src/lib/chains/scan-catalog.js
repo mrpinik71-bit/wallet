@@ -27,6 +27,9 @@ const COINGECKO = {
   sei: "sei-network",
   berachain: "berachain-bera",
   kava: "kava",
+  abstract: "ethereum",
+  megaeth: "ethereum",
+  core: "coredaoorg",
   litecoin: "litecoin",
   dogecoin: "dogecoin",
   dash: "dash",
@@ -141,6 +144,9 @@ const TOKENS = [
 
   token("mantle", "usdc-mantle", "USDC", "USD Coin (Mantle)", "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9", 6, "usd-coin", "#2775CA", cdn("usdc")),
   token("mantle", "usdt-mantle", "USDT", "Tether USD (Mantle)", "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE", 6, "tether", "#26A17B", cdn("usdt")),
+
+  // Airdrop tokens that live as SPL tokens on Solana rather than on their own chain.
+  token("solana", "grass-sol", "GRASS", "Grass", "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs", 9, "grass", "#1DC46D"),
 ];
 
 export const SCAN_ASSETS = [...Object.keys(COINGECKO).map(native), ...TOKENS];

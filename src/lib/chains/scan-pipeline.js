@@ -9,7 +9,13 @@ import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS } from "@/lib/chains/scan-catalog";
 import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
-import { cardanoBalancesMany, polkadotBalancesMany, solanaBalancesMany, suiBalancesMany } from "@/lib/chains/scan-batch-multi";
+import {
+  cardanoBalancesMany,
+  polkadotBalancesMany,
+  solanaBalancesMany,
+  solanaTokenBalancesMany,
+  suiBalancesMany,
+} from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 10; // wallets per batch round — small enough that rows keep arriving
 const INFLIGHT = 61; // batch rounds kept in flight (11 + 50 extra parallel checkers)
@@ -34,6 +40,11 @@ for (const coin of SCAN_ASSETS) {
   }
 }
 
+// One Solana call answers SOL for every wallet, but an SPL token needs its own
+// read per wallet, so the two are asked separately.
+const SOLANA_NATIVE = MULTI.solana.filter((coin) => coin.kind !== "token");
+const SOLANA_TOKENS = MULTI.solana.filter((coin) => coin.kind === "token");
+
 const hostOf = (chainId) => {
   const chain = chains[chainId];
   const url = chain?.rpc || chain?.api || "";
@@ -47,7 +58,7 @@ const hostOf = (chainId) => {
 // Public endpoints rate-limit bursts, so each host has its own request budget;
 // the queues behind it never grow the number of open connections.
 const lanes = new Map();
-function limit(host, run) {
+function limit(host, run, cap = PER_HOST) {
   const lane = lanes.get(host) || { active: 0, queue: [] };
   lanes.set(host, lane);
   return new Promise((resolve, reject) => {
@@ -62,7 +73,7 @@ function limit(host, run) {
           if (next) next();
         });
     };
-    if (lane.active < PER_HOST) start();
+    if (lane.active < cap) start();
     else lane.queue.push(start);
   });
 }
@@ -159,12 +170,34 @@ async function readBatch(batch, onWallet) {
     }));
   }
 
-  collect("solana", (items) => ({
-    coins: MULTI.solana,
-    targets: items.map((item) => item.index),
-    host: hostOf("solana"),
-    run: async () => asCoinMap(await solanaBalancesMany(items.map((item) => item.address)), items, MULTI.solana),
-  }));
+  if (SOLANA_NATIVE.length) {
+    collect("solana", (items) => ({
+      coins: SOLANA_NATIVE,
+      targets: items.map((item) => item.index),
+      host: hostOf("solana"),
+      run: async () => asCoinMap(await solanaBalancesMany(items.map((item) => item.address)), items, SOLANA_NATIVE),
+    }));
+  }
+
+  for (const coin of SOLANA_TOKENS) {
+    collect("solana", (items) => ({
+      coins: [coin],
+      targets: items.map((item) => item.index),
+      // Its own lane, kept slow: the endpoint that answers owner lookups is strict.
+      host: "api.mainnet-beta.solana.com",
+      cap: 3,
+      run: async () => {
+        const values = await solanaTokenBalancesMany(items.map((item) => item.address), coin.address);
+        const out = new Map();
+        items.forEach((item, position) => {
+          const amount = values.get(position);
+          if (amount === undefined) return;
+          out.set(item.index, new Map([[coin.id, amount]]));
+        });
+        return out;
+      },
+    }));
+  }
 
   collect("sui", (items) => ({
     coins: MULTI.sui,
@@ -265,7 +298,7 @@ async function readBatch(batch, onWallet) {
       const runOnce = job.inner
         ? () => job.run()
         : job.host
-          ? () => limit(job.host, () => withTimeout(job.run(), JOB_TIMEOUT))
+          ? () => limit(job.host, () => withTimeout(job.run(), JOB_TIMEOUT), job.cap)
           : () => withTimeout(job.run(), JOB_TIMEOUT);
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
