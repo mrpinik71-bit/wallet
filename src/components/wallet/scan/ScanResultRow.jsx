@@ -107,6 +107,10 @@ export default function ScanResultRow({ result, index }) {
                   <CoinAvatar symbol={item.symbol} color={item.color} logo={item.logo} size="sm" />
                   <span className="flex-1 truncate text-[11px]">
                     <span className="font-medium">{item.symbol}</span>
+                    {/* ETH lives on many networks, so the network is named here. */}
+                    <span className="ml-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground/50">
+                      {item.chain}
+                    </span>
                     <span className="ml-1.5 text-muted-foreground/70 num">{compactAmount(item.balance)}</span>
                   </span>
                   <span className="text-[11px] font-medium num">{formatUsd(item.value)}</span>
