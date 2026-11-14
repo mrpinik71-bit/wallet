@@ -17,9 +17,9 @@ import {
   suiBalancesMany,
 } from "@/lib/chains/scan-batch-multi";
 
-const CHUNK = 30; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 18; // batch rounds kept in flight: each round is now 3× larger
-const PER_HOST = 12; // simultaneous requests to one public endpoint: past this, free nodes answer 429
+const CHUNK = 40; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
+const INFLIGHT = 28; // batch rounds kept in flight (more parallel scanners = faster scan)
+const PER_HOST = 20; // simultaneous requests to one public endpoint: past this, free nodes answer 429
 const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
 
 // Free endpoints with a published, low request budget: asking them faster only
