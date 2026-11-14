@@ -4,6 +4,7 @@
 import bs58 from "bs58";
 import { sha256 } from "@noble/hashes/sha256";
 import { chains } from "@/lib/chains/config";
+import { request } from "@/lib/chains/scan-lanes";
 import { accountStorageKey, publicKeyFromAddress } from "@/lib/chains/polkadot";
 
 const hexOf = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -25,7 +26,7 @@ export async function solanaBalancesMany(addresses) {
 
   await Promise.all(
     group(addresses, 90).map(async ({ start, list }) => {
-      const response = await fetch(chains.solana.rpc, {
+      const response = await request(chains.solana.rpc, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -85,7 +86,7 @@ export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
   await Promise.all(
     group(addresses, 90).map(async ({ start, list }) => {
       const accounts = list.map((address) => associatedTokenAddress(address, mint));
-      const response = await fetch(chains.solana.rpc, {
+      const response = await request(chains.solana.rpc, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -143,7 +144,7 @@ export async function suiBalancesMany(addresses) {
             `a${offset}: address(address: "${address}") { balance(coinType: "0x2::sui::SUI") { totalBalance } }`,
         )
         .join(" ");
-      const response = await fetch(chains.sui.api, {
+      const response = await request(chains.sui.api, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ query: `query { ${fields} }` }),
@@ -187,7 +188,7 @@ export async function polkadotBalancesMany(addresses) {
         method: "state_getStorage",
         params: [key],
       }));
-      const response = await fetch(chains.polkadot.rpc, {
+      const response = await request(chains.polkadot.rpc, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(calls),
@@ -236,7 +237,7 @@ export async function cardanoBalancesMany(addressLists) {
 
   await Promise.all(
     group(flat, 100).map(async ({ list }) => {
-      const response = await fetch(`${chains.cardano.api}/address_info`, {
+      const response = await request(`${chains.cardano.api}/address_info`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ _addresses: list.map((row) => row.address) }),

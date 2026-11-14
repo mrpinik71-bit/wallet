@@ -9,7 +9,7 @@ import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS } from "@/lib/chains/scan-catalog";
 import { colorForToken, discoverTokens } from "@/lib/chains/token-discovery";
 import { prepare } from "@/lib/chains/scan-derive";
-import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
+import { evmChainBalancesMany, resetBatching } from "@/lib/chains/scan-batch";
 import { endpointsFor } from "@/lib/chains/mirrors";
 import {
   cardanoBalancesMany,
@@ -26,6 +26,10 @@ const READ_CHUNK = 200; // wallets handed to the network while the rest of the r
 const PER_HOST = 200; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
 const MAX_CAP = 400; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
+// A batched read first waits its turn in its node's own lane, so its clock is far
+// longer than a single address read: timing it like one marked live chains as
+// failed whenever the node was merely busy.
+const SLOW_JOB_TIMEOUT = 60000;
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
 // High enough that a burst of 429s never trips it, low enough that a dead node
@@ -37,7 +41,9 @@ const DEAD_AFTER = 20;
 const HOST_CAPS = {
   // Measured: these answer the burst below without a single 429, so they start
   // at twice the burst that was being used before.
-  "api.blockcypher.com": 64,
+  // Unregistered BlockCypher answers about three requests a second, so a wider
+  // burst only earns a 429 for the whole DOGE/DASH group.
+  "api.blockcypher.com": 4,
   "mempool.space": 88,
   "litecoinspace.org": 40,
   "fullnode.mainnet.aptoslabs.com": 60,
@@ -78,7 +84,8 @@ let hostWins = new Map();
 const capFor = (host) => hostCaps.get(host) ?? (HOST_CAPS[host] || PER_HOST);
 
 /** A node that refused the burst is busy, not dead: lower its lanes, keep it. */
-const isRateLimited = (error) => /\(429\)|too many requests|rate limit/i.test(String(error?.message || error));
+const isRateLimited = (error) =>
+  error?.status === 429 || /\(429\)|\b429\b|too many requests|rate limit|busy/i.test(String(error?.message || error));
 function lowerCap(host) {
   if (!host) return;
   hostCaps.set(host, Math.max(2, Math.floor(capFor(host) / 2)));
@@ -242,6 +249,7 @@ async function readBatch(batch, onWallet) {
       coins,
       targets: items.map((item) => item.index),
       host: hostOf(chainId),
+      slow: true,
       run: async () => {
         const values = await evmChainBalancesMany(chainId, items.map((item) => item.address), coins);
         const out = new Map();
@@ -259,6 +267,7 @@ async function readBatch(batch, onWallet) {
       coins: SOLANA_NATIVE,
       targets: items.map((item) => item.index),
       host: hostOf("solana"),
+      slow: true,
       run: async () => asCoinMap(await solanaBalancesMany(items.map((item) => item.address)), items, SOLANA_NATIVE),
     }));
   }
@@ -269,6 +278,7 @@ async function readBatch(batch, onWallet) {
       targets: items.map((item) => item.index),
       // Batched like native SOL now, so the strict owner-lookup lane is gone.
       host: hostOf("solana"),
+      slow: true,
       run: async () => {
         const values = await solanaTokenBalancesMany(
           items.map((item) => item.address),
@@ -290,6 +300,7 @@ async function readBatch(batch, onWallet) {
     coins: MULTI.sui,
     targets: items.map((item) => item.index),
     host: hostOf("sui"),
+    slow: true,
     run: async () => asCoinMap(await suiBalancesMany(items.map((item) => item.address)), items, MULTI.sui),
   }));
 
@@ -297,6 +308,7 @@ async function readBatch(batch, onWallet) {
     coins: MULTI.polkadot,
     targets: items.map((item) => item.index),
     host: hostOf("polkadot"),
+    slow: true,
     run: async () => asCoinMap(await polkadotBalancesMany(items.map((item) => item.address)), items, MULTI.polkadot),
   }));
 
@@ -310,6 +322,7 @@ async function readBatch(batch, onWallet) {
         coins: MULTI.cardano,
         targets: items.map((item) => item.index),
         host: hostOf("cardano"),
+        slow: true,
         run: async () =>
           asCoinMap(
             await cardanoBalancesMany(items.map((item) => item.addresses)),
@@ -456,13 +469,16 @@ async function readBatch(batch, onWallet) {
       // A batched read waits in its host's queue first, so its clock starts only
       // when the request actually goes out — otherwise a busy node makes every
       // round look stalled while it was still waiting its turn.
+      const budget = job.slow ? SLOW_JOB_TIMEOUT : JOB_TIMEOUT;
       const runOnce = job.inner
         ? () => job.run()
         : job.host
-          ? () => limit(job.host, () => withTimeout(job.run(), JOB_TIMEOUT), job.cap)
-          : () => withTimeout(job.run(), JOB_TIMEOUT);
+          ? () => limit(job.host, () => withTimeout(job.run(), budget), job.cap)
+          : () => withTimeout(job.run(), budget);
 
-      if (job.host && hostDead(job.host)) {
+      // A batched job rotates over several nodes of its own, so one resting node
+      // must not stop the whole chain: only single-node jobs are held back.
+      if (job.host && !job.slow && hostDead(job.host)) {
         // This node is resting; the job is asked again once its rest is over.
         result = { job, error: new Error(`${job.host} unavailable`) };
       } else {
@@ -484,7 +500,9 @@ async function readBatch(batch, onWallet) {
         if (!job.inner) {
           const refused = isRateLimited(result.error);
           if (refused) lowerCap(job.host);
-          noteHost(job.host, !result.error, refused ? 0 : 1);
+          // A batched node that failed lost a whole round of wallets, not one
+          // address, so it counts for more when deciding to let it rest.
+          noteHost(job.host, !result.error, refused ? 0 : job.slow ? 6 : 1);
         }
       }
 
@@ -569,6 +587,8 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   hostFailures.clear();
   hostCaps = new Map();
   hostWins = new Map();
+  // Batched reads go back to full groups and their nodes to full request lanes.
+  resetBatching();
   let completed = 0;
   let started = 0;
   const active = new Set();
