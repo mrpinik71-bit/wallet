@@ -103,6 +103,32 @@ export const chains = {
     color: "#345D9D",
     decimals: 8,
   },
+  // Bitcoin fork: same address format, its own ledger.
+  fractal: {
+    id: "fractal",
+    name: "Fractal Bitcoin",
+    family: "utxo",
+    api: "https://mempool.fractalbitcoin.io/api",
+    explorer: "https://mempool.fractalbitcoin.io",
+    hrp: "bc",
+    path: "m/84'/0'/0'/0/0",
+    symbol: "FB",
+    color: "#F7931A",
+    decimals: 8,
+  },
+  // Elements sidechain: the unconfidential segwit form of the same key.
+  liquid: {
+    id: "liquid",
+    name: "Liquid Network",
+    family: "utxo",
+    api: "https://blockstream.info/liquid/api",
+    explorer: "https://blockstream.info/liquid",
+    hrp: "ex",
+    path: "m/84'/1776'/0'/0/0",
+    symbol: "L-BTC",
+    color: "#46B9C8",
+    decimals: 8,
+  },
   solana: {
     id: "solana",
     name: "Solana",
@@ -298,6 +324,70 @@ export const chains = {
     symbol: "CORE",
     color: "#FF9211",
   },
+  // Bitcoin sidechains and L2s: the same EVM account is funded on each of them.
+  rootstock: {
+    id: "rootstock",
+    name: "Rootstock",
+    family: "evm",
+    chainId: 30,
+    rpc: "https://public-node.rsk.co",
+    explorer: "https://explorer.rsk.co",
+    symbol: "RBTC",
+    color: "#FF9416",
+  },
+  merlin: {
+    id: "merlin",
+    name: "Merlin Chain",
+    family: "evm",
+    chainId: 4200,
+    rpc: "https://rpc.merlinchain.io",
+    explorer: "https://scan.merlinchain.io",
+    symbol: "MERL",
+    color: "#7A4DFF",
+  },
+  bob: {
+    id: "bob",
+    name: "BOB",
+    family: "evm",
+    chainId: 60808,
+    rpc: "https://rpc.gobob.xyz",
+    explorer: "https://explorer.gobob.xyz",
+    symbol: "ETH",
+    color: "#F3A93B",
+  },
+  botanix: {
+    id: "botanix",
+    name: "Botanix",
+    family: "evm",
+    chainId: 3637,
+    rpc: "https://rpc.botanixlabs.com",
+    explorer: "https://botanixscan.io",
+    symbol: "BTC",
+    color: "#8FD14F",
+    decimals: 18,
+  },
+  bevm: {
+    id: "bevm",
+    name: "BEVM",
+    family: "evm",
+    chainId: 11501,
+    rpc: "https://rpc-mainnet-1.bevm.io",
+    explorer: "https://scan.bevm.io",
+    symbol: "BTC",
+    color: "#F0A32B",
+    decimals: 18,
+  },
+  citrea: {
+    id: "citrea",
+    name: "Citrea",
+    family: "evm",
+    chainId: 4114,
+    rpc: "https://rpc.mainnet.citrea.xyz",
+    explorer: "https://explorer.mainnet.citrea.xyz",
+    symbol: "cBTC",
+    color: "#FF7A2F",
+    decimals: 18,
+  },
   dogecoin: {
     id: "dogecoin",
     name: "Dogecoin",
@@ -395,6 +485,30 @@ export const chains = {
     symbol: "SUI",
     color: "#4DA2FF",
     decimals: 9,
+  },
+  stacks: {
+    id: "stacks",
+    name: "Stacks",
+    family: "stacks",
+    api: "https://api.mainnet.hiro.so",
+    explorer: "https://explorer.hiro.so",
+    path: "m/44'/5757'/0'/0/0",
+    symbol: "STX",
+    color: "#5546FF",
+    decimals: 6,
+  },
+  babylon: {
+    id: "babylon",
+    name: "Babylon",
+    family: "babylon",
+    api: "https://babylon-rest.publicnode.com",
+    apis: ["https://babylon-api.polkachu.com"],
+    explorer: "https://babylon.explorers.guru",
+    hrp: "bbn",
+    path: "m/44'/118'/0'/0/0",
+    symbol: "BABY",
+    color: "#F4A44C",
+    decimals: 6,
   },
 };
 
@@ -495,5 +609,7 @@ export function explorerAddress(chainId, address) {
   if (chain.family === "ton") return `${chain.explorer}/${address}`;
   if (chain.family === "sui") return `${chain.explorer}/account/${address}`;
   if (chain.family === "solana") return `${chain.explorer}/account/${address}`;
+  if (chain.family === "stacks") return `${chain.explorer}/address/${address}?chain=mainnet`;
+  if (chain.family === "babylon") return `${chain.explorer}/account/${address}`;
   return `${chain.explorer}/#/address/${address}`;
 }
