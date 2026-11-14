@@ -50,6 +50,46 @@ export async function solanaBalancesMany(addresses) {
   return balances;
 }
 
+// Owner lookups are "indexed" requests, which the shared Solana node refuses:
+// the official endpoint answers them, at a lower request rate.
+const SOLANA_TOKEN_RPC = "https://api.mainnet-beta.solana.com";
+
+/** One SPL token balance per wallet, as a batch of owner lookups on one mint. */
+export async function solanaTokenBalancesMany(addresses, mint) {
+  const balances = new Map();
+
+  await Promise.all(
+    group(addresses, 25).map(async ({ start, list }) => {
+      const calls = list.map((address, offset) => ({
+        jsonrpc: "2.0",
+        id: offset + 1,
+        method: "getTokenAccountsByOwner",
+        params: [address, { mint }, { encoding: "jsonParsed" }],
+      }));
+      const response = await fetch(SOLANA_TOKEN_RPC, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(calls),
+      });
+      if (!response.ok) throw new Error(`Solana network error (${response.status}).`);
+      const body = await response.json();
+      if (!Array.isArray(body)) throw new Error("Solana network error.");
+
+      for (const item of body) {
+        if (!item || item.error || !item.result) continue;
+        // A wallet can hold the same mint in more than one token account.
+        const amount = (item.result.value || []).reduce(
+          (sum, account) => sum + (account?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0),
+          0,
+        );
+        balances.set(start + (item.id - 1), amount);
+      }
+    }),
+  );
+
+  return balances;
+}
+
 /** SUI balances for many addresses, as aliased fields of one GraphQL query. */
 export async function suiBalancesMany(addresses) {
   const balances = new Map();

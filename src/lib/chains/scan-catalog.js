@@ -27,6 +27,9 @@ const COINGECKO = {
   sei: "sei-network",
   berachain: "berachain-bera",
   kava: "kava",
+  abstract: "ethereum",
+  megaeth: "ethereum",
+  core: "coredaoorg",
   litecoin: "litecoin",
   dogecoin: "dogecoin",
   dash: "dash",
@@ -127,6 +130,23 @@ const TOKENS = [
   token("celo", "usdc-celo", "USDC", "USD Coin (Celo)", "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", 6, "usd-coin", "#2775CA", cdn("usdc")),
 
   token("tron", "usdt-tron", "USDT", "Tether USD (TRC-20)", "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", 6, "tether", "#26A17B", cdn("usdt")),
+
+  // Airdrop networks: the native coin alone misses claimed stablecoins, which is
+  // usually what is left on these chains.
+  token("zksync", "usdc-zksync", "USDC", "USD Coin (zkSync Era)", "0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("zksync", "usdt-zksync", "USDT", "Tether USD (zkSync Era)", "0x493257fD37EDB34451f62EDf8D2a0C418852bA4C", 6, "tether", "#26A17B", cdn("usdt")),
+
+  token("linea", "usdc-linea", "USDC", "USD Coin (Linea)", "0x176211869cA2b568f2A7D4EE941E073a821EE1ff", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("linea", "usdt-linea", "USDT", "Tether USD (Linea)", "0xA219439258ca9da29E9Cc4cE5596924745e12B93", 6, "tether", "#26A17B", cdn("usdt")),
+
+  token("scroll", "usdc-scroll", "USDC", "USD Coin (Scroll)", "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("scroll", "usdt-scroll", "USDT", "Tether USD (Scroll)", "0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df", 6, "tether", "#26A17B", cdn("usdt")),
+
+  token("mantle", "usdc-mantle", "USDC", "USD Coin (Mantle)", "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("mantle", "usdt-mantle", "USDT", "Tether USD (Mantle)", "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE", 6, "tether", "#26A17B", cdn("usdt")),
+
+  // Airdrop tokens that live as SPL tokens on Solana rather than on their own chain.
+  token("solana", "grass-sol", "GRASS", "Grass", "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs", 9, "grass", "#1DC46D"),
 ];
 
 export const SCAN_ASSETS = [...Object.keys(COINGECKO).map(native), ...TOKENS];
