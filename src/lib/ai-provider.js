@@ -1,17 +1,18 @@
 // Calls the user's own provider straight from this device. The key is read from
 // local storage and only ever sent to the provider it belongs to.
-import { AI_PROVIDERS } from "@/lib/ai-settings";
+import { AI_PROVIDERS, modelFor } from "@/lib/ai-settings";
 
 export async function callProvider(settings, prompt) {
   const config = AI_PROVIDERS[settings.provider];
   if (!config || settings.provider === "base44") throw new Error("Choose a provider first.");
-  if (!settings.apiKey) throw new Error("Paste your API key first.");
-  if (!settings.model) throw new Error("Name the model you want to use.");
+  if (!String(settings.apiKey || "").trim()) throw new Error("Paste your API key first.");
 
+  // No model typed: the provider's default is used, so a key alone is enough.
+  const ready = { ...settings, apiKey: settings.apiKey.trim(), model: modelFor(settings) };
   const text =
-    settings.provider === "anthropic"
-      ? await callAnthropic(settings, prompt)
-      : await callOpenAiCompatible(settings, prompt);
+    ready.provider === "anthropic"
+      ? await callAnthropic(ready, prompt)
+      : await callOpenAiCompatible(ready, prompt);
 
   if (!String(text || "").trim()) throw new Error("The provider returned an empty answer.");
   return text;

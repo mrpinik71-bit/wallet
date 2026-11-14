@@ -75,8 +75,16 @@ export default function useAgentChat({ holdings = [], total = 0, changePct = 0, 
             text: (item.prompt || item.text).slice(0, 12000),
           })),
         };
-        // Their own API key answers first; the built-in model stands in when none is set.
-        const reply = (await askWithOwnProvider(payload)) || (await call({ data: payload }));
+        // Their own API key answers first; the built-in model stands in when none
+        // is set — and also when the key or model was refused, so the chat always
+        // answers instead of going silent.
+        let reply = null;
+        try {
+          reply = await askWithOwnProvider(payload);
+        } catch {
+          reply = null;
+        }
+        if (!reply) reply = await call({ data: payload });
         setMessages((prev) => [...prev, { role: "assistant", text: reply.answer }]);
         speech.speak(reply.answer);
         await perform(reply.actions);

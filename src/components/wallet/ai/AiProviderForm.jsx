@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
-import { AI_PROVIDERS, writeAiSettings } from "@/lib/ai-settings";
+import { AI_PROVIDERS, modelFor, writeAiSettings } from "@/lib/ai-settings";
 import { callProvider } from "@/lib/ai-provider";
 
 const ORDER = ["base44", "openai", "anthropic", "custom"];
@@ -30,9 +30,10 @@ export default function AiProviderForm({ initial, onSaved }) {
 
   function save() {
     const apiKey = draft.apiKey.trim();
-    const model = draft.model.trim();
+    // The model is optional here: a key on its own is a complete setup, and the
+    // provider's own default model answers when the field is left empty.
+    const model = modelFor({ ...draft, apiKey });
     if (own && !apiKey) return setNote({ bad: true, text: "Paste an API key first." });
-    if (own && !model) return setNote({ bad: true, text: "Name the model you want to use." });
 
     const next = { provider: draft.provider, apiKey, model, baseUrl: (draft.baseUrl || "").trim() };
     writeAiSettings(next);
@@ -108,13 +109,13 @@ export default function AiProviderForm({ initial, onSaved }) {
 
           <div>
             <label htmlFor="ai-model" className="eyebrow">
-              Model
+              Model · optional
             </label>
             <input
               id="ai-model"
               value={draft.model}
               onChange={(event) => set({ model: event.target.value })}
-              placeholder="model name"
+              placeholder={config.defaultModel ? `default: ${config.defaultModel}` : "model name"}
               spellCheck={false}
               className={`${FIELD} font-mono`}
             />
