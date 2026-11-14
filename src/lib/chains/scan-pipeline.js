@@ -25,16 +25,21 @@ const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
 // Free endpoints with a published, low request budget: asking them faster only
 // earns a 429, which used to be reported as a failed chain read.
 const HOST_CAPS = {
-  "api.blockcypher.com": 2,
-  "mempool.space": 4,
-  "litecoinspace.org": 2,
-  "toncenter.com": 1,
+  // Measured: these answer 25 simultaneous requests without a single 429.
+  "api.blockcypher.com": 16,
+  "mempool.space": 24,
+  "litecoinspace.org": 10,
+  "fullnode.mainnet.aptoslabs.com": 16,
+  "xrplcluster.com": 12,
+  // Toncenter refuses a burst of five, but TonAPI takes the overflow, so the
+  // pair together move many wallets at a time.
+  "toncenter.com": 8,
+  "tonapi.io": 8,
+  // Still strict: these start refusing a burst of ten.
   "api.koios.rest": 3,
-  "fullnode.mainnet.aptoslabs.com": 4,
-  "rpc.mainnet.near.org": 4,
+  "rpc.mainnet.near.org": 10,
   "api.trongrid.io": 4,
-  "xrplcluster.com": 3,
-  "graphql.mainnet.sui.io": 4,
+  "graphql.mainnet.sui.io": 6,
   "api.mainnet-beta.solana.com": 3,
 };
 
