@@ -20,7 +20,8 @@ export default function ScanResultRow({ result, index }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState("");
   const funded = result.funded || [];
-  const hasBalance = result.total > 0;
+  // A wallet can hold only tokens whose price is unknown, so the list decides.
+  const hasBalance = funded.length > 0;
   const invalid = result.status === "invalid";
 
   const addressRows = [
