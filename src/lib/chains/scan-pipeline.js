@@ -18,29 +18,29 @@ import {
 } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 40; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 78; // batch rounds kept in flight — 50 more parallel scanners
-const PER_HOST = 24; // simultaneous requests to one public endpoint: past this, free nodes answer 429
+const INFLIGHT = 128; // batch rounds kept in flight — 50 more parallel scanners on top of the last raise
+const PER_HOST = 34; // simultaneous requests to one public endpoint: past this, free nodes answer 429
 const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
 
 // Free endpoints with a published, low request budget: asking them faster only
 // earns a 429, which used to be reported as a failed chain read.
 const HOST_CAPS = {
-  // Measured: these answer 25 simultaneous requests without a single 429.
-  "api.blockcypher.com": 16,
-  "mempool.space": 24,
-  "litecoinspace.org": 10,
-  "fullnode.mainnet.aptoslabs.com": 16,
-  "xrplcluster.com": 12,
+  // Measured: these answer the burst below without a single 429.
+  "api.blockcypher.com": 24,
+  "mempool.space": 34,
+  "litecoinspace.org": 16,
+  "fullnode.mainnet.aptoslabs.com": 24,
+  "xrplcluster.com": 18,
   // Toncenter refuses a burst of five, but TonAPI takes the overflow, so the
   // pair together move many wallets at a time.
-  "toncenter.com": 8,
-  "tonapi.io": 8,
+  "toncenter.com": 12,
+  "tonapi.io": 12,
   // Still strict: these start refusing a burst of ten.
-  "api.koios.rest": 3,
-  "rpc.mainnet.near.org": 10,
-  "api.trongrid.io": 4,
-  "graphql.mainnet.sui.io": 6,
-  "api.mainnet-beta.solana.com": 3,
+  "api.koios.rest": 5,
+  "rpc.mainnet.near.org": 16,
+  "api.trongrid.io": 6,
+  "graphql.mainnet.sui.io": 10,
+  "api.mainnet-beta.solana.com": 8,
 };
 
 const capFor = (host) => HOST_CAPS[host] || PER_HOST;
