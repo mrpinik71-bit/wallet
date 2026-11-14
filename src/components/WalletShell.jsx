@@ -3,6 +3,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Compass,
+  FolderOpen,
   History,
   KeyRound,
   LayoutDashboard,
@@ -19,6 +20,7 @@ const nav = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
   { to: "/markets", label: "Markets", icon: LineChart },
   { to: "/activity", label: "Activity", icon: History },
+  { to: "/files", label: "Files", icon: FolderOpen },
   { to: "/send", label: "Send", icon: ArrowUpRight },
   { to: "/receive", label: "Receive", icon: ArrowDownLeft },
   { to: "/swap", label: "Swap", icon: Repeat },
@@ -28,7 +30,10 @@ const nav = [
   { to: "/ai-settings", label: "AI API", icon: Sparkles },
 ];
 
-const mobileNav = [nav[0], nav[1], nav[6], nav[7], nav[8]];
+// The bottom bar keeps its five slots; files ride along next to the agent.
+const mobileNav = ["/", "/markets", "/browser", "/wallet", "/assistant", "/files"]
+  .map((to) => nav.find((item) => item.to === to))
+  .filter(Boolean);
 
 function Brand({ compact = false }) {
   return (

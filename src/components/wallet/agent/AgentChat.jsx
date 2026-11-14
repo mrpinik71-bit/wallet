@@ -5,7 +5,12 @@ import AiProviderDialog from "@/components/wallet/ai/AiProviderDialog";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
 
-const HINTS = ["Plan my week", "Write a product caption", "Explain a smart contract", "Open the swap screen"];
+const HINTS = [
+  "Plan my week",
+  "Write a product caption",
+  "Upload a plan to Notes/plan.md",
+  "Open the swap screen",
+];
 
 /**
  * The agent chat itself — used by the full agent screen and by the dock that

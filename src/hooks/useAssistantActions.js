@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { MAX_ACTIONS, SCREEN_ACTIONS } from "@/lib/assistant-actions";
+import { storeFile } from "@/lib/file-store";
 import { saveTextFile } from "@/lib/save-text";
 
 /**
@@ -58,6 +59,13 @@ export default function useAssistantActions({ navigate, wallet, onRefresh, addre
           if (!body) continue;
           const saved = saveTextFile(action.arg, body);
           message = action.label || `${saved} created`;
+        } else if (id === "upload_file") {
+          // Written text is filed inside the app itself, in the place the user
+          // named — no follow-up question, no download prompt in the way.
+          const body = String(action.text || "").trim();
+          if (!body) continue;
+          const file = storeFile(action.arg, body);
+          message = action.label || `Uploaded to ${file.place} · ${file.name}`;
         } else if (id === "add_account") {
           wallet?.addAccount?.();
           message = action.label || `Account ${(wallet?.accounts || 1) + 1} added`;
