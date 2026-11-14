@@ -42,7 +42,7 @@ export const TASK_ACTIONS = {
     done: "Copied to clipboard",
   },
   create_file: {
-    help: "write a text file on the device the user can open or download; put the file name (e.g. portfolio.txt) in arg and the whole content in text",
+    help: "write a file the user can open or download — txt, md, csv, json or html; put the full file name (e.g. portfolio.txt) in arg and the entire finished content in text. Use this whenever the user wants something written, saved, exported or put into a file",
     done: "File created",
   },
   add_account: { help: "create the next account from the same phrase", done: "New account added" },

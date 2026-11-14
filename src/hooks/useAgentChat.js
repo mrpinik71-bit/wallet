@@ -53,15 +53,28 @@ export default function useAgentChat({ holdings = [], total = 0, changePct = 0, 
   );
 
   const ask = useCallback(
-    async (raw) => {
+    async (raw, file) => {
       const question = String(raw || "").trim();
-      if (!question || busy) return;
-      const next = [...messages, { role: "user", text: question }];
+      const attached = file && file.text ? file : null;
+      if ((!question && !attached) || busy) return;
+      const label = question || `Rewrite this file: ${attached.name}`;
+      // The bubble stays short; the file body rides along with this one turn only.
+      const shown = attached ? `${label}\n📎 ${attached.name}` : label;
+      const sent = attached
+        ? `${label}\n\n<<<FILE ${attached.name}\n${attached.text}\nFILE>>>`
+        : label;
+      const next = [...messages, { role: "user", text: shown, prompt: sent }];
       setMessages(next);
       reset();
       setBusy(true);
       try {
-        const payload = { context: snapshot, history: next.slice(-12) };
+        const payload = {
+          context: snapshot,
+          history: next.slice(-12).map((item) => ({
+            role: item.role,
+            text: (item.prompt || item.text).slice(0, 12000),
+          })),
+        };
         // Their own API key answers first; the built-in model stands in when none is set.
         const reply = (await askWithOwnProvider(payload)) || (await call({ data: payload }));
         setMessages((prev) => [...prev, { role: "assistant", text: reply.answer }]);

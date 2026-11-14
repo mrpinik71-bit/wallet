@@ -1,5 +1,6 @@
 // The agent conversation lives on this device only, so the home card and the
-// full agent screen continue the same thread even after a reload.
+// full agent screen continue the same thread even after a reload. Attached file
+// contents are sent with their turn but not kept in storage.
 const KEY = "helix.agent.thread";
 const LIMIT = 60;
 
@@ -15,7 +16,8 @@ export function readThread() {
           typeof item.text === "string" &&
           (item.role === "user" || item.role === "assistant"),
       )
-      .slice(-LIMIT);
+      .slice(-LIMIT)
+      .map((item) => ({ role: item.role, text: item.text }));
   } catch {
     return [];
   }
@@ -24,7 +26,10 @@ export function readThread() {
 export function writeThread(messages) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify((messages || []).slice(-LIMIT)));
+    const plain = (messages || [])
+      .map((item) => ({ role: item.role, text: item.text }))
+      .slice(-LIMIT);
+    window.localStorage.setItem(KEY, JSON.stringify(plain));
   } catch {
     // A full or blocked storage leaves the thread in memory only.
   }

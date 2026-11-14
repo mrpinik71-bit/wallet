@@ -21,7 +21,7 @@ const AskInput = z.object({
     holdings: z.array(Holding).max(40),
   }),
   history: z
-    .array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(2000) }))
+    .array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(12000) }))
     .min(1)
     .max(12),
 });
