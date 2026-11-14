@@ -7,6 +7,7 @@ import { createDerivePool } from "@/lib/chains/derive-pool";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
 import { SCAN_ASSETS } from "@/lib/chains/scan-catalog";
+import { colorForToken, discoverTokens } from "@/lib/chains/token-discovery";
 import { prepare } from "@/lib/chains/scan-derive";
 import { evmChainBalancesMany } from "@/lib/chains/scan-batch";
 import {
@@ -53,7 +54,12 @@ const HOST_CAPS = {
   "rpc.mainnet.near.org": 24,
   "api.trongrid.io": 12,
   "graphql.mainnet.sui.io": 18,
-  "api.mainnet-beta.solana.com": 14,
+  // Token lists answer one wallet at a time, so these stay narrower than a
+  // batch read and widen only while the indexer keeps answering.
+  "eth.blockscout.com": 18,
+  "base.blockscout.com": 18,
+  "api.binplorer.com": 10,
+  "api.mainnet-beta.solana.com": 10,
 };
 
 // Burst per host, tuned while the scan runs. Endpoints listed above start at
@@ -89,6 +95,24 @@ for (const coin of SCAN_ASSETS) {
     SOLO.push(coin);
   }
 }
+
+// Token discovery: the catalog only holds the big tokens, so these five
+// networks also report every other coin each wallet actually holds, one list
+// per wallet, next to the catalog reads.
+const DISCOVERY_HOSTS = [
+  ["ethereum", "eth.blockscout.com"],
+  ["base", "base.blockscout.com"],
+  ["bsc", "api.binplorer.com"],
+  ["solana", "api.mainnet-beta.solana.com"],
+  ["ton", "tonapi.io"],
+];
+const DISCOVERY_LIMIT = 15; // tokens reported per network and wallet
+// Catalog tokens are already read, so discovery only adds what is missing.
+const CATALOG_TOKENS = new Set(
+  SCAN_ASSETS.filter((coin) => coin.kind === "token" && coin.address).map(
+    (coin) => `${coin.chain}|${coin.address.toLowerCase()}`,
+  ),
+);
 
 // One Solana call answers SOL for every wallet, but an SPL token needs its own
 // read per wallet, so the two are asked separately.
@@ -325,10 +349,52 @@ async function readBatch(batch, onWallet) {
     });
   }
 
+  // Everything else held on the five discovery networks is looked up per wallet
+  // and reported next to the catalog assets.
+  for (const [chainId, host] of DISCOVERY_HOSTS) {
+    const items = [];
+    batch.forEach((wallet, index) => {
+      const address = wallet.addresses[chainId];
+      if (address) items.push({ index, address });
+    });
+    if (!items.length) continue;
+
+    jobs.push({
+      coins: [],
+      discover: chainId,
+      targets: items.map((item) => item.index),
+      host,
+      // Every lookup takes its own slot on the host, so this group must not take
+      // a second one for itself.
+      inner: true,
+      run: async () => {
+        if (deadHosts.has(host)) return new Map();
+        const held = new Map();
+        let refused = 0;
+        await Promise.all(
+          items.map(async (item) => {
+            const tokens = await limit(host, () =>
+              withTimeout(discoverTokens(chainId, item.address, DISCOVERY_LIMIT), JOB_TIMEOUT),
+            ).catch((error) => {
+              if (isRateLimited(error)) refused += 1;
+              return undefined;
+            });
+            // An empty list is still an answer: this wallet holds no other coin.
+            if (tokens) held.set(item.index, tokens);
+          }),
+        );
+        if (refused) lowerCap(host);
+        noteHost(host, held.size > 0, Math.max(0, items.length - held.size - refused));
+        return held;
+      },
+    });
+  }
+
   const reads = batch.map(() => []);
   const expected = batch.map(() => 0);
   for (const job of jobs) {
-    for (const index of job.targets) expected[index] += job.coins.length;
+    // A discovery job answers once per wallet, however many tokens it finds.
+    for (const index of job.targets) expected[index] += job.discover ? 1 : job.coins.length;
   }
 
   // A wallet is finished the moment every group that asked about it has
@@ -385,6 +451,31 @@ async function readBatch(batch, onWallet) {
       }
 
       for (const index of job.targets) {
+        if (job.discover) {
+          const tokens = result.error ? [] : result.values.get(index) || [];
+          const listed = tokens.filter(
+            (token) => token.address && !CATALOG_TOKENS.has(`${job.discover}|${String(token.address).toLowerCase()}`),
+          );
+          for (const token of listed) {
+            reads[index].push({
+              coin: {
+                id: `token-${job.discover}-${token.address}`,
+                chain: job.discover,
+                symbol: token.symbol,
+                name: token.name,
+                color: colorForToken(token.symbol),
+                logo: token.logo,
+              },
+              balance: token.balance,
+              failed: false,
+            });
+          }
+          // Discovery answers once per wallet, so an empty list still satisfies
+          // that wallet's expected reads.
+          if (!listed.length) reads[index].push({ coin: null, balance: 0, failed: false });
+          finish(index);
+          continue;
+        }
         if (result.error) {
           for (const coin of job.coins) reads[index].push({ coin, balance: 0, failed: true });
         } else {
