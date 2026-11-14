@@ -4,7 +4,9 @@ import FundedExport from "@/components/wallet/scan/FundedExport";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
 import ScanProgress from "@/components/wallet/scan/ScanProgress";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
+import ScanHistory from "@/components/wallet/scan/ScanHistory";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
+import { saveRun } from "@/lib/scan-history";
 import { fetchPricesFor } from "@/lib/chains/prices";
 import useWakeLock from "@/hooks/useWakeLock";
 import { entriesFromList, parsePhrases, phrasesFromFile, scanAssets, scanPhraseStream } from "@/lib/phrase-scan";
@@ -34,6 +36,8 @@ export default function ScanWorkspace() {
   // The report panel waits for the typing to settle, so a line-by-line scan does
   // not fire one Telegram report per line.
   const [exportReady, setExportReady] = useState(false);
+  // Bumped whenever a run is logged, so the history section re-reads its list.
+  const [historyKey, setHistoryKey] = useState(0);
 
   const resultsRef = useRef([]);
   // Phrases already queued or scanned: editing the text again only sends the
@@ -175,6 +179,30 @@ export default function ScanWorkspace() {
     return pricesRef.current;
   }
 
+  // Every finished run is logged: funded wallets keep a row with their
+  // addresses, the rest are only counted, so the log never holds a phrase.
+  function recordRun(slice) {
+    const scanned = slice.filter((slot) => slot.status === "done");
+    if (!scanned.length) return;
+    const funded = scanned.filter((slot) => slot.total > 0);
+    saveRun({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      at: Date.now(),
+      scanned: scanned.length,
+      funded: funded.length,
+      total: funded.reduce((sum, slot) => sum + slot.total, 0),
+      wallets: funded.map((slot) => ({
+        line: slot.line,
+        total: slot.total,
+        funded: slot.funded,
+        addresses: slot.addresses,
+        failed: slot.failed,
+        failedChains: slot.failedChains,
+      })),
+    });
+    setHistoryKey((value) => value + 1);
+  }
+
   function stop() {
     cancelledRef.current = true;
     queueRef.current = [];
@@ -199,6 +227,8 @@ export default function ScanWorkspace() {
     if (busyRef.current) return;
     busyRef.current = true;
     cancelledRef.current = false;
+    // Only what this run adds is logged, so typing more never rewrites old runs.
+    const startAt = resultsRef.current.length;
     setError("");
     setStarted(true);
     setScanning(true);
@@ -228,6 +258,7 @@ export default function ScanWorkspace() {
       setTotal(seenRef.current.size || resultsRef.current.length);
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
+      recordRun(resultsRef.current.slice(startAt));
       scheduleExport();
     }
   }
@@ -324,6 +355,7 @@ export default function ScanWorkspace() {
       setTotal((current) => current || Math.max(countRef.current, resultsRef.current.length));
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
+      recordRun(resultsRef.current);
       scheduleExport();
     }
   }
@@ -452,6 +484,7 @@ export default function ScanWorkspace() {
         </div>
       ) : null}
 
+      <ScanHistory refreshKey={historyKey} />
     </div>
   );
 }
