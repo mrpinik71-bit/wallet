@@ -27,11 +27,17 @@ export const AI_PROVIDERS = {
   custom: {
     label: "Custom endpoint",
     hint: "Any OpenAI-compatible API — OpenRouter, Groq, a local model.",
-    defaultModel: "",
+    defaultModel: "gpt-4o-mini",
     models: [],
     keysUrl: "",
   },
 };
+
+// The model is optional: with only a key the provider's own default is used.
+export function modelFor(settings) {
+  const config = AI_PROVIDERS[settings?.provider];
+  return String(settings?.model || "").trim() || config?.defaultModel || "gpt-4o-mini";
+}
 
 const EMPTY = { provider: "base44", apiKey: "", model: "", baseUrl: "" };
 
@@ -60,7 +66,7 @@ export function initialAiDraft() {
   return { ...current, provider: "openai", model: current.model || AI_PROVIDERS.openai.defaultModel };
 }
 
-// True when a complete own-provider setup exists and can answer.
+// True when an own-provider setup exists and can answer: the key is all it takes.
 export function isOwnAiActive(settings = readAiSettings()) {
-  return settings.provider !== "base44" && Boolean(settings.apiKey && settings.model);
+  return settings.provider !== "base44" && Boolean(String(settings.apiKey || "").trim());
 }
