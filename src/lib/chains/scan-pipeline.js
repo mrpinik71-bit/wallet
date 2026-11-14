@@ -36,6 +36,11 @@ const HOST_CAPS = {
   "toncenter.com": 12,
   "tonapi.io": 12,
   // Still strict: these start refusing a burst of ten.
+  "mempool.fractalbitcoin.io": 12,
+  "blockstream.info": 6,
+  "api.mainnet.hiro.so": 8,
+  "babylon-rest.publicnode.com": 8,
+  "rpc.merlinchain.io": 10,
   "api.koios.rest": 5,
   "rpc.mainnet.near.org": 16,
   "api.trongrid.io": 6,

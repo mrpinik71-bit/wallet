@@ -15,6 +15,8 @@ import {
   tonBalance,
   xrpBalance,
 } from "@/lib/chains/scan-read";
+import { stacksBalance } from "@/lib/chains/stacks";
+import { babylonBalance } from "@/lib/chains/babylon";
 import { changeOf, fetchPrices, priceOf } from "@/lib/chains/prices";
 import { colorForToken, discoverTokens, DISCOVERY_CHAINS } from "@/lib/chains/token-discovery";
 
@@ -33,6 +35,8 @@ export async function readBalance(coin, address) {
   if (coin.family === "ton") return tonBalance(address);
   if (coin.family === "sui") return suiBalance(address);
   if (coin.family === "solana") return solanaBalance(address);
+  if (coin.family === "stacks") return stacksBalance(address);
+  if (coin.family === "babylon") return babylonBalance(address);
   if (coin.chain === "tron") {
     return coin.kind === "token" ? trc20Balance(address, coin) : tronBalance(address);
   }

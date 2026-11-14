@@ -42,6 +42,16 @@ const COINGECKO = {
   near: "near",
   ton: "the-open-network",
   sui: "sui",
+  rootstock: "rootstock",
+  merlin: "merlin-chain",
+  bob: "ethereum",
+  botanix: "bitcoin",
+  bevm: "bitcoin",
+  citrea: "bitcoin",
+  fractal: "fractal-bitcoin",
+  liquid: "bitcoin",
+  stacks: "blockstack",
+  babylon: "babylon-chain",
 };
 
 const LOGO = {
@@ -62,6 +72,11 @@ const LOGO = {
   solana: "https://assets.coingecko.com/coins/images/4128/large/solana.png",
   avalanche: "https://assets.coingecko.com/coins/images/12559/large/avax.png",
   polygon: "https://assets.coingecko.com/coins/images/4713/large/polygon.png",
+  stacks: "https://assets.coingecko.com/coins/images/2069/large/Stacks_logo_full.png",
+  botanix: cdn("btc"),
+  bevm: cdn("btc"),
+  citrea: cdn("btc"),
+  liquid: cdn("btc"),
 };
 
 const native = (chainId) => {

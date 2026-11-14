@@ -13,6 +13,8 @@ import { aptosAddress } from "@/lib/chains/aptos";
 import { nearAddress } from "@/lib/chains/near";
 import { tonAddress } from "@/lib/chains/ton";
 import { suiAddress } from "@/lib/chains/sui";
+import { stacksAddress } from "@/lib/chains/stacks";
+import { babylonAddress } from "@/lib/chains/babylon";
 import { ed25519PrivateKey, mnemonicSeed } from "@/lib/chains/slip10";
 
 export const toHex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -159,6 +161,9 @@ function addressOnChain(chain, mnemonic, evm, account) {
     return mnemonic.trim().split(/\s+/).length === 24 ? tonAddress(mnemonic) : "";
   }
   if (chain.family === "sui") return suiAddress(mnemonic, account);
+  // Stacks and Babylon both receive on a hash160 of the secp256k1 key.
+  if (chain.family === "stacks") return stacksAddress(hash160(compressedKey(mnemonic, withAccount(chain.path, account))));
+  if (chain.family === "babylon") return babylonAddress(hash160(compressedKey(mnemonic, withAccount(chain.path, account))));
   return "";
 }
 
