@@ -122,6 +122,7 @@ async function postCalls(chainId, calls) {
 
   let lastError = null;
   let busy = false;
+  let narrow = false;
   for (const endpoint of endpoints) {
     try {
       const body = await postTo(chainId, endpoint, calls);
@@ -132,8 +133,14 @@ async function postCalls(chainId, calls) {
       // A busy node is not a broken chain: only a node that does not answer at
       // all counts towards resting the chain.
       if (error?.status === 429) busy = true;
+      // Some node of this chain said the batch was too wide. If none of them
+      // serves it, the chain keeps working on smaller batches instead of only
+      // queueing on the one node that takes wide ones.
+      if (error?.batchRefused) narrow = true;
     }
   }
+
+  if (narrow && lastError && !lastError.batchRefused) lastError.batchRefused = true;
 
   if (!busy) {
     const strikes = (downStrikes.get(chainId) || 0) + 1;
