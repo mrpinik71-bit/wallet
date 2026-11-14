@@ -106,10 +106,11 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
           <button
             type="button"
             onClick={() => navigate({ to: "/ai-settings" })}
-            aria-label="AI provider settings"
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Change the AI API key"
+            className="ml-0.5 inline-flex items-center gap-1 rounded-full border border-foreground/[0.1] px-2 py-1 text-[9.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
           >
-            <Settings2 className="h-3.5 w-3.5" />
+            <Settings2 className="h-3 w-3" />
+            AI API
           </button>
         </div>
       </div>

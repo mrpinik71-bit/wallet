@@ -9,6 +9,7 @@ import {
   LineChart,
   Lock,
   Repeat,
+  Sparkles,
 } from "lucide-react";
 import BackButton from "@/components/wallet/BackButton";
 import { useWallet } from "@/lib/WalletContext";
@@ -22,9 +23,10 @@ const nav = [
   { to: "/swap", label: "Swap", icon: Repeat },
   { to: "/browser", label: "Browser", icon: Compass },
   { to: "/wallet", label: "Wallet", icon: KeyRound },
+  { to: "/ai-settings", label: "AI API", icon: Sparkles },
 ];
 
-const mobileNav = [nav[0], nav[1], nav[6], nav[7]];
+const mobileNav = [nav[0], nav[1], nav[6], nav[7], nav[8]];
 
 function Brand({ compact = false }) {
   return (
