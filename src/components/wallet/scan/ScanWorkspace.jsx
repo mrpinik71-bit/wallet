@@ -285,6 +285,9 @@ export default function ScanWorkspace() {
     await waitIdle();
 
     busyRef.current = true;
+    // A previous file or paste is stopped above; that flag must be cleared here
+    // too, otherwise the new file is treated as cancelled and finishes at 0.
+    cancelledRef.current = false;
     setScanning(true);
     setStarted(true);
     startedAtRef.current = Date.now();
