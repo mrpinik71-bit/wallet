@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth-middleware";
 
 const Holding = z.object({
   symbol: z.string().max(20),
@@ -25,7 +24,6 @@ const AskInput = z.object({
 // The only thing that leaves the device is the balance snapshot already shown
 // on screen — never a phrase, a key or the PIN.
 export const askAssistant = createServerFn({ method: "POST" })
-  .middleware([requireUser])
   .validator(AskInput)
   .handler(async ({ data, context }) => {
     const holdings = data.context.holdings.length
