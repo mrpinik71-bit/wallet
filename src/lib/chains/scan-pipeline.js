@@ -18,8 +18,8 @@ import {
 } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 40; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 128; // batch rounds kept in flight — 50 more parallel scanners on top of the last raise
-const PER_HOST = 34; // simultaneous requests to one public endpoint: past this, free nodes answer 429
+const INFLIGHT = 178; // batch rounds kept in flight — 50 more parallel round-trips on top of the last raise
+const PER_HOST = 60; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
 const JOB_TIMEOUT = 7000; // a stalled node must not hold a whole batch back
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
@@ -53,7 +53,21 @@ const HOST_CAPS = {
   "api.mainnet-beta.solana.com": 8,
 };
 
-const capFor = (host) => HOST_CAPS[host] || PER_HOST;
+// Burst per host, tuned while the scan runs. Endpoints listed above start at
+// their measured ceiling; the rest start at PER_HOST and are halved the first
+// time they answer a 429, so extra lanes cost a single retry instead of a wall
+// of refused requests.
+let hostCaps = new Map();
+const capFor = (host) => hostCaps.get(host) ?? (HOST_CAPS[host] || PER_HOST);
+
+/** A node that refused the burst is busy, not dead: lower its lanes, keep it. */
+const isRateLimited = (error) => /\(429\)|too many requests|rate limit/i.test(String(error?.message || error));
+function lowerCap(host) {
+  if (!host) return;
+  hostCaps.set(host, Math.max(2, Math.floor(capFor(host) / 2)));
+  // A busy node has not gone away, so this refusal must not count towards death.
+  hostFailures.delete(host);
+}
 const WORD_COUNTS = [12, 15, 18, 21, 24];
 
 // Assets are routed by how their chain can be asked: EVM chains per network,
@@ -308,13 +322,19 @@ async function readBatch(batch, onWallet) {
         // reported as failed reads instead of waiting on it one by one.
         if (deadHosts.has(host)) return new Map();
         const values = new Map();
+        let refused = 0;
         await Promise.all(
           items.map(async (item) => {
             // Timed out individually too: a node that never answers must not hold
             // this host's request slot for the rest of the scan. One wallet failing
             // is that wallet's failed read only, never the whole chain for the batch.
             const balance = await limit(host, () => withTimeout(readBalance(coin, item.address), JOB_TIMEOUT)).catch(
-              () => undefined,
+              (error) => {
+                // Refused because the burst was too wide: narrow this node's lanes
+                // and retry on the next round rather than counting it as dead.
+                if (isRateLimited(error)) refused += 1;
+                return undefined;
+              },
             );
             values.set(item.index, balance);
           }),
@@ -322,7 +342,8 @@ async function readBatch(batch, onWallet) {
         // A whole group with no answer means the host itself is down, so it counts
         // once per wallet and is dropped from the rest of the scan straight away.
         const answered = [...values.values()].filter((value) => value !== undefined).length;
-        noteHost(host, answered > 0, items.length - answered);
+        if (refused) lowerCap(host);
+        noteHost(host, answered > 0, Math.max(0, items.length - answered - refused));
         // A host that refused every wallet is a busy node rather than empty
         // wallets, so the job is retried as a whole instead of reporting failures.
         if ([...values.values()].every((value) => value === undefined)) throw new Error(`${coin.chain} busy`);
@@ -373,6 +394,9 @@ async function readBatch(batch, onWallet) {
             result = { job, values: await runOnce() };
             break;
           } catch (cause) {
+            // A node that refused the wider burst keeps the next try on fewer
+            // lanes instead of being marked as unavailable.
+            if (isRateLimited(cause)) lowerCap(job.host);
             if (attempt === 2) result = { job, error: cause };
             // Rate-limited nodes need the burst to clear: back off, with a little
             // jitter so the retries do not all land at the same moment.
@@ -380,7 +404,11 @@ async function readBatch(batch, onWallet) {
           }
         }
         // Single-address jobs count their own host per request inside run().
-        if (!job.inner) noteHost(job.host, !result.error);
+        if (!job.inner) {
+          const refused = isRateLimited(result.error);
+          if (refused) lowerCap(job.host);
+          noteHost(job.host, !result.error, refused ? 0 : 1);
+        }
       }
 
       for (const index of job.targets) {
@@ -434,9 +462,10 @@ function toResult(wallet, reads, prices) {
 
 /** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
 export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled } = {}) {
-  // Every run starts with every node trusted again.
+  // Every run starts with every node trusted again, at its full starting burst.
   deadHosts = new Set();
   hostFailures.clear();
+  hostCaps = new Map();
   let completed = 0;
   let started = 0;
   const active = new Set();
