@@ -45,6 +45,10 @@ export const TASK_ACTIONS = {
     help: "write a file the user can open or download — txt, md, csv, json or html; put the full file name (e.g. portfolio.txt) in arg and the entire finished content in text. Use this whenever the user wants something written, saved, exported or put into a file",
     done: "File created",
   },
+  upload_file: {
+    help: 'write anything the user dictates — a note, plan, letter, table, code, list, caption — and file it inside the app; put the place and file name in arg exactly as "Place/name.ext" (e.g. Notes/ideas.md, Documents/invoice.txt) and the entire finished content in text. Use this whenever the user says upload, save in the app, store, keep or put something somewhere. Never ask which place, name or format: take it from their words or pick the most fitting place yourself',
+    done: "File uploaded",
+  },
   add_account: { help: "create the next account from the same phrase", done: "New account added" },
   switch_account: {
     help: "switch to another account; put the account number (1, 2, …) in arg",
