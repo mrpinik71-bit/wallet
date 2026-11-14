@@ -11,7 +11,7 @@ import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
 import AiProviderDialog from "@/components/wallet/ai/AiProviderDialog";
 
-const HINTS = ["Open the swap screen", "Copy my address", "How is my portfolio today?"];
+const HINTS = ["What can you do?", "Write a short tweet for me", "Open the swap screen"];
 
 export default function AssistantCard({ holdings, total, changePct, onRefresh, address }) {
   const call = useServerFn(askAssistant);
@@ -119,7 +119,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
 
       {messages.length === 0 ? (
         <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
-          Ask about your portfolio or tell me what to do — open Swap, copy my address, lock the wallet. Type or tap the mic.
+          Ask me anything — questions, writing, ideas, code — or tell me what to do in the wallet. Type or tap the mic.
         </p>
       ) : (
         <div className="mt-2 max-h-60 space-y-1.5 overflow-y-auto pr-0.5">

@@ -11,7 +11,7 @@ import AssistantComposer from "@/components/wallet/home/AssistantComposer";
 // The app opens on the vault screen, before any balance is known, so the
 // assistant is asked without a portfolio — it can still explain everything.
 const EMPTY = { total: 0, changePct: 0, holdings: [] };
-const HINTS = ["What is Helix?", "Is my phrase safe?", "How do I restore a wallet?"];
+const HINTS = ["What can you do?", "Explain blockchain simply", "Draft a short email for me"];
 
 export default function EntryAssistant() {
   const call = useServerFn(askAssistant);
@@ -87,7 +87,7 @@ export default function EntryAssistant() {
 
       {messages.length === 0 ? (
         <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
-          Ask me anything before you unlock — the vault, your recovery phrase, or how a screen works.
+          Ask me anything — questions, writing, ideas or code. Type or tap the mic.
         </p>
       ) : (
         <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto pr-0.5">
