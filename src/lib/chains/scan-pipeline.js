@@ -17,25 +17,25 @@ import {
   suiBalancesMany,
 } from "@/lib/chains/scan-batch-multi";
 
-const CHUNK = 40; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
+const CHUNK = 60; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
 const INFLIGHT = 178; // batch rounds kept in flight — 50 more parallel round-trips on top of the last raise
 const PER_HOST = 60; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
-const JOB_TIMEOUT = 7000; // a stalled node must not hold a whole batch back
+const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
 // High enough that a burst of 429s never trips it, low enough that a dead node
 // is dropped within the first few wallets instead of one try per wallet.
-const DEAD_AFTER = 30;
+const DEAD_AFTER = 20;
 
 // Free endpoints with a published, low request budget: asking them faster only
 // earns a 429, which used to be reported as a failed chain read.
 const HOST_CAPS = {
   // Measured: these answer the burst below without a single 429.
-  "api.blockcypher.com": 24,
-  "mempool.space": 34,
-  "litecoinspace.org": 16,
-  "fullnode.mainnet.aptoslabs.com": 24,
-  "xrplcluster.com": 18,
+  "api.blockcypher.com": 32,
+  "mempool.space": 44,
+  "litecoinspace.org": 20,
+  "fullnode.mainnet.aptoslabs.com": 30,
+  "xrplcluster.com": 24,
   // Toncenter refuses a burst of five, but TonAPI takes the overflow, so the
   // pair together move many wallets at a time.
   "toncenter.com": 12,
@@ -400,7 +400,7 @@ async function readBatch(batch, onWallet) {
             if (attempt === 2) result = { job, error: cause };
             // Rate-limited nodes need the burst to clear: back off, with a little
             // jitter so the retries do not all land at the same moment.
-            else await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** attempt + Math.random() * 300));
+            else await new Promise((resolve) => setTimeout(resolve, 220 * 2 ** attempt + Math.random() * 160));
           }
         }
         // Single-address jobs count their own host per request inside run().
