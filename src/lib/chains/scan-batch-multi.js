@@ -1,6 +1,8 @@
 // Multi-wallet reads for the non-EVM chains that accept several wallets in a
 // single call: Solana accounts, Sui balances, Polkadot storage entries and
 // Cardano addresses. Each returns wallet position → balance.
+import bs58 from "bs58";
+import { sha256 } from "@noble/hashes/sha256";
 import { chains } from "@/lib/chains/config";
 import { accountStorageKey, publicKeyFromAddress } from "@/lib/chains/polkadot";
 
@@ -50,40 +52,79 @@ export async function solanaBalancesMany(addresses) {
   return balances;
 }
 
-// Owner lookups are "indexed" requests, which the shared Solana node refuses:
-// the official endpoint answers them, at a lower request rate.
-const SOLANA_TOKEN_RPC = "https://api.mainnet-beta.solana.com";
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const ATA_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+const PDA_MARKER = new TextEncoder().encode("ProgramDerivedAddress");
 
-/** One SPL token balance per wallet, as a batch of owner lookups on one mint. */
-export async function solanaTokenBalancesMany(addresses, mint) {
+const join = (list) => {
+  const total = list.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of list) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+};
+
+/**
+ * The one token account every wallet has for a mint. It is derived here, which
+ * turns an owner lookup per wallet into a single batch read of those accounts.
+ */
+function associatedTokenAddress(owner, mint) {
+  const seeds = [bs58.decode(owner), bs58.decode(TOKEN_PROGRAM), bs58.decode(mint)];
+  // Bump 255 is the one every real wallet lands on; a lower bump would need an
+  // on-curve hit, which cannot happen for a phrase-derived address.
+  return bs58.encode(sha256(join([...seeds, Uint8Array.of(255), bs58.decode(ATA_PROGRAM), PDA_MARKER])));
+}
+
+/** SPL token balances per wallet, read as each wallet's token account in one batch. */
+export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
   const balances = new Map();
 
   await Promise.all(
-    group(addresses, 25).map(async ({ start, list }) => {
-      const calls = list.map((address, offset) => ({
-        jsonrpc: "2.0",
-        id: offset + 1,
-        method: "getTokenAccountsByOwner",
-        params: [address, { mint }, { encoding: "jsonParsed" }],
-      }));
-      const response = await fetch(SOLANA_TOKEN_RPC, {
+    group(addresses, 90).map(async ({ start, list }) => {
+      const accounts = list.map((address) => associatedTokenAddress(address, mint));
+      const response = await fetch(chains.solana.rpc, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(calls),
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getMultipleAccounts",
+          params: [accounts, { encoding: "base64" }],
+        }),
       });
       if (!response.ok) throw new Error(`Solana network error (${response.status}).`);
-      const body = await response.json();
-      if (!Array.isArray(body)) throw new Error("Solana network error.");
+      const data = await response.json();
+      if (data?.error) throw new Error("Solana network error.");
 
-      for (const item of body) {
-        if (!item || item.error || !item.result) continue;
-        // A wallet can hold the same mint in more than one token account.
-        const amount = (item.result.value || []).reduce(
-          (sum, account) => sum + (account?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0),
-          0,
-        );
-        balances.set(start + (item.id - 1), amount);
-      }
+      const values = data?.result?.value;
+      if (!Array.isArray(values)) throw new Error("Solana network error.");
+
+      values.forEach((value, offset) => {
+        if (offset >= list.length) return;
+        // No token account for this mint means the wallet holds none of it.
+        const encoded = value?.data?.[0];
+        if (!encoded) {
+          balances.set(start + offset, 0);
+          return;
+        }
+        let raw;
+        try {
+          raw = Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0));
+        } catch {
+          return;
+        }
+        if (raw.length < 72) {
+          balances.set(start + offset, 0);
+          return;
+        }
+        // Token account layout: mint (32), owner (32), then the amount as u64.
+        let amount = 0n;
+        for (let byte = 71; byte >= 64; byte -= 1) amount = (amount << 8n) | BigInt(raw[byte]);
+        balances.set(start + offset, Number(amount) / 10 ** decimals);
+      });
     }),
   );
 

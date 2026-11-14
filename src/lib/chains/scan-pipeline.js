@@ -18,8 +18,8 @@ import {
 } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 40; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 28; // batch rounds kept in flight (more parallel scanners = faster scan)
-const PER_HOST = 20; // simultaneous requests to one public endpoint: past this, free nodes answer 429
+const INFLIGHT = 78; // batch rounds kept in flight — 50 more parallel scanners
+const PER_HOST = 24; // simultaneous requests to one public endpoint: past this, free nodes answer 429
 const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
 
 // Free endpoints with a published, low request budget: asking them faster only
@@ -206,11 +206,14 @@ async function readBatch(batch, onWallet) {
     collect("solana", (items) => ({
       coins: [coin],
       targets: items.map((item) => item.index),
-      // Its own lane, kept slow: the endpoint that answers owner lookups is strict.
-      host: "api.mainnet-beta.solana.com",
-      cap: 3,
+      // Batched like native SOL now, so the strict owner-lookup lane is gone.
+      host: hostOf("solana"),
       run: async () => {
-        const values = await solanaTokenBalancesMany(items.map((item) => item.address), coin.address);
+        const values = await solanaTokenBalancesMany(
+          items.map((item) => item.address),
+          coin.address,
+          coin.decimals,
+        );
         const out = new Map();
         items.forEach((item, position) => {
           const amount = values.get(position);
