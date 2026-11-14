@@ -8,6 +8,9 @@ export function DefaultCatchBoundary({ error }) {
   return (
     <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 py-24">
       <ErrorComponent error={error} />
+      <p className="max-w-full break-words text-center font-mono text-[11px] leading-relaxed text-muted-foreground">
+        {String(error?.message || error || "Unknown error")}
+      </p>
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => router.invalidate()}>
           Try again
