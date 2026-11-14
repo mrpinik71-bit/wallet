@@ -17,10 +17,10 @@ import {
   suiBalancesMany,
 } from "@/lib/chains/scan-batch-multi";
 
-const CHUNK = 10; // wallets per batch round — small enough that rows keep arriving
-const INFLIGHT = 61; // batch rounds kept in flight (11 + 50 extra parallel checkers)
+const CHUNK = 30; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
+const INFLIGHT = 18; // batch rounds kept in flight: each round is now 3× larger
 const PER_HOST = 40; // simultaneous requests to one public endpoint
-const JOB_TIMEOUT = 12000; // a stalled node must not hold a whole batch back
+const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
 const WORD_COUNTS = [12, 15, 18, 21, 24];
 
 // Assets are routed by how their chain can be asked: EVM chains per network,
@@ -300,14 +300,14 @@ async function readBatch(batch, onWallet) {
         : job.host
           ? () => limit(job.host, () => withTimeout(job.run(), JOB_TIMEOUT), job.cap)
           : () => withTimeout(job.run(), JOB_TIMEOUT);
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
           result = { job, values: await runOnce() };
           break;
         } catch (cause) {
-          if (attempt === 2) result = { job, error: cause };
+          if (attempt === 1) result = { job, error: cause };
           // Rate-limited nodes need the burst to clear: back off before retrying.
-          else await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+          else await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt));
         }
       }
 
@@ -400,7 +400,7 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
       }
       batch.push(wallet);
       // A long run must not freeze the page while it derives.
-      if (position % 6 === 5) await new Promise((resolve) => setTimeout(resolve, 0));
+      if (position % 25 === 24) await new Promise((resolve) => setTimeout(resolve, 0));
     }
     if (!batch.length || isCancelled?.()) return;
 

@@ -173,7 +173,7 @@ export default function ScanWorkspace() {
     if (!pricesRef.current) {
       pricesRef.current = await Promise.race([
         fetchPricesFor(scanAssets),
-        new Promise((resolve) => setTimeout(() => resolve({}), 4000)),
+        new Promise((resolve) => setTimeout(() => resolve({}), 2500)),
       ]);
     }
     return pricesRef.current;
