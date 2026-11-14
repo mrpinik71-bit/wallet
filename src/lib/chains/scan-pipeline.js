@@ -18,8 +18,9 @@ import {
 } from "@/lib/chains/scan-batch-multi";
 
 const CHUNK = 60; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 178; // batch rounds kept in flight — 50 more parallel round-trips on top of the last raise
-const PER_HOST = 60; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
+const INFLIGHT = 278; // batch rounds kept in flight — 100 more parallel round-trips on top of the last raise
+const PER_HOST = 80; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
+const MAX_CAP = 140; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
@@ -38,19 +39,20 @@ const HOST_CAPS = {
   "xrplcluster.com": 24,
   // Toncenter refuses a burst of five, but TonAPI takes the overflow, so the
   // pair together move many wallets at a time.
-  "toncenter.com": 12,
-  "tonapi.io": 12,
-  // Still strict: these start refusing a burst of ten.
-  "mempool.fractalbitcoin.io": 12,
-  "blockstream.info": 6,
-  "api.mainnet.hiro.so": 8,
-  "babylon-rest.publicnode.com": 8,
-  "rpc.merlinchain.io": 10,
-  "api.koios.rest": 5,
-  "rpc.mainnet.near.org": 16,
-  "api.trongrid.io": 6,
-  "graphql.mainnet.sui.io": 10,
-  "api.mainnet-beta.solana.com": 8,
+  "toncenter.com": 18,
+  "tonapi.io": 18,
+  // These refuse a wide burst: they start wide enough to matter, then a 429
+  // halves them for the rest of the run instead of failing the read.
+  "mempool.fractalbitcoin.io": 20,
+  "blockstream.info": 14,
+  "api.mainnet.hiro.so": 16,
+  "babylon-rest.publicnode.com": 16,
+  "rpc.merlinchain.io": 18,
+  "api.koios.rest": 10,
+  "rpc.mainnet.near.org": 24,
+  "api.trongrid.io": 12,
+  "graphql.mainnet.sui.io": 18,
+  "api.mainnet-beta.solana.com": 14,
 };
 
 // Burst per host, tuned while the scan runs. Endpoints listed above start at
@@ -58,6 +60,7 @@ const HOST_CAPS = {
 // time they answer a 429, so extra lanes cost a single retry instead of a wall
 // of refused requests.
 let hostCaps = new Map();
+let hostWins = new Map();
 const capFor = (host) => hostCaps.get(host) ?? (HOST_CAPS[host] || PER_HOST);
 
 /** A node that refused the burst is busy, not dead: lower its lanes, keep it. */
@@ -67,6 +70,7 @@ function lowerCap(host) {
   hostCaps.set(host, Math.max(2, Math.floor(capFor(host) / 2)));
   // A busy node has not gone away, so this refusal must not count towards death.
   hostFailures.delete(host);
+  hostWins.delete(host);
 }
 const WORD_COUNTS = [12, 15, 18, 21, 24];
 
@@ -134,6 +138,14 @@ function noteHost(host, ok, weight = 1) {
   if (!host) return;
   if (ok) {
     hostFailures.delete(host);
+    // A node that keeps answering clearly has headroom, so its lane is widened
+    // step by step until it starts refusing — this is what turns the extra scan
+    // lanes into real throughput instead of queued requests.
+    const wins = (hostWins.get(host) || 0) + 1;
+    hostWins.set(host, wins);
+    if (wins % 25 === 0 && capFor(host) < MAX_CAP) {
+      hostCaps.set(host, Math.min(MAX_CAP, capFor(host) + 3));
+    }
     return;
   }
   const misses = (hostFailures.get(host) || 0) + weight;
@@ -466,6 +478,7 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   deadHosts = new Set();
   hostFailures.clear();
   hostCaps = new Map();
+  hostWins = new Map();
   let completed = 0;
   let started = 0;
   const active = new Set();
