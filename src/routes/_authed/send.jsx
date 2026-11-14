@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authed/send")({
   validateSearch: (search) => ({
     coin: typeof search.coin === "string" ? search.coin : undefined,
     scan: typeof search.scan === "string" ? search.scan : undefined,
+    to: typeof search.to === "string" ? search.to : undefined,
   }),
   head: () => ({
     meta: [
@@ -40,7 +41,8 @@ function Send() {
 
   const [step, setStep] = useState("select");
   const [coinId, setCoinId] = useState(search.coin || null);
-  const [to, setTo] = useState("");
+  // An address handed over by the assistant is already in the form.
+  const [to, setTo] = useState(search.to || "");
   const [amount, setAmount] = useState("");
   const [scanning, setScanning] = useState(Boolean(search.scan));
   const [fee, setFee] = useState(null);
