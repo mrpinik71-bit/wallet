@@ -23,6 +23,7 @@ const nav = [
   { to: "/swap", label: "Swap", icon: Repeat },
   { to: "/browser", label: "Browser", icon: Compass },
   { to: "/wallet", label: "Wallet", icon: KeyRound },
+  { to: "/assistant", label: "AI Agent", icon: Sparkles },
   { to: "/ai-settings", label: "AI API", icon: Sparkles },
 ];
 

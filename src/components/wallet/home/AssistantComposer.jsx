@@ -17,7 +17,7 @@ export default function AssistantComposer({ onSend, busy, mic }) {
       <input
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        placeholder={mic.listening ? "Listening…" : "Ask anything about this wallet"}
+        placeholder={mic.listening ? "Listening…" : "Ask anything, or give me a task"}
         aria-label="Message the assistant"
         className="min-w-0 flex-1 rounded-xl border border-foreground/[0.09] bg-background/60 px-3 py-2 text-[11.5px] text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary/40"
       />

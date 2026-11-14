@@ -1,89 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { useNavigate } from "@tanstack/react-router";
-import { Check, Loader2, Settings2, Sparkles, Volume2, VolumeX } from "lucide-react";
-import { askAssistant } from "@/lib/assistant-fns";
-import { askWithOwnProvider } from "@/lib/ask-assistant";
-import useSpeech from "@/hooks/useSpeech";
-import useAssistantActions from "@/hooks/useAssistantActions";
-import { useWallet } from "@/lib/WalletContext";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { Check, Loader2, Maximize2, Settings2, Sparkles, Volume2, VolumeX } from "lucide-react";
+import useAgentChat from "@/hooks/useAgentChat";
+import AiProviderDialog from "@/components/wallet/ai/AiProviderDialog";
 import AssistantBubble from "@/components/wallet/home/AssistantBubble";
 import AssistantComposer from "@/components/wallet/home/AssistantComposer";
-import AiProviderDialog from "@/components/wallet/ai/AiProviderDialog";
 
 const HINTS = ["What can you do?", "Write a short tweet for me", "Open the swap screen"];
 
 export default function AssistantCard({ holdings, total, changePct, onRefresh, address }) {
-  const call = useServerFn(askAssistant);
-  const navigate = useNavigate();
-  const wallet = useWallet();
-  const [messages, setMessages] = useState([]);
-  const [busy, setBusy] = useState(false);
   const [apiOpen, setApiOpen] = useState(false);
-  const askRef = useRef(null);
   const bottom = useRef(null);
 
-  const speech = useSpeech({ onFinal: (text) => askRef.current?.(text) });
-  const { perform, done: did, reset: clearDid } = useAssistantActions({
-    navigate,
-    wallet,
+  // The same thread as the full agent screen, so a task started here continues there.
+  const { messages, busy, ask, speech, done } = useAgentChat({
+    holdings,
+    total,
+    changePct,
     onRefresh,
     address,
-    speech,
   });
-
-  // Only the balances already on screen are sent along as context.
-  const snapshot = useMemo(
-    () => ({
-      total: Number(total) || 0,
-      changePct: Number(changePct) || 0,
-      account: wallet.account,
-      accounts: wallet.accounts,
-      holdings: holdings
-        .filter((item) => item.value > 0)
-        .slice(0, 12)
-        .map((item) => ({
-          id: item.id,
-          symbol: item.symbol,
-          name: item.name,
-          chain: item.chain,
-          balance: Number(item.balance) || 0,
-          value: Number(item.value) || 0,
-        })),
-    }),
-    [holdings, total, changePct, wallet.account, wallet.accounts],
-  );
-
-  const ask = useCallback(
-    async (raw) => {
-      const question = String(raw || "").trim();
-      if (!question || busy) return;
-      const next = [...messages, { role: "user", text: question }];
-      setMessages(next);
-      clearDid();
-      setBusy(true);
-      try {
-        const payload = { context: snapshot, history: next.slice(-10) };
-        // Their own API key answers first; the built-in model only stands in when none is set.
-        const { answer, actions } = (await askWithOwnProvider(payload)) || (await call({ data: payload }));
-        setMessages((prev) => [...prev, { role: "assistant", text: answer }]);
-        speech.speak(answer);
-        await perform(actions);
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: "I couldn't answer just now — please try again." },
-        ]);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [busy, messages, snapshot, call, speech, perform, clearDid],
-  );
-
-  useEffect(() => {
-    askRef.current = ask;
-  }, [ask]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "nearest" });
@@ -95,7 +31,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
         <div className="flex min-w-0 items-center gap-1.5">
           <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={1.9} />
           <h2 className="truncate text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-            Helix assistant
+            Helix agent
           </h2>
           <button
             type="button"
@@ -107,19 +43,29 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
             Change API
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => speech.setVoiceOn((on) => !on)}
-          aria-label={speech.voiceOn ? "Mute spoken replies" : "Unmute spoken replies"}
-          className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {speech.voiceOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Link
+            to="/assistant"
+            aria-label="Open the full agent screen"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => speech.setVoiceOn((on) => !on)}
+            aria-label={speech.voiceOn ? "Mute spoken replies" : "Unmute spoken replies"}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {speech.voiceOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
 
       {messages.length === 0 ? (
         <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
-          Ask me anything — questions, writing, ideas, code — or tell me what to do in the wallet. Type or tap the mic.
+          Give me any task — writing, ideas, code, or something in the wallet. I break it into steps
+          and run them.
         </p>
       ) : (
         <div className="mt-2 max-h-60 space-y-1.5 overflow-y-auto pr-0.5">
@@ -129,17 +75,17 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
           {busy ? (
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Thinking…
+              Working…
             </div>
           ) : null}
           <div ref={bottom} />
         </div>
       )}
 
-      {did ? (
+      {done ? (
         <p className="mt-2 flex items-center gap-1.5 text-[10px] font-medium text-primary">
           <Check className="h-3 w-3" strokeWidth={2.4} />
-          {did}
+          {done}
         </p>
       ) : null}
 
