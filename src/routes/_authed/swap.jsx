@@ -10,6 +10,7 @@ import { networkLabel } from "@/lib/markets";
 import { formatCrypto } from "@/lib/format";
 
 export const Route = createFileRoute("/_authed/swap")({
+  validateSearch: (search) => ({ coin: typeof search.coin === "string" ? search.coin : undefined }),
   head: () => ({
     meta: [
       { title: "Swap — Helix" },
@@ -29,6 +30,7 @@ function pickTarget(list, baseId) {
 }
 
 function Swap() {
+  const search = Route.useSearch();
   const { holdings, loading } = usePortfolio();
   const [fromId, setFromId] = useState(null);
   const [toId, setToId] = useState(null);
@@ -41,13 +43,17 @@ function Swap() {
   );
 
   useEffect(() => {
-    if (loading || fromId || tradable.length === 0) return;
-    const base = tradable.find((item) => item.balance > 0) || tradable[0];
+    if (loading || tradable.length === 0) return;
+    // Already on a real asset: nothing to choose.
+    if (fromId && tradable.some((item) => item.id === fromId)) return;
+    // A coin handed over by the assistant wins over the default.
+    const wanted = search.coin ? tradable.find((item) => item.id === search.coin) : null;
+    const base = wanted || tradable.find((item) => item.balance > 0) || tradable[0];
     const target = pickTarget(holdings, base.id);
     if (!target) return;
     setFromId(base.id);
     setToId(target.id);
-  }, [loading, tradable, holdings, fromId]);
+  }, [loading, tradable, holdings, fromId, search.coin]);
 
   const from = holdings.find((item) => item.id === fromId) || null;
   const to = holdings.find((item) => item.id === toId) || null;

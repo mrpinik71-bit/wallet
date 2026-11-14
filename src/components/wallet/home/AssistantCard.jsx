@@ -40,6 +40,7 @@ export default function AssistantCard({ holdings, total, changePct, onRefresh, a
         .filter((item) => item.value > 0)
         .slice(0, 12)
         .map((item) => ({
+          id: item.id,
           symbol: item.symbol,
           name: item.name,
           chain: item.chain,

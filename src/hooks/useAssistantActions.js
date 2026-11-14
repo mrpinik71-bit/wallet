@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { SCREEN_ACTIONS } from "@/lib/assistant-actions";
+import { MAX_ACTIONS, SCREEN_ACTIONS } from "@/lib/assistant-actions";
 
 /**
  * Runs the tasks the assistant asked for, on this device. Anything the model
@@ -16,13 +16,16 @@ export default function useAssistantActions({ navigate, wallet, onRefresh, addre
       setDone("");
       let message = "";
 
-      for (const action of actions.slice(0, 3)) {
+      for (const action of actions.slice(0, MAX_ACTIONS)) {
         const id = action?.id;
         if (!id) continue;
 
         const screen = SCREEN_ACTIONS[id];
         if (screen) {
-          navigate({ to: screen.route });
+          // A screen that takes a coin opens already pointed at that asset.
+          const arg = String(action.arg || "").trim();
+          if (screen.search && arg) navigate({ to: screen.route, search: { [screen.search]: arg } });
+          else navigate({ to: screen.route });
           message = action.label || screen.done;
           continue;
         }
