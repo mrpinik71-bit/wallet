@@ -38,6 +38,14 @@ function Overview() {
         <HomeHeader address={addresses.tron} />
         <AccountSwitcher />
 
+        <AssistantCard
+          holdings={holdings}
+          total={total}
+          changePct={changePct}
+          onRefresh={refresh}
+          address={addresses.tron}
+        />
+
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start lg:gap-6">
           <div className="lg:col-start-1 lg:row-start-1">
             <BalanceBlock
@@ -49,13 +57,6 @@ function Overview() {
               chains={chains}
             />
             <ActionsRow />
-            <AssistantCard
-              holdings={holdings}
-              total={total}
-              changePct={changePct}
-              onRefresh={refresh}
-              address={addresses.tron}
-            />
             <MarketPulse />
           </div>
 
