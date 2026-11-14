@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { FileText, ScanSearch, X } from "lucide-react";
 import TelegramPanel from "@/components/wallet/scan/TelegramPanel";
 
@@ -17,9 +17,43 @@ export default function PhraseInput({
   onWords,
 }) {
   const fileRef = useRef(null);
+  // Dragging a file from the desktop onto the card is the quickest way in on a
+  // computer, so the whole card accepts a drop.
+  const [dragging, setDragging] = useState(false);
+  // Moving over the card's own children fires leave events too, so entering and
+  // leaving are counted: the hint only clears once the file leaves the card.
+  const depthRef = useRef(0);
+
+  function dropFile(event) {
+    event.preventDefault();
+    depthRef.current = 0;
+    setDragging(false);
+    if (scanning) return;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) onFile(file);
+  }
 
   return (
-    <section className="lux noise relative overflow-hidden p-5">
+    <section
+      onDragEnter={(event) => {
+        event.preventDefault();
+        if (scanning) return;
+        depthRef.current += 1;
+        setDragging(true);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        if (!scanning && !dragging) setDragging(true);
+      }}
+      onDragLeave={() => {
+        depthRef.current = Math.max(0, depthRef.current - 1);
+        if (!depthRef.current) setDragging(false);
+      }}
+      onDrop={dropFile}
+      className={`lux noise relative overflow-hidden p-5 transition-shadow ${
+        dragging ? "ring-1 ring-primary/60" : ""
+      }`}
+    >
       <div className="relative">
         <div>
           <div className="flex gap-1.5">
@@ -72,7 +106,7 @@ export default function PhraseInput({
             className="inline-flex items-center gap-1.5 rounded-full border border-foreground/[0.1] bg-foreground/[0.03] px-3 py-1.5 text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           >
             <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
-            {fileName ? "Change file" : "Upload .txt file"}
+            {fileName ? "Change file" : "Choose file from PC"}
           </button>
           <input
             ref={fileRef}
@@ -91,9 +125,15 @@ export default function PhraseInput({
           {fileName ? (
             <span className="text-primary/85">{fileName} — scan starts automatically</span>
           ) : (
-            "Uploading a file (.txt, up to 2 GB) starts the balance scan right away."
+            "Pick a file or drag it onto this card from your computer (.txt, up to 2 GB) — the scan starts right away."
           )}
         </p>
+
+        {dragging ? (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-[26px] bg-background/85">
+            <p className="text-[12px] font-medium text-primary">Drop the file to start scanning</p>
+          </div>
+        ) : null}
 
         {!scanning && value.trim() && count === 0 ? (
           <p className="mt-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[10.5px] leading-relaxed text-destructive">
