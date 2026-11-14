@@ -18,7 +18,7 @@ import {
 import { stacksBalance } from "@/lib/chains/stacks";
 import { babylonBalance } from "@/lib/chains/babylon";
 import { changeOf, fetchPrices, priceOf } from "@/lib/chains/prices";
-import { colorForToken, discoverTokens, DISCOVERY_CHAINS } from "@/lib/chains/token-discovery";
+import { colorForToken, discoverTokens, DISCOVERY_NETWORKS } from "@/lib/chains/token-discovery";
 
 export async function readBalance(coin, address) {
   if (!address) return 0;
@@ -45,7 +45,7 @@ export async function readBalance(coin, address) {
 
 async function discoverHeld(addresses, known) {
   const found = await Promise.all(
-    Object.keys(DISCOVERY_CHAINS).map(async (chainId) => {
+    DISCOVERY_NETWORKS.map(async (chainId) => {
       try {
         const tokens = await discoverTokens(chainId, addresses[chainId]);
         return tokens.map((token) => ({ ...token, chain: chainId }));
