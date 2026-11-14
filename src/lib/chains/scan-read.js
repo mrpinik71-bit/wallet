@@ -54,7 +54,7 @@ export async function aptosBalance(address) {
 export async function nearBalance(address) {
   // The mainnet node takes seconds per answer; FastNEAR answers the same query
   // in tens of milliseconds, so it is asked first and the node is the fallback.
-  const endpoints = ["https://free.rpc.fastnear.com", chains.near.rpc];
+  const endpoints = ["https://free.rpc.fastnear.com", chains.near.rpc, "https://near.drpc.org"];
   let lastStatus = null;
 
   for (const endpoint of endpoints) {
@@ -131,7 +131,11 @@ export async function suiBalance(address) {
   return Number(total) / 1e9;
 }
 
-const DOT_ENDPOINTS = [chains.polkadot.rpc, "https://rpc.polkadot.io"];
+const DOT_ENDPOINTS = [
+  chains.polkadot.rpc,
+  "https://rpc.polkadot.io",
+  "https://polkadot.api.onfinality.io/public",
+];
 const XRP_ENDPOINTS = [chains.xrp.api, "https://xrpl.ws"];
 
 /** DOT balance from this account's System.Account entry on the Polkadot relay chain. */
