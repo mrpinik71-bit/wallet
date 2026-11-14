@@ -211,6 +211,9 @@ export const chains = {
     family: "evm",
     chainId: 1101,
     rpc: "https://polygon-zkevm.drpc.org",
+    // Free gateways come and go: the second endpoint is used when the first one
+    // is busy, so a scan never reports zkEVM as failed because of one node.
+    rpcs: ["https://polygon-zkevm.rpc.thirdweb.com"],
     explorer: "https://zkevm.polygonscan.com",
     symbol: "ETH",
     color: "#8247E5",

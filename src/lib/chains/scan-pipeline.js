@@ -19,8 +19,26 @@ import {
 
 const CHUNK = 30; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
 const INFLIGHT = 18; // batch rounds kept in flight: each round is now 3× larger
-const PER_HOST = 40; // simultaneous requests to one public endpoint
+const PER_HOST = 12; // simultaneous requests to one public endpoint: past this, free nodes answer 429
 const JOB_TIMEOUT = 9000; // a stalled node must not hold a whole batch back
+
+// Free endpoints with a published, low request budget: asking them faster only
+// earns a 429, which used to be reported as a failed chain read.
+const HOST_CAPS = {
+  "api.blockcypher.com": 2,
+  "mempool.space": 4,
+  "litecoinspace.org": 2,
+  "toncenter.com": 1,
+  "api.koios.rest": 3,
+  "fullnode.mainnet.aptoslabs.com": 4,
+  "rpc.mainnet.near.org": 4,
+  "api.trongrid.io": 4,
+  "xrplcluster.com": 3,
+  "graphql.mainnet.sui.io": 4,
+  "api.mainnet-beta.solana.com": 3,
+};
+
+const capFor = (host) => HOST_CAPS[host] || PER_HOST;
 const WORD_COUNTS = [12, 15, 18, 21, 24];
 
 // Assets are routed by how their chain can be asked: EVM chains per network,
@@ -58,7 +76,7 @@ const hostOf = (chainId) => {
 // Public endpoints rate-limit bursts, so each host has its own request budget;
 // the queues behind it never grow the number of open connections.
 const lanes = new Map();
-function limit(host, run, cap = PER_HOST) {
+function limit(host, run, cap = capFor(host)) {
   const lane = lanes.get(host) || { active: 0, queue: [] };
   lanes.set(host, lane);
   return new Promise((resolve, reject) => {
@@ -256,13 +274,17 @@ async function readBatch(batch, onWallet) {
         await Promise.all(
           items.map(async (item) => {
             // Timed out individually too: a node that never answers must not hold
-            // this host's request slot for the rest of the scan.
-            values.set(
-              item.index,
-              await limit(host, () => withTimeout(readBalance(coin, item.address), JOB_TIMEOUT)),
+            // this host's request slot for the rest of the scan. One wallet failing
+            // is that wallet's failed read only, never the whole chain for the batch.
+            const balance = await limit(host, () => withTimeout(readBalance(coin, item.address), JOB_TIMEOUT)).catch(
+              () => undefined,
             );
+            values.set(item.index, balance);
           }),
         );
+        // A host that refused every wallet is a busy node rather than empty
+        // wallets, so the job is retried as a whole instead of reporting failures.
+        if ([...values.values()].every((value) => value === undefined)) throw new Error(`${coin.chain} busy`);
         return new Map([...values].map(([index, balance]) => [index, new Map([[coin.id, balance]])]));
       },
     });
@@ -300,14 +322,15 @@ async function readBatch(batch, onWallet) {
         : job.host
           ? () => limit(job.host, () => withTimeout(job.run(), JOB_TIMEOUT), job.cap)
           : () => withTimeout(job.run(), JOB_TIMEOUT);
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           result = { job, values: await runOnce() };
           break;
         } catch (cause) {
-          if (attempt === 1) result = { job, error: cause };
-          // Rate-limited nodes need the burst to clear: back off before retrying.
-          else await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt));
+          if (attempt === 2) result = { job, error: cause };
+          // Rate-limited nodes need the burst to clear: back off, with a little
+          // jitter so the retries do not all land at the same moment.
+          else await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** attempt + Math.random() * 300));
         }
       }
 
