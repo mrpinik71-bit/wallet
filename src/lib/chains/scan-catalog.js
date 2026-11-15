@@ -164,11 +164,10 @@ const TOKENS = [
   token("solana", "grass-sol", "GRASS", "Grass", "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs", 9, "grass", "#1DC46D"),
 ];
 
-// Botanix's public RPC no longer answers at all and BEVM's gateway refuses every
-// request, so each wallet reported them as a failed chain read on every scan and
-// buried the chains that do answer. They stay out of the scan until a reachable
-// public node exists.
-const OFFLINE_CHAINS = new Set(["botanix", "bevm"]);
+// Botanix's own node is gone; the only node left (thirdweb) answers one call per
+// request, so it would drag every scan down to single reads. BEVM reads again
+// through its GEB mainnet node, so it is scanned like any other chain.
+const OFFLINE_CHAINS = new Set(["botanix"]);
 
 export const SCAN_ASSETS = [...Object.keys(COINGECKO).map(native), ...TOKENS].filter(
   (asset) => !OFFLINE_CHAINS.has(asset.chain),
