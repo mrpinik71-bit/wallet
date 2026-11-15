@@ -1,6 +1,6 @@
 import { scanPhrases } from "@/lib/chains/scan-pipeline";
 const base = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-const N = 100;
+const N = Number(process.env.N || 100);
 async function* source() { for (let i = 0; i < N; i += 1) yield { phrase: base, words: 12, line: i + 1 }; }
 (async () => {
   const out = [];

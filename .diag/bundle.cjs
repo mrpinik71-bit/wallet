@@ -5668,8 +5668,8 @@ var FetchRequest = class _FetchRequest {
   get processFunc() {
     return this.#process || null;
   }
-  set processFunc(process) {
-    this.#process = process;
+  set processFunc(process2) {
+    this.#process = process2;
   }
   /**
    *  This function is called on each retry attempt.
@@ -15207,7 +15207,7 @@ var ParamType = class _ParamType {
    *  Walks the **ParamType** with %%value%%, calling %%process%%
    *  on each type, destructing the %%value%% recursively.
    */
-  walk(value, process) {
+  walk(value, process2) {
     if (this.isArray()) {
       if (!Array.isArray(value)) {
         throw new Error("invalid array value");
@@ -15216,7 +15216,7 @@ var ParamType = class _ParamType {
         throw new Error("array is wrong length");
       }
       const _this = this;
-      return value.map((v) => _this.arrayChildren.walk(v, process));
+      return value.map((v) => _this.arrayChildren.walk(v, process2));
     }
     if (this.isTuple()) {
       if (!Array.isArray(value)) {
@@ -15226,11 +15226,11 @@ var ParamType = class _ParamType {
         throw new Error("array is wrong length");
       }
       const _this = this;
-      return value.map((v, i) => _this.components[i].walk(v, process));
+      return value.map((v, i) => _this.components[i].walk(v, process2));
     }
-    return process(this.type, value);
+    return process2(this.type, value);
   }
-  #walkAsync(promises, value, process, setValue) {
+  #walkAsync(promises, value, process2, setValue) {
     if (this.isArray()) {
       if (!Array.isArray(value)) {
         throw new Error("invalid array value");
@@ -15241,7 +15241,7 @@ var ParamType = class _ParamType {
       const childType = this.arrayChildren;
       const result2 = value.slice();
       result2.forEach((value2, index) => {
-        childType.#walkAsync(promises, value2, process, (value3) => {
+        childType.#walkAsync(promises, value2, process2, (value3) => {
           result2[index] = value3;
         });
       });
@@ -15271,14 +15271,14 @@ var ParamType = class _ParamType {
         throw new Error("array is wrong length");
       }
       result2.forEach((value2, index) => {
-        components[index].#walkAsync(promises, value2, process, (value3) => {
+        components[index].#walkAsync(promises, value2, process2, (value3) => {
           result2[index] = value3;
         });
       });
       setValue(result2);
       return;
     }
-    const result = process(this.type, value);
+    const result = process2(this.type, value);
     if (result.then) {
       promises.push((async function() {
         setValue(await result);
@@ -15294,10 +15294,10 @@ var ParamType = class _ParamType {
    *  This can be used to resolve ENS names by walking and resolving each
    *  ``"address"`` type.
    */
-  async walkAsync(value, process) {
+  async walkAsync(value, process2) {
     const promises = [];
     const result = [value];
-    this.#walkAsync(promises, value, process, (value2) => {
+    this.#walkAsync(promises, value, process2, (value2) => {
       result[0] = value2;
     });
     if (promises.length) {
@@ -27352,10 +27352,10 @@ async function cardanoBalancesMany(addressLists) {
 }
 
 // src/lib/chains/scan-pipeline.js
-var CHUNK = 500;
+var CHUNK = 20;
 var INFLIGHT = 500;
-var MAX_WAITING = 12e3;
-var READ_CHUNK = 200;
+var MAX_WAITING = 2e4;
+var READ_CHUNK = 10;
 var PER_HOST = 200;
 var MAX_CAP = 400;
 var JOB_TIMEOUT = 5500;
@@ -27367,9 +27367,13 @@ var HOST_CAPS = {
   // Unregistered BlockCypher answers about three requests a second, so a wider
   // burst only earns a 429 for the whole DOGE/DASH group.
   "api.blockcypher.com": 4,
-  "mempool.space": 88,
-  "litecoinspace.org": 40,
-  "fullnode.mainnet.aptoslabs.com": 60,
+  // Esplora-style nodes refuse a sustained burst instead of a single wide one:
+  // they are given fewer lanes so the burst never climbs, and the queue behind
+  // each lane keeps every wallet moving instead of earning a 429.
+  "mempool.space": 24,
+  "litecoinspace.org": 20,
+  "liquid.network": 10,
+  "fullnode.mainnet.aptoslabs.com": 24,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
   "xrpl.ws": 40,
@@ -27702,10 +27706,31 @@ async function readBatch(batch, onWallet) {
     for (const index of job.targets) expected[index] += job.discover ? 1 : job.coins.length;
   }
   const reported = /* @__PURE__ */ new Set();
+  const repairs = [];
+  const mend = async (index) => {
+    const wallet = batch[index];
+    for (const read of reads[index].filter((item) => item.failed)) {
+      const address = read.coin.family === "cardano" ? wallet.cardano : wallet.addresses[read.coin.chain];
+      if (!address || Array.isArray(address) && !address.length) continue;
+      const host = hostOf(read.coin.chain);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const balance = await limit(host, () => withTimeout(readBalance(read.coin, address), 12e3));
+          if (balance === void 0) continue;
+          read.balance = balance;
+          read.failed = false;
+          break;
+        } catch {
+        }
+      }
+    }
+    onWallet?.(index, reads[index]);
+  };
   const finish2 = (index) => {
     if (reported.has(index) || reads[index].length < expected[index]) return;
     reported.add(index);
-    onWallet?.(index, reads[index]);
+    if (reads[index].some((read) => read.failed)) repairs.push(mend(index));
+    else onWallet?.(index, reads[index]);
   };
   batch.forEach((wallet, index) => {
     if (!expected[index]) finish2(index);
@@ -27771,6 +27796,7 @@ async function readBatch(batch, onWallet) {
       }
     })
   );
+  await Promise.all(repairs);
   return reads;
 }
 function toResult(wallet, reads, prices) {
@@ -27884,7 +27910,7 @@ async function scanPhrases(source2, { prices, onResult, onProgress, isCancelled 
 
 // .diag/entry.mjs
 var base = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-var N2 = 100;
+var N2 = Number(process.env.N || 100);
 async function* source() {
   for (let i = 0; i < N2; i += 1) yield { phrase: base, words: 12, line: i + 1 };
 }
