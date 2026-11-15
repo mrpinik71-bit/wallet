@@ -448,7 +448,13 @@ async function readBatch(batch, onWallet) {
               }),
             );
             if (refused) lowerCap(host);
-            noteHost(host, values.size > 0, Math.max(0, slice.length - values.size - refused));
+            // A node that refused every wallet of the group is not serving this
+            // chain: counted as a loss, it is rested after a few rounds instead
+            // of absorbing the whole scan in a wall of 429s.
+            const lost = values.size
+              ? Math.max(0, slice.length - values.size - refused)
+              : Math.max(1, Math.ceil(slice.length / 4));
+            noteHost(host, values.size > 0, lost);
             // This mirror is serving the group, so the answer stands.
             if (values.size) {
               return new Map([...values].map(([index, balance]) => [index, new Map([[coin.id, balance]])]));
