@@ -7,12 +7,39 @@ const hexOf = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(
 const bytesOf = (hex) =>
   Uint8Array.from((hex.replace(/^0x/, "").match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16)));
 
+// BlockCypher's free tier refuses a burst with 429 and then reports nothing for
+// every wallet behind it, so each of these chains also has an independent reader.
+// Both were checked from a browser origin: they answer and send a CORS header.
+const BLOCKCYPHER_MIRRORS = {
+  // Dash Insight API: the balance comes back as a plain number of DASH.
+  dash: async (address) => {
+    const response = await fetch(`https://insight.dash.org/insight-api/addr/${address}/balance`);
+    if (!response.ok) throw new Error(`Dash network error (${response.status}).`);
+    return Number(await response.json()) || 0;
+  },
+  // Blockchair dashboard: the balance is in satoshi, under the address key.
+  dogecoin: async (address) => {
+    const response = await fetch(`https://api.blockchair.com/dogecoin/dashboards/address/${address}`);
+    if (!response.ok) throw new Error(`Dogecoin network error (${response.status}).`);
+    const data = await response.json();
+    const sats = data?.data?.[address]?.address?.balance;
+    if (sats === undefined) throw new Error("Dogecoin network error.");
+    return Number(sats) / 1e8;
+  },
+};
+
 export async function blockcypherBalance(chainId, address) {
   const chain = chains[chainId];
-  const response = await fetch(`${chain.api}/addrs/${address}/balance`);
-  if (!response.ok) throw new Error(`${chain.name} network error (${response.status}).`);
-  const data = await response.json();
-  return (data.final_balance || 0) / 1e8;
+  try {
+    const response = await fetch(`${chain.api}/addrs/${address}/balance`);
+    if (!response.ok) throw new Error(`${chain.name} network error (${response.status}).`);
+    const data = await response.json();
+    return (data.final_balance || 0) / 1e8;
+  } catch (error) {
+    const mirror = BLOCKCYPHER_MIRRORS[chainId];
+    if (!mirror) throw error;
+    return mirror(address);
+  }
 }
 
 /** ADA balance across the phrase's Shelley base addresses, read through the backend. */

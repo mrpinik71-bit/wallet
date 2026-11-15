@@ -64,8 +64,8 @@ const HOST_CAPS = {
   "mempool.ninja": 40,
   "mempool.emzy.de": 40,
   "litecoinspace.org": 24,
-  "fullnode.mainnet.aptoslabs.com": 16,
-  "liquid.network": 16,
+  "fullnode.mainnet.aptoslabs.com": 8,
+  "liquid.network": 8,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
   "xrpl.ws": 40,
@@ -86,7 +86,7 @@ const HOST_CAPS = {
   // BOB's node rate-limits the tail of a wide batch without saying so, so its
   // requests are spaced out instead of arriving in one burst.
   "rpc.gobob.xyz": 4,
-  "api.mainnet.hiro.so": 32,
+  "api.mainnet.hiro.so": 12,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
