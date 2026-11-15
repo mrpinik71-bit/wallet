@@ -1,3 +1,5 @@
+import { customEndpoint } from "@/lib/chains/custom-rpc";
+
 // Extra public endpoints for the chains that answer one address at a time.
 // Each one is a separate host, so the scan can spread a burst over all of them
 // instead of queueing every wallet behind a single node's rate limit.
@@ -26,9 +28,10 @@ export const CHAIN_ENDPOINTS = {
 
 /**
  * Every endpoint that serves this chain, primary first. A chain with no mirror
- * keeps the one endpoint it was configured with.
+ * keeps the one endpoint it was configured with. An endpoint the user saved for
+ * this chain is asked first: its own budget carries the whole scan.
  */
 export function endpointsFor(chainId, primary) {
   const list = CHAIN_ENDPOINTS[chainId] || [];
-  return [...new Set([primary, ...list].filter(Boolean))];
+  return [...new Set([customEndpoint(chainId), primary, ...list].filter(Boolean))];
 }

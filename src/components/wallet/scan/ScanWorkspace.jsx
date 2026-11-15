@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import FundedExport from "@/components/wallet/scan/FundedExport";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
+import RpcKeysPanel from "@/components/wallet/scan/RpcKeysPanel";
 import ScanProgress from "@/components/wallet/scan/ScanProgress";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanHistory from "@/components/wallet/scan/ScanHistory";
@@ -385,6 +386,8 @@ export default function ScanWorkspace() {
         words={words}
         onWords={changeWords}
       />
+
+      <RpcKeysPanel />
 
       {started ? (
         <div className="mt-5 space-y-2.5">

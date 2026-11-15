@@ -2,6 +2,7 @@
 // one EVM chain, so a batch of wallets costs a few round trips per chain instead
 // of one request for every wallet on every chain.
 import { chains } from "@/lib/chains/config";
+import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { request, resetLanes } from "@/lib/chains/scan-lanes";
 import { EVM_MIRRORS } from "@/lib/chains/scan-mirrors";
 
@@ -130,7 +131,14 @@ async function postCalls(chainId, calls) {
   }
 
   const chain = chains[chainId];
-  const endpoints = [...(EVM_MIRRORS[chainId] || []), chain.rpc, ...(chain.rpcs || [])].filter(Boolean);
+  // A node the user saved for this chain carries the batch first: it is the one
+  // endpoint with no shared public budget behind it.
+  const endpoints = [
+    customEndpoint(chainId),
+    ...(EVM_MIRRORS[chainId] || []),
+    chain.rpc,
+    ...(chain.rpcs || []),
+  ].filter(Boolean);
 
   let lastError = null;
   let busy = false;

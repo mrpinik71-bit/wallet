@@ -3,6 +3,7 @@
 // few round trips per chain instead of a fresh set for each wallet, and the
 // next batch is already in flight while the current one is answered.
 import { chains } from "@/lib/chains/config";
+import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { createDerivePool } from "@/lib/chains/derive-pool";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
@@ -222,6 +223,9 @@ const hostOfUrl = (url) => {
 const READER_HOSTS = { dogecoin: "sochain.com", dash: "chainz.cryptoid.info" };
 
 const hostOf = (chainId) => {
+  // A node the user saved carries this chain, so its lanes are that node's own.
+  const custom = customEndpoint(chainId);
+  if (custom) return hostOfUrl(custom) || chainId;
   const chain = chains[chainId];
   const url = chain?.rpc || chain?.api || "";
   return READER_HOSTS[chainId] || hostOfUrl(url) || chainId;
