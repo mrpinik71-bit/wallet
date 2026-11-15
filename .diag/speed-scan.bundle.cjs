@@ -27856,7 +27856,7 @@ function installRelays() {
     return realFetch(input, init2);
   };
 }
-async function run(n2 = 10) {
+async function run(n2 = 10, deadlineSeconds = 0) {
   installRelays();
   const entries = [];
   for (let i = 0; i < n2; i += 1) entries.push({ phrase: await generateMnemonic(12), words: 12, line: i + 1 });
@@ -27866,8 +27866,10 @@ async function run(n2 = 10) {
   const started = Date.now();
   const lands = [];
   const failed = {};
+  const isCancelled = deadlineSeconds ? () => Date.now() - started > deadlineSeconds * 1e3 : void 0;
   await scanPhrases(source(), {
     prices: {},
+    isCancelled,
     onResult: (result) => {
       lands.push(Number(((Date.now() - started) / 1e3).toFixed(1)));
       for (const symbol of result.failedChains || []) failed[symbol] = (failed[symbol] || 0) + 1;
@@ -27875,10 +27877,11 @@ async function run(n2 = 10) {
   });
   const seconds = (Date.now() - started) / 1e3;
   return {
-    wallets: n2,
+    requested: n2,
+    completed: lands.length,
     seconds: Number(seconds.toFixed(1)),
-    walletsPerMinute: Number((n2 / seconds * 60).toFixed(1)),
-    completionTimes: lands,
+    walletsPerMinute: Number((lands.length / seconds * 60).toFixed(1)),
+    landedAt: lands.slice(0, 40),
     failedChains: Object.entries(failed).sort((a, b2) => b2[1] - a[1]).slice(0, 12)
   };
 }

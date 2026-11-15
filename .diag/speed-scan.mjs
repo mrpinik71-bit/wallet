@@ -47,20 +47,29 @@ async function run(n = 10, deadlineSeconds = 0) {
   const started = Date.now();
   const lands = [];
   const failed = {};
+  const isCancelled = deadlineSeconds ? () => Date.now() - started > deadlineSeconds * 1000 : undefined;
   await scanPhrases(source(), {
     prices: {},
+    isCancelled,
     onResult: (result) => {
       lands.push(Number(((Date.now() - started) / 1000).toFixed(1)));
       for (const symbol of result.failedChains || []) failed[symbol] = (failed[symbol] || 0) + 1;
+      // Written on every wallet, so a run that is cut short still reports the
+      // rate it actually reached.
+      fs.writeFileSync(
+        PROGRESS,
+        JSON.stringify({ requested: n, completed: lands.length, landedAt: lands, failed }, null, 0),
+      );
     },
   });
 
   const seconds = (Date.now() - started) / 1000;
   return {
-    wallets: n,
+    requested: n,
+    completed: lands.length,
     seconds: Number(seconds.toFixed(1)),
-    walletsPerMinute: Number(((n / seconds) * 60).toFixed(1)),
-    completionTimes: lands,
+    walletsPerMinute: Number(((lands.length / seconds) * 60).toFixed(1)),
+    landedAt: lands.slice(0, 40),
     failedChains: Object.entries(failed).sort((a, b) => b[1] - a[1]).slice(0, 12),
   };
 }
