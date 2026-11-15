@@ -44,8 +44,32 @@ let turn = 0;
 const paused = new Map();
 const pause = (host) => new Promise((resolve) => setTimeout(resolve, Math.max(0, (paused.get(host) || 0) - Date.now())));
 
+// Your own Hiro key lives on the server, where this app's relay adds it: a STX
+// read then uses your own request budget instead of the shared public one.
+const RELAY = "/api/rpc-hiro";
+
+async function relayBalance(address) {
+  if (typeof window === "undefined") return null;
+  try {
+    const response = await fetch(`${RELAY}?address=${encodeURIComponent(address)}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data?.stx?.balance === undefined) return null;
+    return Number(data.stx.balance || 0) / 1e6;
+  } catch {
+    return null;
+  }
+}
+
 /** STX balance in whole coins (1 STX = 1,000,000 microSTX). */
 export async function stacksBalance(address, endpoint) {
+  // Your key first; an unset key answers at once and the public nodes below take
+  // over, so the chain is never left unreadable.
+  if (!endpoint) {
+    const own = await relayBalance(address);
+    if (own !== null) return own;
+  }
+
   let lastError = null;
   const order = endpoint ? [endpoint, ...HOSTS.filter((host) => host !== endpoint)] : HOSTS;
   const rotated = order.length > 1 ? [...order.slice(turn % order.length), ...order.slice(0, turn % order.length)] : order;

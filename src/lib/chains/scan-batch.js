@@ -3,6 +3,7 @@
 // of one request for every wallet on every chain.
 import { chains } from "@/lib/chains/config";
 import { customEndpoint } from "@/lib/chains/custom-rpc";
+import { drpcRelay } from "@/lib/chains/drpc-relay";
 import { request, resetLanes } from "@/lib/chains/scan-lanes";
 import { EVM_MIRRORS } from "@/lib/chains/scan-mirrors";
 
@@ -131,9 +132,10 @@ async function postCalls(chainId, calls) {
   }
 
   const chain = chains[chainId];
-  // A node the user saved for this chain carries the batch first: it is the one
-  // endpoint with no shared public budget behind it.
+  // Your own dRPC key is asked first, then a node the user saved: both carry a
+  // batch without the shared public budget of the mirrors below.
   const endpoints = [
+    drpcRelay(chainId),
     customEndpoint(chainId),
     ...(EVM_MIRRORS[chainId] || []),
     chain.rpc,
