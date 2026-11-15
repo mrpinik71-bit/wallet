@@ -27,7 +27,11 @@ const CHUNK = 10; // wallets per batch round
 const INFLIGHT = 2400; // batch rounds kept in flight — 2400 rounds of 10 run together (24,000 wallets per wave)
 const MAX_WAITING = 48000; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 10; // wallets handed to the network while the rest of the round is still being derived
-const PER_HOST = 500; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
+// Starting burst for a node nobody has measured. A public node handed 500
+// requests at once usually stops answering instead of refusing them, which read
+// as a failed chain; a modest start that widens while the node keeps answering
+// reaches the same width without that.
+const PER_HOST = 80;
 const MAX_CAP = 1200; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
@@ -76,6 +80,44 @@ const HOST_CAPS = {
   "rpc.mainnet.near.org": 48,
   "api.trongrid.io": 24,
   "graphql.mainnet.sui.io": 36,
+  // Gateways that serve many chains but reward a narrow burst; each widens on
+  // its own while it keeps answering.
+  "ethereum.drpc.org": 24,
+  "bsc.drpc.org": 24,
+  "base.drpc.org": 24,
+  "arbitrum.drpc.org": 24,
+  "polygon.drpc.org": 24,
+  "optimism.drpc.org": 24,
+  "avalanche.drpc.org": 24,
+  "linea.drpc.org": 24,
+  "scroll.drpc.org": 24,
+  "mantle.drpc.org": 24,
+  "celo.drpc.org": 24,
+  "gnosis.drpc.org": 24,
+  "cronos.drpc.org": 24,
+  "sonic.drpc.org": 24,
+  "sei.drpc.org": 24,
+  "unichain.drpc.org": 24,
+  "zksync.drpc.org": 20,
+  "polygon-zkevm.drpc.org": 20,
+  "core.drpc.org": 20,
+  "fantom.drpc.org": 20,
+  "megaeth.drpc.org": 20,
+  "bob.drpc.org": 20,
+  "merlin.drpc.org": 20,
+  // Small L2 nodes: a burst that is too wide is simply read as a failed chain,
+  // so these start narrow and widen only while they keep answering.
+  "api.mainnet.abs.xyz": 16,
+  "mainnet.megaeth.com": 16,
+  "rpc.mainnet.citrea.xyz": 16,
+  "rpc.citreascan.com": 16,
+  "public-node.rsk.co": 16,
+  "mycrypto.rsk.co": 16,
+  "rpc-mainnet-1.geb.network": 16,
+  "mainnet.era.zksync.io": 32,
+  "rpcapi.fantom.network": 24,
+  "zkevm-rpc.com": 16,
+  "polygon-zkevm.rpc.thirdweb.com": 24,
   // Token lists answer one wallet at a time, so these stay narrower than a
   // batch read and widen only while the indexer keeps answering.
   "eth.blockscout.com": 36,

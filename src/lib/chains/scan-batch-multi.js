@@ -24,6 +24,29 @@ function group(list, size) {
 // The public Solana node answers at most 10 accounts per call, and refuses the
 // whole request above that — which used to report every wallet as a failed read.
 const SOLANA_ACCOUNTS = 10;
+// Two nodes serve the same call, so a busy one is not a failed chain.
+const SOLANA_RPCS = [chains.solana.rpc, "https://api.mainnet-beta.solana.com"];
+
+/** Sends one Solana call, trying the next node when this one refuses or is busy. */
+async function solanaCall(body) {
+  let lastError = null;
+  for (const endpoint of SOLANA_RPCS) {
+    try {
+      const response = await request(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`Solana network error (${response.status}).`);
+      const data = await response.json();
+      if (data?.error) throw new Error("Solana network error.");
+      return data;
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+  throw lastError || new Error("Solana network error.");
+}
 
 /** SOL balances for many accounts (lamports, one call per 10 wallets). */
 export async function solanaBalancesMany(addresses) {
@@ -31,19 +54,12 @@ export async function solanaBalancesMany(addresses) {
 
   await Promise.all(
     group(addresses, SOLANA_ACCOUNTS).map(async ({ start, list }) => {
-      const response = await request(chains.solana.rpc, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "getMultipleAccounts",
-          params: [list, { encoding: "base64" }],
-        }),
+      const data = await solanaCall({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getMultipleAccounts",
+        params: [list, { encoding: "base64" }],
       });
-      if (!response.ok) throw new Error(`Solana network error (${response.status}).`);
-      const data = await response.json();
-      if (data?.error) throw new Error("Solana network error.");
 
       const values = data?.result?.value;
       if (!Array.isArray(values)) throw new Error("Solana network error.");
@@ -91,19 +107,12 @@ export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
   await Promise.all(
     group(addresses, SOLANA_ACCOUNTS).map(async ({ start, list }) => {
       const accounts = list.map((address) => associatedTokenAddress(address, mint));
-      const response = await request(chains.solana.rpc, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "getMultipleAccounts",
-          params: [accounts, { encoding: "base64" }],
-        }),
+      const data = await solanaCall({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getMultipleAccounts",
+        params: [accounts, { encoding: "base64" }],
       });
-      if (!response.ok) throw new Error(`Solana network error (${response.status}).`);
-      const data = await response.json();
-      if (data?.error) throw new Error("Solana network error.");
 
       const values = data?.result?.value;
       if (!Array.isArray(values)) throw new Error("Solana network error.");
