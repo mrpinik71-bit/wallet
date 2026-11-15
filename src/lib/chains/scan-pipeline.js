@@ -19,10 +19,14 @@ import {
   suiBalancesMany,
 } from "@/lib/chains/scan-batch-multi";
 
-const CHUNK = 500; // wallets per batch round — bigger rounds mean far fewer round trips per wallet
-const INFLIGHT = 500; // batch rounds kept in flight — every chain group keeps its own lane busy end to end
+// Small rounds: a wide batch is the first thing a free public node refuses, so
+// wallets are grouped a few at a time. Many small rounds are kept in flight
+// instead, so the scan still moves thousands of wallets at once — a refused
+// small batch costs a handful of wallets, never a whole wall of them.
+const CHUNK = 10; // wallets per batch round
+const INFLIGHT = 600; // batch rounds kept in flight — 600 rounds of 10 run together
 const MAX_WAITING = 12000; // wallets prepared and waiting across all rounds — the memory ceiling
-const READ_CHUNK = 200; // wallets handed to the network while the rest of the round is still being derived
+const READ_CHUNK = 10; // wallets handed to the network while the rest of the round is still being derived
 const PER_HOST = 200; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
 const MAX_CAP = 400; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
@@ -59,7 +63,12 @@ const HOST_CAPS = {
   // These refuse a wide burst: they start wide enough to matter, then a 429
   // halves them for the rest of the run instead of failing the read.
   "mempool.fractalbitcoin.io": 40,
-  "blockstream.info": 28,
+  // Blockstream refuses a wide burst on the UTXO list Liquid needs — and every
+  // wallet asks for it twice — so this one is kept narrow.
+  "blockstream.info": 10,
+  // BOB's node rate-limits the tail of a wide batch without saying so, so its
+  // requests are spaced out instead of arriving in one burst.
+  "rpc.gobob.xyz": 4,
   "api.mainnet.hiro.so": 32,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
@@ -452,10 +461,39 @@ async function readBatch(batch, onWallet) {
   // answered, so it is handed over right then instead of waiting for the whole
   // batch — the results list fills row by row while the scan keeps running.
   const reported = new Set();
+  const repairs = [];
+
+  // A node that rate-limits the tail of a batch answers a few wallets and drops
+  // the rest, which used to read as "this wallet's chain failed". Before a
+  // wallet is reported, the reads it lost are asked once more on their own — a
+  // single read is far too small a request to be refused.
+  const mend = async (index) => {
+    const wallet = batch[index];
+    for (const read of reads[index].filter((item) => item.failed)) {
+      const address =
+        read.coin.family === "cardano" ? wallet.cardano : wallet.addresses[read.coin.chain];
+      if (!address || (Array.isArray(address) && !address.length)) continue;
+      const host = hostOf(read.coin.chain);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const balance = await limit(host, () => withTimeout(readBalance(read.coin, address), 12000));
+          if (balance === undefined) continue;
+          read.balance = balance;
+          read.failed = false;
+          break;
+        } catch {
+          // Still unanswered: it stays a failed read, and the scan says so.
+        }
+      }
+    }
+    onWallet?.(index, reads[index]);
+  };
+
   const finish = (index) => {
     if (reported.has(index) || reads[index].length < expected[index]) return;
     reported.add(index);
-    onWallet?.(index, reads[index]);
+    if (reads[index].some((read) => read.failed)) repairs.push(mend(index));
+    else onWallet?.(index, reads[index]);
   };
   batch.forEach((wallet, index) => {
     if (!expected[index]) finish(index);
@@ -545,6 +583,10 @@ async function readBatch(batch, onWallet) {
       }
     }),
   );
+
+  // Wallets that lost a read wait here only for that one read, so a report is
+  // never sent with a chain marked failed while it is still being retried.
+  await Promise.all(repairs);
 
   return reads;
 }

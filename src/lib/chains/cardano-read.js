@@ -1,9 +1,11 @@
-// Cardano balances, read through the app's backend.
+// Cardano balances, read through the app's own route.
 //
 // Koios — the public Cardano indexer — sends no CORS header, so the browser
-// cannot read it. The backend function makes that call and returns the numbers,
-// which is why Cardano goes through here instead of fetching Koios directly.
-import { base44 } from "@/api/base44Client";
+// cannot read it. The route makes that call and returns the numbers, which is
+// why Cardano goes through here instead of fetching Koios directly. It is a
+// plain route and not a backend function: the wallet never signs in, and a
+// function call without a session is refused.
+const ENDPOINT = "/api/cardano-balances";
 
 // The indexer accepts a batch of addresses, and the function caps it there.
 const PER_CALL = 50;
@@ -27,8 +29,14 @@ export async function readCardanoBalances(addresses) {
     while (next < chunks.length) {
       const chunk = chunks[next];
       next += 1;
-      const result = await base44.functions.invoke("cardanoBalance", { addresses: chunk });
-      const rows = result?.data?.balances ?? result?.balances ?? {};
+      const response = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ addresses: chunk }),
+      });
+      if (!response.ok) throw new Error(`Cardano indexer error (${response.status}).`);
+      const payload = await response.json();
+      const rows = payload?.balances || {};
       for (const [address, lovelace] of Object.entries(rows)) {
         balances.set(address, Number(lovelace || 0) / 1e6);
       }
