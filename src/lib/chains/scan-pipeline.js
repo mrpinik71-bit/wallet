@@ -33,7 +33,9 @@ const READ_CHUNK = 10; // wallets handed to the network while the rest of the ro
 // reaches the same width without that.
 const PER_HOST = 80;
 const MAX_CAP = 1200; // a node that keeps answering without a refusal may be widened this far
-const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
+// A rate-limited node answers slowly when it answers at all, so a single read
+// gets long enough to come back instead of being written off as a failed chain.
+const JOB_TIMEOUT = 12000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
@@ -52,9 +54,13 @@ const HOST_CAPS = {
   // Unregistered BlockCypher answers about three requests a second, so a wider
   // burst only earns a 429 for the whole DOGE/DASH group.
   "api.blockcypher.com": 4,
-  "mempool.space": 88,
-  "litecoinspace.org": 40,
-  "fullnode.mainnet.aptoslabs.com": 60,
+  // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
+  // refusal costs the wallet its read, so these stay at the rate the node
+  // actually serves.
+  "mempool.space": 40,
+  "litecoinspace.org": 24,
+  "fullnode.mainnet.aptoslabs.com": 16,
+  "liquid.network": 16,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
   "xrpl.ws": 40,
@@ -69,7 +75,9 @@ const HOST_CAPS = {
   "mempool.fractalbitcoin.io": 40,
   // Blockstream refuses a wide burst on the UTXO list Liquid needs — and every
   // wallet asks for it twice — so this one is kept narrow.
-  "blockstream.info": 10,
+  // Blockstream refuses almost immediately — a single request past its budget
+  // comes back 429 — so its lane is kept to a trickle.
+  "blockstream.info": 3,
   // BOB's node rate-limits the tail of a wide batch without saying so, so its
   // requests are spaced out instead of arriving in one burst.
   "rpc.gobob.xyz": 4,
@@ -431,6 +439,9 @@ async function readBatch(batch, onWallet) {
                   // Refused because the burst was too wide: narrow this node's
                   // lanes and retry on the next round rather than counting it dead.
                   if (isRateLimited(error)) refused += 1;
+                  globalThis.__scanErr ||= {};
+                  const k = `${coin.chain}|${host}|${String(error?.message).slice(0, 70)}`;
+                  globalThis.__scanErr[k] = (globalThis.__scanErr[k] || 0) + 1;
                   return undefined;
                 });
                 if (balance !== undefined) values.set(item.index, balance);
