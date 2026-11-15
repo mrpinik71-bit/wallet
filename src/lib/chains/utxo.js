@@ -60,11 +60,27 @@ async function request(chainId, path, init, base) {
   return response;
 }
 
+// Litecoin is served by one Esplora host only, so a Blockbook node on a second
+// host answers the same question when that one is down. Blockbook reports the
+// same figure in satoshis, so the result needs no conversion beyond /1e8.
+const BLOCKBOOK = {
+  litecoin: "https://litecoinblockexplorer.net/api/v2/address/",
+};
+
 export async function utxoBalance(chainId, address, base) {
-  const data = await (await request(chainId, `/address/${address}`, undefined, base)).json();
-  const stats = data.chain_stats || {};
-  const sats = (stats.funded_txo_sum || 0) - (stats.spent_txo_sum || 0);
-  return sats / 1e8;
+  try {
+    const data = await (await request(chainId, `/address/${address}`, undefined, base)).json();
+    const stats = data.chain_stats || {};
+    const sats = (stats.funded_txo_sum || 0) - (stats.spent_txo_sum || 0);
+    return sats / 1e8;
+  } catch (error) {
+    const fallback = BLOCKBOOK[chainId];
+    if (!fallback) throw error;
+    const response = await fetch(`${fallback}${address}`);
+    if (!response.ok) throw error;
+    const book = await response.json();
+    return Number(book?.balance || 0) / 1e8;
+  }
 }
 
 async function fetchUtxos(chainId, address) {

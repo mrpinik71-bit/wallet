@@ -4,8 +4,9 @@
 import bs58 from "bs58";
 import { sha256 } from "@noble/hashes/sha256";
 import { chains } from "@/lib/chains/config";
+import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { request } from "@/lib/chains/scan-lanes";
-import { accountStorageKey, publicKeyFromAddress } from "@/lib/chains/polkadot";
+import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
 
 const hexOf = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 const bytesOf = (hex) =>
@@ -188,14 +189,27 @@ export async function polkadotBalancesMany(addresses) {
         method: "state_getStorage",
         params: [key],
       }));
-      const response = await request(chains.polkadot.rpc, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(calls),
-      });
-      if (!response.ok) throw new Error(`Polkadot network error (${response.status}).`);
-      const body = await response.json();
-      if (!Array.isArray(body)) throw new Error("Polkadot network error.");
+      // One batch may be spread over several relay nodes: a node that is busy
+      // costs this round nothing, because the next one answers the same calls.
+      let body = null;
+      let lastError = null;
+      for (const endpoint of POLKADOT_ENDPOINTS) {
+        try {
+          const response = await request(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(calls),
+          });
+          if (!response.ok) throw new Error(`Polkadot network error (${response.status}).`);
+          const parsed = await response.json();
+          if (!Array.isArray(parsed)) throw new Error("Polkadot network error.");
+          body = parsed;
+          break;
+        } catch (cause) {
+          lastError = cause;
+        }
+      }
+      if (!body) throw lastError || new Error("Polkadot network error.");
 
       const raw = new Map();
       for (const item of body) {
@@ -227,36 +241,24 @@ export async function polkadotBalancesMany(addresses) {
   return balances;
 }
 
-/** ADA totals per wallet, from one address_info call for many addresses. */
+/**
+ * ADA totals per wallet. Koios sends no CORS header, so the addresses go to the
+ * app's backend function, which reads the same indexer server-side.
+ */
 export async function cardanoBalancesMany(addressLists) {
   const balances = new Map();
   const flat = [];
   addressLists.forEach((addresses, index) => {
     for (const address of addresses || []) flat.push({ index, address });
   });
+  if (!flat.length) return balances;
 
-  await Promise.all(
-    group(flat, 100).map(async ({ list }) => {
-      const response = await request(`${chains.cardano.api}/address_info`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ _addresses: list.map((row) => row.address) }),
-      });
-      if (!response.ok) throw new Error(`Cardano network error (${response.status}).`);
-      const rows = await response.json();
-
-      const byAddress = new Map();
-      for (const row of Array.isArray(rows) ? rows : []) {
-        byAddress.set(row.address, Number(row.balance || 0) / 1e6);
-      }
-
-      for (const row of list) {
-        // A phrase can hold ADA on more than one base address, so they add up.
-        const amount = byAddress.get(row.address) || 0;
-        balances.set(row.index, (balances.get(row.index) || 0) + amount);
-      }
-    }),
-  );
+  const byAddress = await readCardanoBalances(flat.map((row) => row.address));
+  for (const row of flat) {
+    // A phrase can hold ADA on more than one base address, so they add up.
+    const amount = byAddress.get(row.address) || 0;
+    balances.set(row.index, (balances.get(row.index) || 0) + amount);
+  }
 
   return balances;
 }

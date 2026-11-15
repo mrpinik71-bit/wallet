@@ -4,16 +4,31 @@ import bs58 from "bs58";
 import { chains } from "@/lib/chains/config";
 import { fromHex, toHex, tronAddress, tronPrivateKey } from "@/lib/chains/derive";
 
-const API = chains.tron.api;
+// Three public hosts serve the same node API, so a busy one is not a failed
+// chain: a read falls through to the next host that answers.
+const APIS = [chains.tron.api, "https://tron-rpc.publicnode.com", "https://api.tronstack.io"];
+// A transfer stays on the primary node — a write is not worth spreading around.
+const PRIMARY = [chains.tron.api];
 
-async function post(path, body) {
-  const response = await fetch(`${API}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(`TRON network error (${response.status}).`);
-  return response.json();
+async function post(path, body, apis = APIS) {
+  let lastError = null;
+  for (const api of apis) {
+    try {
+      const response = await fetch(`${api}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        lastError = new Error(`TRON network error (${response.status}).`);
+        continue;
+      }
+      return response.json();
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+  throw lastError || new Error("TRON network error.");
 }
 
 function rawAddress(address) {
@@ -67,7 +82,7 @@ async function signAndBroadcast(transaction, mnemonic, account = 0) {
   bytes.set(fromHex(signature.s), 32);
   bytes[64] = signature.yParity;
 
-  const result = await post("/wallet/broadcasttransaction", { ...transaction, signature: [toHex(bytes)] });
+  const result = await post("/wallet/broadcasttransaction", { ...transaction, signature: [toHex(bytes)] }, PRIMARY);
   if (result.result === false) throw new Error(decodeMessage(result.message) || "The network rejected the transaction.");
   return result.txid || transaction.txID;
 }
@@ -78,25 +93,33 @@ export async function tronSend({ mnemonic, coin, to, amount, account = 0 }) {
 
   if (coin.kind === "token") {
     const units = BigInt(Math.round(Number(amount) * 10 ** coin.decimals));
-    const data = await post("/wallet/triggersmartcontract", {
-      owner_address: hexAddress(from),
-      contract_address: hexAddress(coin.address),
-      function_selector: "transfer(address,uint256)",
-      parameter: padParameter(to) + units.toString(16).padStart(64, "0"),
-      fee_limit: 100000000,
-      call_value: 0,
-      visible: false,
-    });
+    const data = await post(
+      "/wallet/triggersmartcontract",
+      {
+        owner_address: hexAddress(from),
+        contract_address: hexAddress(coin.address),
+        function_selector: "transfer(address,uint256)",
+        parameter: padParameter(to) + units.toString(16).padStart(64, "0"),
+        fee_limit: 100000000,
+        call_value: 0,
+        visible: false,
+      },
+      PRIMARY,
+    );
     if (!data.result?.result) throw new Error(decodeMessage(data.result?.message) || "The node rejected this transfer.");
     return signAndBroadcast(data.transaction, mnemonic, account);
   }
 
-  const data = await post("/wallet/createtransaction", {
-    owner_address: hexAddress(from),
-    to_address: hexAddress(to),
-    amount: Math.round(Number(amount) * 1e6),
-    visible: false,
-  });
+  const data = await post(
+    "/wallet/createtransaction",
+    {
+      owner_address: hexAddress(from),
+      to_address: hexAddress(to),
+      amount: Math.round(Number(amount) * 1e6),
+      visible: false,
+    },
+    PRIMARY,
+  );
   if (!data.txID) throw new Error(decodeMessage(data.Error) || "The node rejected this transfer.");
   return signAndBroadcast(data, mnemonic, account);
 }
