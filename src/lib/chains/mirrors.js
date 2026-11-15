@@ -17,6 +17,9 @@ export const CHAIN_ENDPOINTS = {
   // liquid.network stopped answering altogether, so Blockstream is the one
   // Liquid reader and its narrow lane in the scan is what keeps it answering.
   liquid: ["https://blockstream.info/liquid/api"],
+  // Stacks: the same indexer under a second hostname, with its own request
+  // budget, so a rate-limited host does not cost the chain its read.
+  stacks: ["https://api.hiro.so"],
   // Rippled servers, all accepting the same account_info call.
   xrp: ["https://xrplcluster.com", "https://xrpl.ws", "https://s1.ripple.com:51234", "https://s2.ripple.com:51234"],
 };

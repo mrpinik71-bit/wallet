@@ -90,7 +90,10 @@ const HOST_CAPS = {
   // BOB's node rate-limits the tail of a wide batch without saying so, so its
   // requests are spaced out instead of arriving in one burst.
   "rpc.gobob.xyz": 4,
-  "api.mainnet.hiro.so": 4,
+  // Hiro bans an address that goes over its window, so Stacks is served by two
+  // hostnames at a trickle each instead of one wide burst.
+  "api.mainnet.hiro.so": 3,
+  "api.hiro.so": 3,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
