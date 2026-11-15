@@ -2,6 +2,8 @@
 // one EVM chain, so a batch of wallets costs a few round trips per chain instead
 // of one request for every wallet on every chain.
 import { chains } from "@/lib/chains/config";
+import { customEndpoint } from "@/lib/chains/custom-rpc";
+import { drpcRelay } from "@/lib/chains/drpc-relay";
 import { request, resetLanes } from "@/lib/chains/scan-lanes";
 import { EVM_MIRRORS } from "@/lib/chains/scan-mirrors";
 
@@ -130,7 +132,15 @@ async function postCalls(chainId, calls) {
   }
 
   const chain = chains[chainId];
-  const endpoints = [...(EVM_MIRRORS[chainId] || []), chain.rpc, ...(chain.rpcs || [])].filter(Boolean);
+  // Your own dRPC key is asked first, then a node the user saved: both carry a
+  // batch without the shared public budget of the mirrors below.
+  const endpoints = [
+    drpcRelay(chainId),
+    customEndpoint(chainId),
+    ...(EVM_MIRRORS[chainId] || []),
+    chain.rpc,
+    ...(chain.rpcs || []),
+  ].filter(Boolean);
 
   let lastError = null;
   let busy = false;

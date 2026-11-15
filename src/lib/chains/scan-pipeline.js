@@ -3,6 +3,7 @@
 // few round trips per chain instead of a fresh set for each wallet, and the
 // next batch is already in flight while the current one is answered.
 import { chains } from "@/lib/chains/config";
+import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { createDerivePool } from "@/lib/chains/derive-pool";
 import { readBalance } from "@/lib/chains/portfolio";
 import { priceOf } from "@/lib/chains/prices";
@@ -27,9 +28,15 @@ const CHUNK = 10; // wallets per batch round
 const INFLIGHT = 2400; // batch rounds kept in flight — 2400 rounds of 10 run together (24,000 wallets per wave)
 const MAX_WAITING = 48000; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 10; // wallets handed to the network while the rest of the round is still being derived
-const PER_HOST = 500; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
+// Starting burst for a node nobody has measured. A public node handed 500
+// requests at once usually stops answering instead of refusing them, which read
+// as a failed chain; a modest start that widens while the node keeps answering
+// reaches the same width without that.
+const PER_HOST = 80;
 const MAX_CAP = 1200; // a node that keeps answering without a refusal may be widened this far
-const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
+// A rate-limited node answers slowly when it answers at all, so a single read
+// gets long enough to come back instead of being written off as a failed chain.
+const JOB_TIMEOUT = 8000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
@@ -48,9 +55,22 @@ const HOST_CAPS = {
   // Unregistered BlockCypher answers about three requests a second, so a wider
   // burst only earns a 429 for the whole DOGE/DASH group.
   "api.blockcypher.com": 4,
-  "mempool.space": 88,
-  "litecoinspace.org": 40,
-  "fullnode.mainnet.aptoslabs.com": 60,
+  // Dogecoin and Dash are read from these two explorers now; both answer a
+  // steady burst, so they carry the whole group instead of BlockCypher.
+  "chainz.cryptoid.info": 4,
+  "sochain.com": 24,
+  // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
+  // refusal costs the wallet its read, so these stay at the rate the node
+  // actually serves.
+  "mempool.space": 40,
+  // Three more Esplora hosts serve the same Bitcoin read, so a wallet is asked
+  // on whichever of the four is free instead of queueing behind one limit.
+  "mempool.bitaroo.net": 40,
+  "mempool.ninja": 40,
+  "mempool.emzy.de": 40,
+  "litecoinspace.org": 24,
+  "fullnode.mainnet.aptoslabs.com": 8,
+  "liquid.network": 8,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
   "xrpl.ws": 40,
@@ -65,17 +85,60 @@ const HOST_CAPS = {
   "mempool.fractalbitcoin.io": 40,
   // Blockstream refuses a wide burst on the UTXO list Liquid needs — and every
   // wallet asks for it twice — so this one is kept narrow.
-  "blockstream.info": 10,
+  // Blockstream refuses almost immediately — a single request past its budget
+  // comes back 429 — so its lane is kept to a trickle.
+  "blockstream.info": 3,
   // BOB's node rate-limits the tail of a wide batch without saying so, so its
   // requests are spaced out instead of arriving in one burst.
   "rpc.gobob.xyz": 4,
-  "api.mainnet.hiro.so": 32,
+  // Hiro bans an address that goes over its window, so Stacks is served by two
+  // hostnames at a trickle each instead of one wide burst.
+  "api.mainnet.hiro.so": 3,
+  "api.hiro.so": 3,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
   "rpc.mainnet.near.org": 48,
   "api.trongrid.io": 24,
   "graphql.mainnet.sui.io": 36,
+  // Gateways that serve many chains but reward a narrow burst; each widens on
+  // its own while it keeps answering.
+  "ethereum.drpc.org": 24,
+  "bsc.drpc.org": 24,
+  "base.drpc.org": 24,
+  "arbitrum.drpc.org": 24,
+  "polygon.drpc.org": 24,
+  "optimism.drpc.org": 24,
+  "avalanche.drpc.org": 24,
+  "linea.drpc.org": 24,
+  "scroll.drpc.org": 24,
+  "mantle.drpc.org": 24,
+  "celo.drpc.org": 24,
+  "gnosis.drpc.org": 24,
+  "cronos.drpc.org": 24,
+  "sonic.drpc.org": 24,
+  "sei.drpc.org": 24,
+  "unichain.drpc.org": 24,
+  "zksync.drpc.org": 20,
+  "polygon-zkevm.drpc.org": 20,
+  "core.drpc.org": 20,
+  "fantom.drpc.org": 20,
+  "megaeth.drpc.org": 20,
+  "bob.drpc.org": 20,
+  "merlin.drpc.org": 20,
+  // Small L2 nodes: a burst that is too wide is simply read as a failed chain,
+  // so these start narrow and widen only while they keep answering.
+  "api.mainnet.abs.xyz": 16,
+  "mainnet.megaeth.com": 16,
+  "rpc.mainnet.citrea.xyz": 16,
+  "rpc.citreascan.com": 16,
+  "public-node.rsk.co": 16,
+  "mycrypto.rsk.co": 16,
+  "rpc-mainnet-1.geb.network": 16,
+  "mainnet.era.zksync.io": 32,
+  "rpcapi.fantom.network": 24,
+  "zkevm-rpc.com": 16,
+  "polygon-zkevm.rpc.thirdweb.com": 24,
   // Token lists answer one wallet at a time, so these stay narrower than a
   // batch read and widen only while the indexer keeps answering.
   "eth.blockscout.com": 36,
@@ -97,10 +160,15 @@ const isRateLimited = (error) =>
   error?.status === 429 || /\(429\)|\b429\b|too many requests|rate limit|busy/i.test(String(error?.message || error));
 function lowerCap(host) {
   if (!host) return;
-  hostCaps.set(host, Math.max(2, Math.floor(capFor(host) / 2)));
+  const next = Math.max(2, Math.floor(capFor(host) / 2));
+  hostCaps.set(host, next);
   // A busy node has not gone away, so this refusal must not count towards death.
   hostFailures.delete(host);
   hostWins.delete(host);
+  // Already at its narrowest lane and still refusing: this node is out of
+  // budget for now, not merely busy, so it rests instead of being asked once
+  // per wallet for the rest of the scan.
+  if (next <= 2) deadHosts.set(host, Date.now() + DEAD_MS);
 }
 // Assets are routed by how their chain can be asked: EVM chains per network,
 // the multi-address chains together, everything else one wallet at a time.
@@ -150,10 +218,17 @@ const hostOfUrl = (url) => {
   }
 };
 
+// Dogecoin and Dash are read from their own explorer rather than the node in
+// the chain config, so their requests are paced by that host's lane.
+const READER_HOSTS = { dogecoin: "sochain.com", dash: "chainz.cryptoid.info" };
+
 const hostOf = (chainId) => {
+  // A node the user saved carries this chain, so its lanes are that node's own.
+  const custom = customEndpoint(chainId);
+  if (custom) return hostOfUrl(custom) || chainId;
   const chain = chains[chainId];
   const url = chain?.rpc || chain?.api || "";
-  return hostOfUrl(url) || chainId;
+  return READER_HOSTS[chainId] || hostOfUrl(url) || chainId;
 };
 
 // Public endpoints rate-limit bursts, so each host has its own request budget;
@@ -371,10 +446,18 @@ async function readBatch(batch, onWallet) {
         inner: true,
         run: async () => {
           // A mirror that went quiet costs this slice nothing: the same wallets
-          // are asked on the next endpoint that serves this chain.
-          for (const endpoint of [base, ...fallbacks]) {
+          // are asked on the next endpoint that serves this chain. When every
+          // endpoint of the chain is resting, the resting one is still asked —
+          // a chain served by a single node must never be reported failed only
+          // because that one node took a break.
+          const order = [base, ...fallbacks];
+          const live = order.filter((endpoint) => {
             const host = hostOfUrl(endpoint);
-            if (!host || hostDead(host)) continue;
+            return host && !hostDead(host);
+          });
+          for (const endpoint of live.length ? live : order) {
+            const host = hostOfUrl(endpoint);
+            if (!host) continue;
             const values = new Map();
             let refused = 0;
             await Promise.all(
@@ -389,13 +472,22 @@ async function readBatch(batch, onWallet) {
                   // Refused because the burst was too wide: narrow this node's
                   // lanes and retry on the next round rather than counting it dead.
                   if (isRateLimited(error)) refused += 1;
+                  globalThis.__scanErr ||= {};
+                  const k = `${coin.chain}|${host}|${String(error?.message).slice(0, 70)}`;
+                  globalThis.__scanErr[k] = (globalThis.__scanErr[k] || 0) + 1;
                   return undefined;
                 });
                 if (balance !== undefined) values.set(item.index, balance);
               }),
             );
             if (refused) lowerCap(host);
-            noteHost(host, values.size > 0, Math.max(0, slice.length - values.size - refused));
+            // A node that refused every wallet of the group is not serving this
+            // chain: counted as a loss, it is rested after a few rounds instead
+            // of absorbing the whole scan in a wall of 429s.
+            const lost = values.size
+              ? Math.max(0, slice.length - values.size - refused)
+              : Math.max(1, Math.ceil(slice.length / 4));
+            noteHost(host, values.size > 0, lost);
             // This mirror is serving the group, so the answer stands.
             if (values.size) {
               return new Map([...values].map(([index, balance]) => [index, new Map([[coin.id, balance]])]));

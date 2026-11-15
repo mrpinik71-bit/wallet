@@ -34,19 +34,61 @@ export function stacksAddress(hash) {
 }
 
 // Two public nodes serve the same API, so a busy one is not a failed chain.
-const HOSTS = [chains.stacks.api, "https://stacks-node-api.mainnet.stacks.co"];
+// api.hiro.so is a second hostname of the same indexer with its own request
+// budget: when one is rate-limited the other still answers.
+const HOSTS = [chains.stacks.api, "https://api.hiro.so"];
+// Each read starts on a different host, so a burst is shared between them.
+let turn = 0;
+// A host that answered 429 is over its window for a moment: asking it again
+// straight away only extends the refusal, so it is left alone until then.
+const paused = new Map();
+const pause = (host) => new Promise((resolve) => setTimeout(resolve, Math.max(0, (paused.get(host) || 0) - Date.now())));
+
+// Your own Hiro key lives on the server, where this app's relay adds it: a STX
+// read then uses your own request budget instead of the shared public one.
+const RELAY = "/api/rpc-hiro";
+
+async function relayBalance(address) {
+  if (typeof window === "undefined") return null;
+  try {
+    const response = await fetch(`${RELAY}?address=${encodeURIComponent(address)}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data?.stx?.balance === undefined) return null;
+    return Number(data.stx.balance || 0) / 1e6;
+  } catch {
+    return null;
+  }
+}
 
 /** STX balance in whole coins (1 STX = 1,000,000 microSTX). */
-export async function stacksBalance(address) {
+export async function stacksBalance(address, endpoint) {
+  // Your key first; an unset key answers at once and the public nodes below take
+  // over, so the chain is never left unreadable.
+  if (!endpoint) {
+    const own = await relayBalance(address);
+    if (own !== null) return own;
+  }
+
   let lastError = null;
-  for (const host of HOSTS) {
+  const order = endpoint ? [endpoint, ...HOSTS.filter((host) => host !== endpoint)] : HOSTS;
+  const rotated = order.length > 1 ? [...order.slice(turn % order.length), ...order.slice(0, turn % order.length)] : order;
+  turn += 1;
+  for (const host of rotated) {
+    if (paused.has(host)) await pause(host);
     try {
       const response = await fetch(`${host}/extended/v1/address/${address}/balances`);
+      if (response.status === 429) {
+        paused.set(host, Date.now() + 1800);
+        lastError = new Error("Stacks network error (429).");
+        continue;
+      }
       if (!response.ok) {
         lastError = new Error(`Stacks network error (${response.status}).`);
         continue;
       }
       const data = await response.json();
+      paused.delete(host);
       return Number(data?.stx?.balance || 0) / 1e6;
     } catch (cause) {
       lastError = cause;

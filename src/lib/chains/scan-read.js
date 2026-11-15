@@ -7,7 +7,36 @@ const hexOf = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(
 const bytesOf = (hex) =>
   Uint8Array.from((hex.replace(/^0x/, "").match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16)));
 
+// BlockCypher blocks a whole IP with 403 once its free allowance is used, which
+// left Dogecoin and Dash unreadable in a burst. Each of the two now has its own
+// explorer reader, checked from a browser origin (it answers and sends a CORS
+// header), and BlockCypher is kept only as the fallback.
+async function dashBalance(address) {
+  const response = await fetch(`https://chainz.cryptoid.info/dash/api.dws?q=getbalance&a=${address}`);
+  if (!response.ok) throw new Error(`Dash explorer error (${response.status}).`);
+  return Number(await response.text()) || 0;
+}
+
+async function dogecoinBalance(address) {
+  const response = await fetch(`https://sochain.com/api/v3/balance/DOGE/${address}`);
+  if (!response.ok) throw new Error(`Dogecoin network error (${response.status}).`);
+  const data = await response.json();
+  const confirmed = data?.data?.confirmed;
+  if (confirmed === undefined) throw new Error("Dogecoin network error.");
+  return Number(confirmed) || 0;
+}
+
+const DEDICATED_READERS = { dash: dashBalance, dogecoin: dogecoinBalance };
+
 export async function blockcypherBalance(chainId, address) {
+  const reader = DEDICATED_READERS[chainId];
+  if (reader) {
+    try {
+      return await reader(address);
+    } catch {
+      // The explorer did not answer: BlockCypher still gets the last word.
+    }
+  }
   const chain = chains[chainId];
   const response = await fetch(`${chain.api}/addrs/${address}/balance`);
   if (!response.ok) throw new Error(`${chain.name} network error (${response.status}).`);

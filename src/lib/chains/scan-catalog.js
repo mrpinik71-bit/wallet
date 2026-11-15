@@ -167,7 +167,10 @@ const TOKENS = [
 // Botanix's own node is gone; the only node left (thirdweb) answers one call per
 // request, so it would drag every scan down to single reads. BEVM reads again
 // through its GEB mainnet node, so it is scanned like any other chain.
-const OFFLINE_CHAINS = new Set(["botanix"]);
+// Liquid has no indexer left that serves a bulk scan: liquid.network stopped
+// answering and Blockstream refuses its burst, so L-BTC is read in the wallet
+// itself (one address at a time) but not in the scanner.
+const OFFLINE_CHAINS = new Set(["botanix", "liquid"]);
 
 export const SCAN_ASSETS = [...Object.keys(COINGECKO).map(native), ...TOKENS].filter(
   (asset) => !OFFLINE_CHAINS.has(asset.chain),
