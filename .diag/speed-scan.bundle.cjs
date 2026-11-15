@@ -27260,8 +27260,8 @@ var HOST_CAPS = {
   "rpc.gobob.xyz": 4,
   // Hiro bans an address that goes over its window, so Stacks is served by two
   // hostnames at a trickle each instead of one wide burst.
-  "api.mainnet.hiro.so": 4,
-  "api.hiro.so": 4,
+  "api.mainnet.hiro.so": 8,
+  "api.hiro.so": 8,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
