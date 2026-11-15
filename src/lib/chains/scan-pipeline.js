@@ -35,7 +35,7 @@ const PER_HOST = 80;
 const MAX_CAP = 1200; // a node that keeps answering without a refusal may be widened this far
 // A rate-limited node answers slowly when it answers at all, so a single read
 // gets long enough to come back instead of being written off as a failed chain.
-const JOB_TIMEOUT = 12000; // a stalled node must not hold a whole batch back
+const JOB_TIMEOUT = 8000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
