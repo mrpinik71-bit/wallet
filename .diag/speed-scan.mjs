@@ -1,7 +1,10 @@
 // Diagnostic: one small scan round, timed, with the app's relays served locally.
 // Exported as run() so it can be driven from the executor.
+import fs from "node:fs";
 import { generateMnemonic } from "@/lib/bip39";
 import { scanPhrases } from "@/lib/chains/scan-pipeline";
+
+const PROGRESS = "/app/.diag/live-progress.json";
 
 function installRelays() {
   const realFetch = globalThis.fetch;
