@@ -14,7 +14,9 @@ export const CHAIN_ENDPOINTS = {
   ],
   litecoin: ["https://litecoinspace.org/api"],
   fractal: ["https://mempool.fractalbitcoin.io/api"],
-  liquid: ["https://liquid.network/api", "https://blockstream.info/liquid/api"],
+  // liquid.network stopped answering altogether, so Blockstream is the one
+  // Liquid reader and its narrow lane in the scan is what keeps it answering.
+  liquid: ["https://blockstream.info/liquid/api"],
   // Rippled servers, all accepting the same account_info call.
   xrp: ["https://xrplcluster.com", "https://xrpl.ws", "https://s1.ripple.com:51234", "https://s2.ripple.com:51234"],
 };

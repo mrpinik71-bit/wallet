@@ -54,6 +54,10 @@ const HOST_CAPS = {
   // Unregistered BlockCypher answers about three requests a second, so a wider
   // burst only earns a 429 for the whole DOGE/DASH group.
   "api.blockcypher.com": 4,
+  // Dogecoin and Dash are read from these two explorers now; both answer a
+  // steady burst, so they carry the whole group instead of BlockCypher.
+  "chainz.cryptoid.info": 24,
+  "sochain.com": 24,
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
@@ -86,7 +90,7 @@ const HOST_CAPS = {
   // BOB's node rate-limits the tail of a wide batch without saying so, so its
   // requests are spaced out instead of arriving in one burst.
   "rpc.gobob.xyz": 4,
-  "api.mainnet.hiro.so": 12,
+  "api.mainnet.hiro.so": 4,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
@@ -152,10 +156,15 @@ const isRateLimited = (error) =>
   error?.status === 429 || /\(429\)|\b429\b|too many requests|rate limit|busy/i.test(String(error?.message || error));
 function lowerCap(host) {
   if (!host) return;
-  hostCaps.set(host, Math.max(2, Math.floor(capFor(host) / 2)));
+  const next = Math.max(2, Math.floor(capFor(host) / 2));
+  hostCaps.set(host, next);
   // A busy node has not gone away, so this refusal must not count towards death.
   hostFailures.delete(host);
   hostWins.delete(host);
+  // Already at its narrowest lane and still refusing: this node is out of
+  // budget for now, not merely busy, so it rests instead of being asked once
+  // per wallet for the rest of the scan.
+  if (next <= 2) deadHosts.set(host, Date.now() + DEAD_MS);
 }
 // Assets are routed by how their chain can be asked: EVM chains per network,
 // the multi-address chains together, everything else one wallet at a time.
