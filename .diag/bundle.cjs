@@ -27367,13 +27367,9 @@ var HOST_CAPS = {
   // Unregistered BlockCypher answers about three requests a second, so a wider
   // burst only earns a 429 for the whole DOGE/DASH group.
   "api.blockcypher.com": 4,
-  // Esplora-style nodes refuse a sustained burst instead of a single wide one:
-  // they are given fewer lanes so the burst never climbs, and the queue behind
-  // each lane keeps every wallet moving instead of earning a 429.
-  "mempool.space": 40,
-  "litecoinspace.org": 20,
-  "liquid.network": 10,
-  "fullnode.mainnet.aptoslabs.com": 40,
+  "mempool.space": 88,
+  "litecoinspace.org": 40,
+  "fullnode.mainnet.aptoslabs.com": 60,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
   "xrpl.ws": 40,
