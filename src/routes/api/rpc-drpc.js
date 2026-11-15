@@ -5,7 +5,8 @@ import { DRPC_NETWORKS } from "@/lib/chains/drpc-relay";
 // The dRPC gateway, called with YOUR key — added here on the server, so the key
 // is never part of the app's code or of anything the browser can read.
 // The scan posts its JSON-RPC batch to this route and gets the node's answer.
-const GATEWAY = "https://lb.drpc.org/ogrpc";
+// Your dashboard's link shape: https://lb.drpc.live/<network>/<KEY>
+const GATEWAY = "https://lb.drpc.live";
 const NETWORKS = new Set(Object.values(DRPC_NETWORKS));
 
 // Only balance reads are relayed: this route is a wallet's reader, not a free
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/api/rpc-drpc")({
         );
         if (!readsOnly) return Response.json({ error: "Method not relayed." }, { status: 403 });
 
-        const response = await fetch(`${GATEWAY}?network=${encodeURIComponent(network)}&dkey=${encodeURIComponent(key)}`, {
+        const response = await fetch(`${GATEWAY}/${encodeURIComponent(network)}/${encodeURIComponent(key)}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body,
