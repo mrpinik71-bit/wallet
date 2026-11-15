@@ -26508,7 +26508,7 @@ var TOKENS = [
   // Airdrop tokens that live as SPL tokens on Solana rather than on their own chain.
   token2("solana", "grass-sol", "GRASS", "Grass", "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs", 9, "grass", "#1DC46D")
 ];
-var OFFLINE_CHAINS = /* @__PURE__ */ new Set(["botanix", "liquid"]);
+var OFFLINE_CHAINS = /* @__PURE__ */ new Set(["botanix", "liquid", "dash"]);
 var SCAN_ASSETS = [...Object.keys(COINGECKO).map(native2), ...TOKENS].filter(
   (asset) => !OFFLINE_CHAINS.has(asset.chain)
 );
@@ -26543,7 +26543,7 @@ function drpcRelay(chainId) {
 }
 
 // src/lib/chains/scan-lanes.js
-var START_LANES = 8;
+var START_LANES = 16;
 var lanes = /* @__PURE__ */ new Map();
 var caps = /* @__PURE__ */ new Map();
 var capOf = (host) => caps.get(host) ?? START_LANES;
@@ -26766,7 +26766,7 @@ var EVM_MIRRORS = {
 };
 
 // src/lib/chains/scan-batch.js
-var CALLS_PER_REQUEST = 200;
+var CALLS_PER_REQUEST = 400;
 var CHAIN_CALL_LIMIT = { bob: 20 };
 var sizeCaps = /* @__PURE__ */ new Map();
 var endpointCaps = /* @__PURE__ */ new Map();
@@ -27207,14 +27207,14 @@ async function cardanoBalancesMany(addressLists) {
 }
 
 // src/lib/chains/scan-pipeline.js
-var CHUNK = 10;
-var INFLIGHT = 2400;
-var MAX_WAITING = 48e3;
-var READ_CHUNK = 10;
-var PER_HOST = 80;
-var MAX_CAP = 1200;
-var JOB_TIMEOUT = 8e3;
-var SLOW_JOB_TIMEOUT = 6e4;
+var CHUNK = 40;
+var INFLIGHT = 3e3;
+var MAX_WAITING = 32e3;
+var READ_CHUNK = 20;
+var PER_HOST = 160;
+var MAX_CAP = 2400;
+var JOB_TIMEOUT = 6e3;
+var SLOW_JOB_TIMEOUT = 3e4;
 var DEAD_AFTER = 20;
 var HOST_CAPS = {
   // Measured: these answer the burst below without a single 429, so they start
@@ -27229,13 +27229,13 @@ var HOST_CAPS = {
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
-  "mempool.space": 40,
+  "mempool.space": 64,
   // Three more Esplora hosts serve the same Bitcoin read, so a wallet is asked
   // on whichever of the four is free instead of queueing behind one limit.
-  "mempool.bitaroo.net": 40,
-  "mempool.ninja": 40,
-  "mempool.emzy.de": 40,
-  "litecoinspace.org": 24,
+  "mempool.bitaroo.net": 64,
+  "mempool.ninja": 64,
+  "mempool.emzy.de": 64,
+  "litecoinspace.org": 40,
   "fullnode.mainnet.aptoslabs.com": 8,
   "liquid.network": 8,
   "xrplcluster.com": 48,
@@ -27260,39 +27260,39 @@ var HOST_CAPS = {
   "rpc.gobob.xyz": 4,
   // Hiro bans an address that goes over its window, so Stacks is served by two
   // hostnames at a trickle each instead of one wide burst.
-  "api.mainnet.hiro.so": 3,
-  "api.hiro.so": 3,
+  "api.mainnet.hiro.so": 4,
+  "api.hiro.so": 4,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
-  "rpc.mainnet.near.org": 48,
-  "api.trongrid.io": 24,
-  "graphql.mainnet.sui.io": 36,
+  "rpc.mainnet.near.org": 64,
+  "api.trongrid.io": 40,
+  "graphql.mainnet.sui.io": 48,
   // Gateways that serve many chains but reward a narrow burst; each widens on
   // its own while it keeps answering.
-  "ethereum.drpc.org": 24,
-  "bsc.drpc.org": 24,
-  "base.drpc.org": 24,
-  "arbitrum.drpc.org": 24,
-  "polygon.drpc.org": 24,
-  "optimism.drpc.org": 24,
-  "avalanche.drpc.org": 24,
-  "linea.drpc.org": 24,
-  "scroll.drpc.org": 24,
-  "mantle.drpc.org": 24,
-  "celo.drpc.org": 24,
-  "gnosis.drpc.org": 24,
-  "cronos.drpc.org": 24,
-  "sonic.drpc.org": 24,
-  "sei.drpc.org": 24,
-  "unichain.drpc.org": 24,
-  "zksync.drpc.org": 20,
-  "polygon-zkevm.drpc.org": 20,
-  "core.drpc.org": 20,
-  "fantom.drpc.org": 20,
-  "megaeth.drpc.org": 20,
-  "bob.drpc.org": 20,
-  "merlin.drpc.org": 20,
+  "ethereum.drpc.org": 40,
+  "bsc.drpc.org": 40,
+  "base.drpc.org": 40,
+  "arbitrum.drpc.org": 40,
+  "polygon.drpc.org": 40,
+  "optimism.drpc.org": 40,
+  "avalanche.drpc.org": 40,
+  "linea.drpc.org": 40,
+  "scroll.drpc.org": 40,
+  "mantle.drpc.org": 40,
+  "celo.drpc.org": 40,
+  "gnosis.drpc.org": 40,
+  "cronos.drpc.org": 40,
+  "sonic.drpc.org": 40,
+  "sei.drpc.org": 40,
+  "unichain.drpc.org": 40,
+  "zksync.drpc.org": 32,
+  "polygon-zkevm.drpc.org": 32,
+  "core.drpc.org": 32,
+  "fantom.drpc.org": 32,
+  "megaeth.drpc.org": 32,
+  "bob.drpc.org": 32,
+  "merlin.drpc.org": 32,
   // Small L2 nodes: a burst that is too wide is simply read as a failed chain,
   // so these start narrow and widen only while they keep answering.
   "api.mainnet.abs.xyz": 16,
@@ -27403,8 +27403,8 @@ function noteHost(host, ok, weight = 1) {
     hostFailures.delete(host);
     const wins = (hostWins.get(host) || 0) + 1;
     hostWins.set(host, wins);
-    if (wins % 25 === 0 && capFor(host) < MAX_CAP) {
-      hostCaps.set(host, Math.min(MAX_CAP, capFor(host) + 3));
+    if (wins % 10 === 0 && capFor(host) < MAX_CAP) {
+      hostCaps.set(host, Math.min(MAX_CAP, capFor(host) + 6));
     }
     return;
   }
@@ -27535,9 +27535,9 @@ async function readBatch(batch, onWallet) {
     });
     if (!items.length) continue;
     const endpoints = endpointsFor(coin.chain, chains[coin.chain]?.rpc || chains[coin.chain]?.api);
-    const lanes3 = Math.min(endpoints.length, items.length);
+    const lanes3 = Math.min(Math.max(endpoints.length, 1) * 2, items.length);
     for (let lane = 0; lane < lanes3; lane += 1) {
-      const base = endpoints[lane];
+      const base = endpoints[lane % endpoints.length];
       const slice = items.filter((_, position) => position % lanes3 === lane);
       const fallbacks = endpoints.filter((endpoint) => endpoint !== base);
       jobs.push({

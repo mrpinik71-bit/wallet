@@ -170,7 +170,10 @@ const TOKENS = [
 // Liquid has no indexer left that serves a bulk scan: liquid.network stopped
 // answering and Blockstream refuses its burst, so L-BTC is read in the wallet
 // itself (one address at a time) but not in the scanner.
-const OFFLINE_CHAINS = new Set(["botanix", "liquid"]);
+// Dash's explorers demand minutes-long pacing now (chainz answers 429, insight
+// sits behind a browser challenge), so every Dash read failed and every round
+// waited on it. Dash is out of the scanner until a working indexer exists.
+const OFFLINE_CHAINS = new Set(["botanix", "liquid", "dash"]);
 
 export const SCAN_ASSETS = [...Object.keys(COINGECKO).map(native), ...TOKENS].filter(
   (asset) => !OFFLINE_CHAINS.has(asset.chain),

@@ -24,23 +24,23 @@ import {
 // wallets are grouped a few at a time. Many small rounds are kept in flight
 // instead, so the scan still moves thousands of wallets at once — a refused
 // small batch costs a handful of wallets, never a whole wall of them.
-const CHUNK = 10; // wallets per batch round
-const INFLIGHT = 2400; // batch rounds kept in flight — 2400 rounds of 10 run together (24,000 wallets per wave)
-const MAX_WAITING = 48000; // wallets prepared and waiting across all rounds — the memory ceiling
-const READ_CHUNK = 10; // wallets handed to the network while the rest of the round is still being derived
+const CHUNK = 40; // wallets per batch round
+const INFLIGHT = 3000; // batch rounds kept in flight — 3000 rounds of 40 run together (120,000 wallets per wave)
+const MAX_WAITING = 32000; // wallets prepared and waiting across all rounds — the memory ceiling
+const READ_CHUNK = 20; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
 // requests at once usually stops answering instead of refusing them, which read
 // as a failed chain; a modest start that widens while the node keeps answering
 // reaches the same width without that.
-const PER_HOST = 80;
-const MAX_CAP = 1200; // a node that keeps answering without a refusal may be widened this far
+const PER_HOST = 160;
+const MAX_CAP = 2400; // a node that keeps answering without a refusal may be widened this far
 // A rate-limited node answers slowly when it answers at all, so a single read
 // gets long enough to come back instead of being written off as a failed chain.
-const JOB_TIMEOUT = 8000; // a stalled node must not hold a whole batch back
+const JOB_TIMEOUT = 6000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
-const SLOW_JOB_TIMEOUT = 60000;
+const SLOW_JOB_TIMEOUT = 30000;
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
 // High enough that a burst of 429s never trips it, low enough that a dead node
@@ -62,13 +62,13 @@ const HOST_CAPS = {
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
-  "mempool.space": 40,
+  "mempool.space": 64,
   // Three more Esplora hosts serve the same Bitcoin read, so a wallet is asked
   // on whichever of the four is free instead of queueing behind one limit.
-  "mempool.bitaroo.net": 40,
-  "mempool.ninja": 40,
-  "mempool.emzy.de": 40,
-  "litecoinspace.org": 24,
+  "mempool.bitaroo.net": 64,
+  "mempool.ninja": 64,
+  "mempool.emzy.de": 64,
+  "litecoinspace.org": 40,
   "fullnode.mainnet.aptoslabs.com": 8,
   "liquid.network": 8,
   "xrplcluster.com": 48,
@@ -93,39 +93,39 @@ const HOST_CAPS = {
   "rpc.gobob.xyz": 4,
   // Hiro bans an address that goes over its window, so Stacks is served by two
   // hostnames at a trickle each instead of one wide burst.
-  "api.mainnet.hiro.so": 3,
-  "api.hiro.so": 3,
+  "api.mainnet.hiro.so": 4,
+  "api.hiro.so": 4,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
-  "rpc.mainnet.near.org": 48,
-  "api.trongrid.io": 24,
-  "graphql.mainnet.sui.io": 36,
+  "rpc.mainnet.near.org": 64,
+  "api.trongrid.io": 40,
+  "graphql.mainnet.sui.io": 48,
   // Gateways that serve many chains but reward a narrow burst; each widens on
   // its own while it keeps answering.
-  "ethereum.drpc.org": 24,
-  "bsc.drpc.org": 24,
-  "base.drpc.org": 24,
-  "arbitrum.drpc.org": 24,
-  "polygon.drpc.org": 24,
-  "optimism.drpc.org": 24,
-  "avalanche.drpc.org": 24,
-  "linea.drpc.org": 24,
-  "scroll.drpc.org": 24,
-  "mantle.drpc.org": 24,
-  "celo.drpc.org": 24,
-  "gnosis.drpc.org": 24,
-  "cronos.drpc.org": 24,
-  "sonic.drpc.org": 24,
-  "sei.drpc.org": 24,
-  "unichain.drpc.org": 24,
-  "zksync.drpc.org": 20,
-  "polygon-zkevm.drpc.org": 20,
-  "core.drpc.org": 20,
-  "fantom.drpc.org": 20,
-  "megaeth.drpc.org": 20,
-  "bob.drpc.org": 20,
-  "merlin.drpc.org": 20,
+  "ethereum.drpc.org": 40,
+  "bsc.drpc.org": 40,
+  "base.drpc.org": 40,
+  "arbitrum.drpc.org": 40,
+  "polygon.drpc.org": 40,
+  "optimism.drpc.org": 40,
+  "avalanche.drpc.org": 40,
+  "linea.drpc.org": 40,
+  "scroll.drpc.org": 40,
+  "mantle.drpc.org": 40,
+  "celo.drpc.org": 40,
+  "gnosis.drpc.org": 40,
+  "cronos.drpc.org": 40,
+  "sonic.drpc.org": 40,
+  "sei.drpc.org": 40,
+  "unichain.drpc.org": 40,
+  "zksync.drpc.org": 32,
+  "polygon-zkevm.drpc.org": 32,
+  "core.drpc.org": 32,
+  "fantom.drpc.org": 32,
+  "megaeth.drpc.org": 32,
+  "bob.drpc.org": 32,
+  "merlin.drpc.org": 32,
   // Small L2 nodes: a burst that is too wide is simply read as a failed chain,
   // so these start narrow and widen only while they keep answering.
   "api.mainnet.abs.xyz": 16,
@@ -281,8 +281,10 @@ function noteHost(host, ok, weight = 1) {
     // lanes into real throughput instead of queued requests.
     const wins = (hostWins.get(host) || 0) + 1;
     hostWins.set(host, wins);
-    if (wins % 25 === 0 && capFor(host) < MAX_CAP) {
-      hostCaps.set(host, Math.min(MAX_CAP, capFor(host) + 3));
+    // Widened every few answers instead of every 25, so a node reaches its real
+    // width inside the first round instead of halfway through a long scan.
+    if (wins % 10 === 0 && capFor(host) < MAX_CAP) {
+      hostCaps.set(host, Math.min(MAX_CAP, capFor(host) + 6));
     }
     return;
   }
@@ -430,10 +432,12 @@ async function readBatch(batch, onWallet) {
     if (!items.length) continue;
 
     const endpoints = endpointsFor(coin.chain, chains[coin.chain]?.rpc || chains[coin.chain]?.api);
-    const lanes = Math.min(endpoints.length, items.length);
+    // Two lanes per mirror: a single-address chain is asked on each of its
+    // mirrors twice as often, so a round does not queue behind one lane each.
+    const lanes = Math.min(Math.max(endpoints.length, 1) * 2, items.length);
 
     for (let lane = 0; lane < lanes; lane += 1) {
-      const base = endpoints[lane];
+      const base = endpoints[lane % endpoints.length];
       // Round-robin, so every mirror gets an even share of the wallets.
       const slice = items.filter((_, position) => position % lanes === lane);
       const fallbacks = endpoints.filter((endpoint) => endpoint !== base);
