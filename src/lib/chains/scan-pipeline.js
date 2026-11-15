@@ -59,7 +59,12 @@ const HOST_CAPS = {
   // These refuse a wide burst: they start wide enough to matter, then a 429
   // halves them for the rest of the run instead of failing the read.
   "mempool.fractalbitcoin.io": 40,
-  "blockstream.info": 28,
+  // Blockstream refuses a wide burst on the UTXO list Liquid needs — and every
+  // wallet asks for it twice — so this one is kept narrow.
+  "blockstream.info": 10,
+  // BOB's node rate-limits the tail of a wide batch without saying so, so its
+  // requests are spaced out instead of arriving in one burst.
+  "rpc.gobob.xyz": 4,
   "api.mainnet.hiro.so": 32,
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,

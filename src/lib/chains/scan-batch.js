@@ -9,6 +9,10 @@ import { EVM_MIRRORS } from "@/lib/chains/scan-mirrors";
 // larger group means far fewer round trips per round of wallets; a node that
 // caps the size answers 400 and its group is split for the rest of the run.
 const CALLS_PER_REQUEST = 200;
+// A few nodes answer wide batches only up to a point and then rate-limit the
+// rest of the same request: half the wallets come back and the rest look
+// unreadable. These chains are asked in smaller batches from the start.
+const CHAIN_CALL_LIMIT = { bob: 20 };
 // Nodes differ: most accept 90 calls in one request, but some (zkEVM's node, for
 // one) refuse anything over a handful. The smallest size a node accepts is
 // remembered per chain, so a refused batch is split once and every later
@@ -100,8 +104,16 @@ async function postTo(chainId, endpoint, calls) {
   if (!Array.isArray(body)) {
     const error = new Error(`${chainId} rejected the batch`);
     // A node under load sometimes answers 200 with one error object instead.
-    if (/rate|limit|busy|capacity|exceed|too many/i.test(JSON.stringify(body || {}))) error.status = 429;
-    else error.batchRefused = calls.length > 1;
+    // A size complaint comes first: the node named the batch, so the fix is a
+    // smaller batch — reading it as "busy" left the chain resting instead.
+    const text = JSON.stringify(body || {});
+    if (/batch|exceed|maximum of \d+|too many rpc calls/i.test(text)) {
+      error.batchRefused = calls.length > 1;
+    } else if (/rate|limit|busy|capacity|too many/i.test(text)) {
+      error.status = 429;
+    } else {
+      error.batchRefused = calls.length > 1;
+    }
     throw error;
   }
   return body;
@@ -156,7 +168,7 @@ async function postCalls(chainId, calls) {
 
 /** Sends calls, splitting a refused batch and asking failed items again once. */
 async function readCalls(chainId, calls) {
-  const cap = sizeCaps.get(chainId) || CALLS_PER_REQUEST;
+  const cap = Math.min(sizeCaps.get(chainId) || CALLS_PER_REQUEST, CHAIN_CALL_LIMIT[chainId] || CALLS_PER_REQUEST);
   if (calls.length > cap) {
     const values = new Map();
     for (let start = 0; start < calls.length; start += cap) {

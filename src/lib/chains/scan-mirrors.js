@@ -84,7 +84,9 @@ export const EVM_MIRRORS = {
     "https://unichain-rpc.publicnode.com", // 40
     "https://mainnet.unichain.org", // 10
   ],
-  zksync: ["https://zksync.gateway.tenderly.co"], // 10
+  // The chain's own node answers the widest batches; the gateway mirror below
+  // only ever earned a 429 at this width, so it is left out.
+  zksync: [],
   polygonzkevm: [
     "https://zkevm-rpc.com", // 40
     "https://polygon-zkevm.rpc.thirdweb.com", // 20

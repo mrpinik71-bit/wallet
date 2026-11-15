@@ -21,12 +21,16 @@ function group(list, size) {
   return groups;
 }
 
-/** SOL balances for many accounts (lamports, one call per 90 wallets). */
+// The public Solana node answers at most 10 accounts per call, and refuses the
+// whole request above that — which used to report every wallet as a failed read.
+const SOLANA_ACCOUNTS = 10;
+
+/** SOL balances for many accounts (lamports, one call per 10 wallets). */
 export async function solanaBalancesMany(addresses) {
   const balances = new Map();
 
   await Promise.all(
-    group(addresses, 90).map(async ({ start, list }) => {
+    group(addresses, SOLANA_ACCOUNTS).map(async ({ start, list }) => {
       const response = await request(chains.solana.rpc, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -85,7 +89,7 @@ export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
   const balances = new Map();
 
   await Promise.all(
-    group(addresses, 90).map(async ({ start, list }) => {
+    group(addresses, SOLANA_ACCOUNTS).map(async ({ start, list }) => {
       const accounts = list.map((address) => associatedTokenAddress(address, mint));
       const response = await request(chains.solana.rpc, {
         method: "POST",
