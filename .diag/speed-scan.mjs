@@ -35,7 +35,7 @@ function installRelays() {
   };
 }
 
-async function run(n = 10) {
+async function run(n = 10, deadlineSeconds = 0) {
   installRelays();
   const entries = [];
   for (let i = 0; i < n; i += 1) entries.push({ phrase: await generateMnemonic(12), words: 12, line: i + 1 });
