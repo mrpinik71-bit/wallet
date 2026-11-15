@@ -227,7 +227,7 @@ export const chains = {
     family: "evm",
     chainId: 250,
     rpc: "https://rpcapi.fantom.network",
-    explorer: "https://ftmscan.com",
+    explorer: "https://explorer.fantom.network",
     symbol: "FTM",
     color: "#1969FF",
   },
@@ -236,7 +236,8 @@ export const chains = {
     name: "Polygon zkEVM",
     family: "evm",
     chainId: 1101,
-    rpc: "https://polygon-zkevm.drpc.org",
+    // drpc answers one call but refuses batches; this node serves wide ones.
+    rpc: "https://zkevm-rpc.com",
     // Free gateways come and go: the second endpoint is used when the first one
     // is busy, so a scan never reports zkEVM as failed because of one node.
     rpcs: ["https://polygon-zkevm.rpc.thirdweb.com"],
@@ -331,7 +332,7 @@ export const chains = {
     family: "evm",
     chainId: 30,
     rpc: "https://public-node.rsk.co",
-    explorer: "https://explorer.rsk.co",
+    explorer: "https://explorer.rootstock.io",
     symbol: "RBTC",
     color: "#FF9416",
   },
@@ -360,7 +361,9 @@ export const chains = {
     name: "Botanix",
     family: "evm",
     chainId: 3637,
-    rpc: "https://rpc.botanixlabs.com",
+    // Botanix's own node stopped answering; thirdweb still serves the chain,
+    // though only one call per request (the reader narrows its batch for it).
+    rpc: "https://3637.rpc.thirdweb.com",
     explorer: "https://botanixscan.io",
     symbol: "BTC",
     color: "#8FD14F",
@@ -371,8 +374,10 @@ export const chains = {
     name: "BEVM",
     family: "evm",
     chainId: 11501,
-    rpc: "https://rpc-mainnet-1.bevm.io",
-    explorer: "https://scan.bevm.io",
+    // BEVM runs its mainnet nodes under the GEB name now; this one serves full
+    // 40-call batches, the retired gateway refused every request.
+    rpc: "https://rpc-mainnet-1.geb.network",
+    explorer: "https://scan.geb.network",
     symbol: "BTC",
     color: "#F0A32B",
     decimals: 18,
@@ -393,7 +398,7 @@ export const chains = {
     name: "Dogecoin",
     family: "blockcypher",
     api: "https://api.blockcypher.com/v1/doge/main",
-    explorer: "https://dogechain.info",
+    explorer: "https://dogechain.com",
     path: "m/44'/3'/0'/0/0",
     p2pkh: 0x1e,
     symbol: "DOGE",

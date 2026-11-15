@@ -37,7 +37,7 @@ export const EVM_MIRRORS = {
   ],
   optimism: [
     "https://optimism-rpc.publicnode.com", // 40
-    "https://mainnet.optimism.io", // 10
+    "https://1rpc.io/op", // 20
   ],
   avalanche: [
     "https://api.avax.network/ext/bc/C/rpc", // 40
@@ -49,7 +49,7 @@ export const EVM_MIRRORS = {
   ],
   scroll: [
     "https://scroll-rpc.publicnode.com", // 40
-    "https://rpc.scroll.io", // 10
+    "https://scroll.rpc.thirdweb.com", // 20
   ],
   mantle: [
     "https://mantle-rpc.publicnode.com", // 40
@@ -65,7 +65,7 @@ export const EVM_MIRRORS = {
   ],
   cronos: [
     "https://cronos-evm-rpc.publicnode.com", // 40
-    "https://evm.cronos.org", // 10
+    "https://cronos.rpc.thirdweb.com", // 20
   ],
   sonic: ["https://sonic-rpc.publicnode.com"], // 40
   sei: [
