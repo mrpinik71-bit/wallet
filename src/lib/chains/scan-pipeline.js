@@ -23,9 +23,9 @@ import {
 // wallets are grouped a few at a time. Many small rounds are kept in flight
 // instead, so the scan still moves thousands of wallets at once — a refused
 // small batch costs a handful of wallets, never a whole wall of them.
-const CHUNK = 20; // wallets per batch round
-const INFLIGHT = 500; // batch rounds kept in flight — 500 small rounds run together
-const MAX_WAITING = 20000; // wallets prepared and waiting across all rounds — the memory ceiling
+const CHUNK = 10; // wallets per batch round
+const INFLIGHT = 10000; // batch rounds kept in flight — 10,000 rounds of 10 run together
+const MAX_WAITING = 100000; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 10; // wallets handed to the network while the rest of the round is still being derived
 const PER_HOST = 200; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
 const MAX_CAP = 400; // a node that keeps answering without a refusal may be widened this far
