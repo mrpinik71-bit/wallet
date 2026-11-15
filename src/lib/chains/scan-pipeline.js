@@ -58,6 +58,11 @@ const HOST_CAPS = {
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
   "mempool.space": 40,
+  // Three more Esplora hosts serve the same Bitcoin read, so a wallet is asked
+  // on whichever of the four is free instead of queueing behind one limit.
+  "mempool.bitaroo.net": 40,
+  "mempool.ninja": 40,
+  "mempool.emzy.de": 40,
   "litecoinspace.org": 24,
   "fullnode.mainnet.aptoslabs.com": 16,
   "liquid.network": 16,
@@ -421,10 +426,18 @@ async function readBatch(batch, onWallet) {
         inner: true,
         run: async () => {
           // A mirror that went quiet costs this slice nothing: the same wallets
-          // are asked on the next endpoint that serves this chain.
-          for (const endpoint of [base, ...fallbacks]) {
+          // are asked on the next endpoint that serves this chain. When every
+          // endpoint of the chain is resting, the resting one is still asked —
+          // a chain served by a single node must never be reported failed only
+          // because that one node took a break.
+          const order = [base, ...fallbacks];
+          const live = order.filter((endpoint) => {
             const host = hostOfUrl(endpoint);
-            if (!host || hostDead(host)) continue;
+            return host && !hostDead(host);
+          });
+          for (const endpoint of live.length ? live : order) {
+            const host = hostOfUrl(endpoint);
+            if (!host) continue;
             const values = new Map();
             let refused = 0;
             await Promise.all(
