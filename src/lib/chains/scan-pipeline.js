@@ -56,7 +56,7 @@ const HOST_CAPS = {
   "api.blockcypher.com": 4,
   // Dogecoin and Dash are read from these two explorers now; both answer a
   // steady burst, so they carry the whole group instead of BlockCypher.
-  "chainz.cryptoid.info": 8,
+  "chainz.cryptoid.info": 4,
   "sochain.com": 24,
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
