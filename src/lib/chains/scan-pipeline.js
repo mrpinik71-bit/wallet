@@ -24,11 +24,11 @@ import {
 // instead, so the scan still moves thousands of wallets at once — a refused
 // small batch costs a handful of wallets, never a whole wall of them.
 const CHUNK = 10; // wallets per batch round
-const INFLIGHT = 600; // batch rounds kept in flight — 600 rounds of 10 run together
-const MAX_WAITING = 12000; // wallets prepared and waiting across all rounds — the memory ceiling
+const INFLIGHT = 2400; // batch rounds kept in flight — 2400 rounds of 10 run together (24,000 wallets in flight)
+const MAX_WAITING = 48000; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 10; // wallets handed to the network while the rest of the round is still being derived
-const PER_HOST = 200; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
-const MAX_CAP = 400; // a node that keeps answering without a refusal may be widened this far
+const PER_HOST = 320; // starting burst per endpoint; a 429 halves it for that node for the rest of the run
+const MAX_CAP = 800; // a node that keeps answering without a refusal may be widened this far
 const JOB_TIMEOUT = 5500; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
