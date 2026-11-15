@@ -10,11 +10,11 @@ import { EVM_MIRRORS } from "@/lib/chains/scan-mirrors";
 // Public nodes refuse very large JSON-RPC batches, so calls are grouped. A
 // larger group means far fewer round trips per round of wallets; a node that
 // caps the size answers 400 and its group is split for the rest of the run.
-const CALLS_PER_REQUEST = 400;
+const CALLS_PER_REQUEST = 600;
 // A few nodes answer wide batches only up to a point and then rate-limit the
 // rest of the same request: half the wallets come back and the rest look
 // unreadable. These chains are asked in smaller batches from the start.
-const CHAIN_CALL_LIMIT = { bob: 20 };
+const CHAIN_CALL_LIMIT = { bob: 40 };
 // Nodes differ: most accept 90 calls in one request, but some (zkEVM's node, for
 // one) refuse anything over a handful. The smallest size a node accepts is
 // remembered per chain, so a refused batch is split once and every later
@@ -26,12 +26,12 @@ const endpointCaps = new Map();
 // A node that just refused is passed over for a moment: waiting on it again only
 // costs a retry, so the batch goes straight to the next node that serves the chain.
 const coolUntil = new Map();
-const COOLDOWN_MS = 20000;
+const COOLDOWN_MS = 12000;
 // A chain whose nodes never answer at all is rested for a while: without this,
 // every round waits out its timeouts and holds back the wallets that are fine.
 const downStrikes = new Map();
 const chainRests = new Map();
-const REST_MS = 60000;
+const REST_MS = 45000;
 
 const balanceOfData = (address) =>
   `0x70a08231${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;

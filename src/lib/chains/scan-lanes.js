@@ -8,7 +8,7 @@
 // request lanes, a refusal only slows that node down, and the read is retried
 // instead of being written off.
 
-const START_LANES = 16;
+const START_LANES = 32;
 const lanes = new Map();
 const caps = new Map();
 
@@ -53,7 +53,7 @@ function slot(host) {
  * backoff and narrows that host's lanes, so the retry lands after the burst has
  * cleared instead of failing the batch.
  */
-export async function request(url, init = {}, { timeout = 20000, attempts = 3 } = {}) {
+export async function request(url, init = {}, { timeout = 15000, attempts = 3 } = {}) {
   const host = hostKey(url);
   let lastError = null;
 

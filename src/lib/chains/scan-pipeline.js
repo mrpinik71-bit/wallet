@@ -24,16 +24,16 @@ import {
 // wallets are grouped a few at a time. Many small rounds are kept in flight
 // instead, so the scan still moves thousands of wallets at once — a refused
 // small batch costs a handful of wallets, never a whole wall of them.
-const CHUNK = 40; // wallets per batch round
-const INFLIGHT = 3000; // batch rounds kept in flight — 3000 rounds of 40 run together (120,000 wallets per wave)
-const MAX_WAITING = 32000; // wallets prepared and waiting across all rounds — the memory ceiling
-const READ_CHUNK = 20; // wallets handed to the network while the rest of the round is still being derived
+const CHUNK = 80; // wallets per batch round
+const INFLIGHT = 4000; // batch rounds kept in flight — 4000 rounds of 80 run together (320,000 wallets per wave)
+const MAX_WAITING = 64000; // wallets prepared and waiting across all rounds — the memory ceiling
+const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
 // requests at once usually stops answering instead of refusing them, which read
 // as a failed chain; a modest start that widens while the node keeps answering
 // reaches the same width without that.
-const PER_HOST = 160;
-const MAX_CAP = 2400; // a node that keeps answering without a refusal may be widened this far
+const PER_HOST = 240;
+const MAX_CAP = 3600; // a node that keeps answering without a refusal may be widened this far
 // A rate-limited node answers slowly when it answers at all, so a single read
 // gets long enough to come back instead of being written off as a failed chain.
 const JOB_TIMEOUT = 6000; // a stalled node must not hold a whole batch back
@@ -146,6 +146,29 @@ const HOST_CAPS = {
   "api.binplorer.com": 20,
   "api.mainnet-beta.solana.com": 20,
 };
+
+// Every measured host budget is widened by half again for this pass. The lane
+// below that is the real ceiling: a node that refuses just narrows itself.
+// Bitcoin-family and Stacks explorers are left at their measured value: a wider
+// burst there earns a refusal instead of a faster answer, and a refused read is
+// a wallet reported as unread.
+const FRAGILE_HOSTS = new Set([
+  "mempool.space",
+  "mempool.bitaroo.net",
+  "mempool.ninja",
+  "mempool.emzy.de",
+  "mempool.fractalbitcoin.io",
+  "litecoinspace.org",
+  "blockstream.info",
+  "api.hiro.so",
+  "api.mainnet.hiro.so",
+  "chainz.cryptoid.info",
+  "sochain.com",
+  "api.blockcypher.com",
+]);
+for (const host of Object.keys(HOST_CAPS)) {
+  if (HOST_CAPS[host] >= 8 && !FRAGILE_HOSTS.has(host)) HOST_CAPS[host] = Math.round(HOST_CAPS[host] * 1.5);
+}
 
 // Burst per host, tuned while the scan runs. Endpoints listed above start at
 // their measured ceiling; the rest start at PER_HOST and are halved the first
@@ -624,10 +647,17 @@ async function readBatch(batch, onWallet) {
             // A node that refused the wider burst keeps the next try on fewer
             // lanes instead of being marked as unavailable.
             if (isRateLimited(cause)) lowerCap(job.host);
-            if (attempt === 2) result = { job, error: cause };
+            // A batched job that stalls is given two tries, not three: each one
+            // costs the whole round its wait, and a node that missed the first
+            // two is not going to answer the third.
+            const tries = job.slow ? 2 : 3;
+            if (attempt === tries - 1) {
+              result = { job, error: cause };
+              break;
+            }
             // Rate-limited nodes need the burst to clear: back off, with a little
             // jitter so the retries do not all land at the same moment.
-            else await new Promise((resolve) => setTimeout(resolve, 220 * 2 ** attempt + Math.random() * 160));
+            await new Promise((resolve) => setTimeout(resolve, 220 * 2 ** attempt + Math.random() * 160));
           }
         }
         // Single-address jobs count their own host per request inside run().

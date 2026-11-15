@@ -26543,7 +26543,7 @@ function drpcRelay(chainId) {
 }
 
 // src/lib/chains/scan-lanes.js
-var START_LANES = 16;
+var START_LANES = 32;
 var lanes = /* @__PURE__ */ new Map();
 var caps = /* @__PURE__ */ new Map();
 var capOf = (host) => caps.get(host) ?? START_LANES;
@@ -26575,7 +26575,7 @@ function slot(host) {
     else lane.queue.push(start);
   });
 }
-async function request2(url, init2 = {}, { timeout = 2e4, attempts = 3 } = {}) {
+async function request2(url, init2 = {}, { timeout = 15e3, attempts = 3 } = {}) {
   const host = hostKey(url);
   let lastError = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -26766,15 +26766,15 @@ var EVM_MIRRORS = {
 };
 
 // src/lib/chains/scan-batch.js
-var CALLS_PER_REQUEST = 400;
-var CHAIN_CALL_LIMIT = { bob: 20 };
+var CALLS_PER_REQUEST = 600;
+var CHAIN_CALL_LIMIT = { bob: 40 };
 var sizeCaps = /* @__PURE__ */ new Map();
 var endpointCaps = /* @__PURE__ */ new Map();
 var coolUntil = /* @__PURE__ */ new Map();
-var COOLDOWN_MS = 2e4;
+var COOLDOWN_MS = 12e3;
 var downStrikes = /* @__PURE__ */ new Map();
 var chainRests = /* @__PURE__ */ new Map();
-var REST_MS = 6e4;
+var REST_MS = 45e3;
 var balanceOfData = (address) => `0x70a08231${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
 function buildCalls(addresses, coins2) {
   const native3 = coins2.find((coin) => coin.kind !== "token");
@@ -27106,7 +27106,7 @@ async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
 async function suiBalancesMany(addresses) {
   const balances = /* @__PURE__ */ new Map();
   await Promise.all(
-    group(addresses, 20).map(async ({ start, list }) => {
+    group(addresses, 40).map(async ({ start, list }) => {
       const fields = list.map(
         (address, offset) => `a${offset}: address(address: "${address}") { balance(coinType: "0x2::sui::SUI") { totalBalance } }`
       ).join(" ");
@@ -27130,7 +27130,7 @@ async function suiBalancesMany(addresses) {
 async function polkadotBalancesMany(addresses) {
   const balances = /* @__PURE__ */ new Map();
   await Promise.all(
-    group(addresses, 50).map(async ({ start, list }) => {
+    group(addresses, 100).map(async ({ start, list }) => {
       const keys = [];
       const positions = [];
       list.forEach((address, offset) => {
@@ -27207,12 +27207,12 @@ async function cardanoBalancesMany(addressLists) {
 }
 
 // src/lib/chains/scan-pipeline.js
-var CHUNK = 40;
-var INFLIGHT = 3e3;
-var MAX_WAITING = 32e3;
-var READ_CHUNK = 20;
-var PER_HOST = 160;
-var MAX_CAP = 2400;
+var CHUNK = 80;
+var INFLIGHT = 4e3;
+var MAX_WAITING = 64e3;
+var READ_CHUNK = 40;
+var PER_HOST = 240;
+var MAX_CAP = 3600;
 var JOB_TIMEOUT = 6e3;
 var SLOW_JOB_TIMEOUT = 3e4;
 var DEAD_AFTER = 20;
@@ -27313,6 +27313,23 @@ var HOST_CAPS = {
   "api.binplorer.com": 20,
   "api.mainnet-beta.solana.com": 20
 };
+var FRAGILE_HOSTS = /* @__PURE__ */ new Set([
+  "mempool.space",
+  "mempool.bitaroo.net",
+  "mempool.ninja",
+  "mempool.emzy.de",
+  "mempool.fractalbitcoin.io",
+  "litecoinspace.org",
+  "blockstream.info",
+  "api.hiro.so",
+  "api.mainnet.hiro.so",
+  "chainz.cryptoid.info",
+  "sochain.com",
+  "api.blockcypher.com"
+]);
+for (const host of Object.keys(HOST_CAPS)) {
+  if (HOST_CAPS[host] >= 8 && !FRAGILE_HOSTS.has(host)) HOST_CAPS[host] = Math.round(HOST_CAPS[host] * 1.5);
+}
 var hostCaps = /* @__PURE__ */ new Map();
 var hostWins = /* @__PURE__ */ new Map();
 var capFor = (host) => hostCaps.get(host) ?? (HOST_CAPS[host] || PER_HOST);
@@ -27670,8 +27687,12 @@ async function readBatch(batch, onWallet) {
             break;
           } catch (cause) {
             if (isRateLimited(cause)) lowerCap(job.host);
-            if (attempt === 2) result = { job, error: cause };
-            else await new Promise((resolve) => setTimeout(resolve, 220 * 2 ** attempt + Math.random() * 160));
+            const tries = job.slow ? 2 : 3;
+            if (attempt === tries - 1) {
+              result = { job, error: cause };
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 220 * 2 ** attempt + Math.random() * 160));
           }
         }
         if (!job.inner) {

@@ -154,7 +154,7 @@ export async function suiBalancesMany(addresses) {
   const balances = new Map();
 
   await Promise.all(
-    group(addresses, 20).map(async ({ start, list }) => {
+    group(addresses, 40).map(async ({ start, list }) => {
       const fields = list
         .map(
           (address, offset) =>
@@ -186,7 +186,7 @@ export async function polkadotBalancesMany(addresses) {
   const balances = new Map();
 
   await Promise.all(
-    group(addresses, 50).map(async ({ start, list }) => {
+    group(addresses, 100).map(async ({ start, list }) => {
       const keys = [];
       const positions = [];
       list.forEach((address, offset) => {
