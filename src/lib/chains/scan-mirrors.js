@@ -93,6 +93,8 @@ export const EVM_MIRRORS = {
     "https://rpc.coredao.org", // 40
     "https://rpc.ankr.com/core", // 10
   ],
+  fantom: ["https://1rpc.io/ftm"], // 40
+  rootstock: ["https://mycrypto.rsk.co"], // 40
   citrea: ["https://rpc.citreascan.com"], // 40
   megaeth: ["https://megaeth.gateway.tenderly.co"], // 10
   bob: ["https://bob.gateway.tenderly.co"], // 10

@@ -33,10 +33,24 @@ export function stacksAddress(hash) {
   return `SP${c32encode(Uint8Array.from([...hash, ...checksum]))}`;
 }
 
+// Two public nodes serve the same API, so a busy one is not a failed chain.
+const HOSTS = [chains.stacks.api, "https://stacks-node-api.mainnet.stacks.co"];
+
 /** STX balance in whole coins (1 STX = 1,000,000 microSTX). */
 export async function stacksBalance(address) {
-  const response = await fetch(`${chains.stacks.api}/extended/v1/address/${address}/balances`);
-  if (!response.ok) throw new Error(`Stacks network error (${response.status}).`);
-  const data = await response.json();
-  return Number(data?.stx?.balance || 0) / 1e6;
+  let lastError = null;
+  for (const host of HOSTS) {
+    try {
+      const response = await fetch(`${host}/extended/v1/address/${address}/balances`);
+      if (!response.ok) {
+        lastError = new Error(`Stacks network error (${response.status}).`);
+        continue;
+      }
+      const data = await response.json();
+      return Number(data?.stx?.balance || 0) / 1e6;
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+  throw lastError || new Error("Stacks network error.");
 }

@@ -1,6 +1,7 @@
 // Balance readers for the extra networks the bulk scanner covers.
 import { chains } from "@/lib/chains/config";
-import { accountStorageKey, publicKeyFromAddress } from "@/lib/chains/polkadot";
+import { readCardanoBalances } from "@/lib/chains/cardano-read";
+import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
 
 const hexOf = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 const bytesOf = (hex) =>
@@ -14,20 +15,14 @@ export async function blockcypherBalance(chainId, address) {
   return (data.final_balance || 0) / 1e8;
 }
 
-/** ADA balance across the phrase's Shelley base addresses (Koios). */
+/** ADA balance across the phrase's Shelley base addresses, read through the backend. */
 export async function cardanoBalance(addresses) {
   const list = (Array.isArray(addresses) ? addresses : [addresses]).filter(Boolean);
   if (!list.length) return 0;
 
-  const response = await fetch(`${chains.cardano.api}/address_info`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ _addresses: list }),
-  });
-  if (!response.ok) throw new Error(`Cardano network error (${response.status}).`);
-
-  const rows = await response.json();
-  const lovelace = (Array.isArray(rows) ? rows : []).reduce((sum, row) => sum + Number(row.balance || 0), 0);
+  const balances = await readCardanoBalances(list);
+  let lovelace = 0;
+  for (const address of list) lovelace += Number(((balances.get(address) || 0) * 1e6).toFixed(6));
   return lovelace / 1e6;
 }
 
@@ -131,11 +126,7 @@ export async function suiBalance(address) {
   return Number(total) / 1e9;
 }
 
-const DOT_ENDPOINTS = [
-  chains.polkadot.rpc,
-  "https://rpc.polkadot.io",
-  "https://polkadot.api.onfinality.io/public",
-];
+const DOT_ENDPOINTS = POLKADOT_ENDPOINTS;
 const XRP_ENDPOINTS = [chains.xrp.api, "https://xrpl.ws"];
 
 /** DOT balance from this account's System.Account entry on the Polkadot relay chain. */

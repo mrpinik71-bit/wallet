@@ -10,6 +10,13 @@ import { twox128 } from "@/lib/chains/xxhash64";
 
 const WORD_INDEX = new Map(WORDLIST.map((word, index) => [word, index]));
 const SS58_PREFIX = 0; // Polkadot mainnet
+
+/** Every relay-chain node the wallet reads through, primary first. */
+export const POLKADOT_ENDPOINTS = [
+  "https://polkadot-rpc.publicnode.com",
+  "https://rpc.polkadot.io",
+  "https://polkadot.api.onfinality.io/public",
+];
 const PUBLIC_KEY_LENGTH = 32;
 
 function entropyOf(mnemonic) {
