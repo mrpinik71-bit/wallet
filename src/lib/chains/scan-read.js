@@ -13,7 +13,7 @@ const bytesOf = (hex) =>
 // header), and BlockCypher is kept only as the fallback.
 async function dashBalance(address) {
   const response = await fetch(`https://chainz.cryptoid.info/dash/api.dws?q=getbalance&a=${address}`);
-  if (!response.ok) throw new Error(`Dash network error (${response.status}).`);
+  if (!response.ok) throw new Error(`Dash explorer error (${response.status}).`);
   return Number(await response.text()) || 0;
 }
 

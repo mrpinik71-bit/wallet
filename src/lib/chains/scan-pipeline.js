@@ -56,7 +56,7 @@ const HOST_CAPS = {
   "api.blockcypher.com": 4,
   // Dogecoin and Dash are read from these two explorers now; both answer a
   // steady burst, so they carry the whole group instead of BlockCypher.
-  "chainz.cryptoid.info": 24,
+  "chainz.cryptoid.info": 8,
   "sochain.com": 24,
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
@@ -214,10 +214,14 @@ const hostOfUrl = (url) => {
   }
 };
 
+// Dogecoin and Dash are read from their own explorer rather than the node in
+// the chain config, so their requests are paced by that host's lane.
+const READER_HOSTS = { dogecoin: "sochain.com", dash: "chainz.cryptoid.info" };
+
 const hostOf = (chainId) => {
   const chain = chains[chainId];
   const url = chain?.rpc || chain?.api || "";
-  return hostOfUrl(url) || chainId;
+  return READER_HOSTS[chainId] || hostOfUrl(url) || chainId;
 };
 
 // Public endpoints rate-limit bursts, so each host has its own request budget;
