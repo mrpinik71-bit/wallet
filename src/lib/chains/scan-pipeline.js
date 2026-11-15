@@ -36,7 +36,7 @@ const PER_HOST = 240;
 const MAX_CAP = 3600; // a node that keeps answering without a refusal may be widened this far
 // A rate-limited node answers slowly when it answers at all, so a single read
 // gets long enough to come back instead of being written off as a failed chain.
-const JOB_TIMEOUT = 6000; // a stalled node must not hold a whole batch back
+const JOB_TIMEOUT = 10000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
@@ -593,7 +593,7 @@ async function readBatch(batch, onWallet) {
         read.coin.family === "cardano" ? wallet.cardano : wallet.addresses[read.coin.chain];
       if (!address || (Array.isArray(address) && !address.length)) continue;
       const host = hostOf(read.coin.chain);
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           const balance = await limit(host, () => withTimeout(readBalance(read.coin, address), 12000));
           if (balance === undefined) continue;

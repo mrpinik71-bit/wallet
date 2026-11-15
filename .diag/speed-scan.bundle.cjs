@@ -27213,7 +27213,7 @@ var MAX_WAITING = 64e3;
 var READ_CHUNK = 40;
 var PER_HOST = 240;
 var MAX_CAP = 3600;
-var JOB_TIMEOUT = 6e3;
+var JOB_TIMEOUT = 1e4;
 var SLOW_JOB_TIMEOUT = 3e4;
 var DEAD_AFTER = 20;
 var HOST_CAPS = {
@@ -27651,7 +27651,7 @@ async function readBatch(batch, onWallet) {
       const address = read.coin.family === "cardano" ? wallet.cardano : wallet.addresses[read.coin.chain];
       if (!address || Array.isArray(address) && !address.length) continue;
       const host = hostOf(read.coin.chain);
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           const balance = await limit(host, () => withTimeout(readBalance(read.coin, address), 12e3));
           if (balance === void 0) continue;
