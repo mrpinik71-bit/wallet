@@ -6,6 +6,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { chains } from "@/lib/chains/config";
 import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { drpcRelay } from "@/lib/chains/drpc-relay";
+import { SOLANA_RELAY } from "@/lib/chains/keyed-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { request } from "@/lib/chains/scan-lanes";
 import { verifySolanaBalances } from "@/lib/chains/scan-verify";
@@ -33,7 +34,9 @@ const SOLANA_RPCS = [chains.solana.rpc, "https://api.mainnet-beta.solana.com"];
 /** Sends one Solana call, trying the next node when this one refuses or is busy. */
 async function solanaCall(body) {
   let lastError = null;
-  const endpoints = [drpcRelay("solana"), customEndpoint("solana"), ...SOLANA_RPCS].filter(Boolean);
+  // The app's Helius relay first (its key is far wider than a public node),
+  // then the saved endpoint, then the public nodes.
+  const endpoints = [SOLANA_RELAY, drpcRelay("solana"), customEndpoint("solana"), ...SOLANA_RPCS].filter(Boolean);
   for (const endpoint of endpoints) {
     try {
       const response = await request(endpoint, {

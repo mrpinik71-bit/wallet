@@ -3,6 +3,7 @@ import { SigningKey } from "ethers";
 import bs58 from "bs58";
 import { chains } from "@/lib/chains/config";
 import { fromHex, toHex, tronAddress, tronPrivateKey } from "@/lib/chains/derive";
+import { TRON_RELAY } from "@/lib/chains/keyed-relay";
 
 // Three public hosts serve the same node API, so a busy one is not a failed
 // chain: a read falls through to the next host that answers.
@@ -10,7 +11,30 @@ const APIS = [chains.tron.api, "https://tron-rpc.publicnode.com", "https://api.t
 // A transfer stays on the primary node — a write is not worth spreading around.
 const PRIMARY = [chains.tron.api];
 
+// The two reads the scan makes, relayed with the TronGrid key when one is saved.
+const RELAY_OPS = {
+  "/wallet/getaccount": "account",
+  "/wallet/triggerconstantcontract": "call",
+};
+
 async function post(path, body, apis = APIS) {
+  // Reads go through the app's relay first: the key's own budget answers far
+  // more wallets at once than the public node. No key saved answers 503 here,
+  // and the public nodes below carry the read exactly as before.
+  const op = apis === APIS ? RELAY_OPS[path] : null;
+  if (op) {
+    try {
+      const relayed = await fetch(`${TRON_RELAY}?op=${op}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (relayed.ok) return await relayed.json();
+    } catch {
+      // Fall through to the public nodes.
+    }
+  }
+
   let lastError = null;
   for (const api of apis) {
     try {

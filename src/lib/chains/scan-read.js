@@ -1,5 +1,6 @@
 // Balance readers for the extra networks the bulk scanner covers.
 import { chains } from "@/lib/chains/config";
+import { TON_RELAY } from "@/lib/chains/keyed-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
 import { verifyTonBalance } from "@/lib/chains/scan-verify";
@@ -121,14 +122,21 @@ export async function tonBalance(address) {
   // only trusted once TonAPI agrees, because a busy or lagging indexer answers
   // zero for a wallet that does hold TON — and that would hide a funded wallet.
   let fromToncenter;
-  try {
-    const response = await fetch(`${chains.ton.api}/getAddressBalance?address=${encodeURIComponent(address)}`);
-    if (response.ok) {
+  // The app's relay answers with the Toncenter key when one is saved, and the
+  // public endpoint is kept as the fallback, so this read never depends on it.
+  const encoded = encodeURIComponent(address);
+  for (const target of [`${TON_RELAY}?address=${encoded}`, `${chains.ton.api}/getAddressBalance?address=${encoded}`]) {
+    try {
+      const response = await fetch(target);
+      if (!response.ok) continue;
       const data = await response.json();
-      if (data?.ok) fromToncenter = Number(data.result || 0) / 1e9;
+      if (data?.ok) {
+        fromToncenter = Number(data.result || 0) / 1e9;
+        break;
+      }
+    } catch {
+      // Try the next reader.
     }
-  } catch {
-    // Left unanswered: TonAPI below is the whole answer.
   }
 
   if (fromToncenter > 0) return fromToncenter;
