@@ -127,7 +127,9 @@ export async function tonBalance(address) {
   const encoded = encodeURIComponent(address);
   for (const target of [`${TON_RELAY}?address=${encoded}`, `${chains.ton.api}/getAddressBalance?address=${encoded}`]) {
     try {
-      const response = await fetch(target);
+      // The relay is asked with a POST: the dev server answers a GET on /api/...
+      // with a module file instead of the route, so a GET relay never answered.
+      const response = await fetch(target, target.startsWith(TON_RELAY) ? { method: "POST" } : undefined);
       if (!response.ok) continue;
       const data = await response.json();
       if (data?.ok) {
@@ -144,6 +146,19 @@ export async function tonBalance(address) {
   const fromTonapi = await verifyTonBalance(address).catch(() => undefined);
   if (fromTonapi === undefined && fromToncenter === undefined) throw new Error("TON network error.");
   return Math.max(fromToncenter || 0, fromTonapi || 0);
+}
+
+/** USDT and other jetton balances: the owner's jetton wallet, read on TonAPI. */
+export async function tonJettonBalance(address, jetton, decimals = 9) {
+  if (!address || !jetton) return 0;
+  const response = await fetch(
+    `https://tonapi.io/v2/accounts/${encodeURIComponent(address)}/jettons/${encodeURIComponent(jetton)}`,
+  );
+  // No jetton wallet for this coin means the account holds none of it.
+  if (response.status === 404) return 0;
+  if (!response.ok) throw new Error(`TON network error (${response.status}).`);
+  const data = await response.json();
+  return Number(data?.balance || 0) / 10 ** decimals;
 }
 
 /** SUI balance in MIST, read through the Sui GraphQL endpoint. */

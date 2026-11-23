@@ -145,6 +145,12 @@ const TOKENS = [
   token("celo", "usdc-celo", "USDC", "USD Coin (Celo)", "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", 6, "usd-coin", "#2775CA", cdn("usdc")),
 
   token("tron", "usdt-tron", "USDT", "Tether USD (TRC-20)", "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", 6, "tether", "#26A17B", cdn("usdt")),
+  // USDT is what most of these wallets actually hold, so it is read on TON (a
+  // jetton) and Solana (an SPL token) too, not only on the EVM networks.
+  token("ton", "usdt-ton", "USDT", "Tether USD (TON)", "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", 6, "tether", "#26A17B", cdn("usdt")),
+  token("solana", "usdt-sol", "USDT", "Tether USD (Solana)", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", 6, "tether", "#26A17B", cdn("usdt")),
+  token("solana", "usdc-sol", "USDC", "USD Coin (Solana)", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("base", "usdt-base", "USDT", "Tether USD (Base)", "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", 6, "tether", "#26A17B", cdn("usdt")),
 
   // Airdrop networks: the native coin alone misses claimed stablecoins, which is
   // usually what is left on these chains.

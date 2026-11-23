@@ -13,6 +13,7 @@ import {
   polkadotBalance,
   suiBalance,
   tonBalance,
+  tonJettonBalance,
   xrpBalance,
 } from "@/lib/chains/scan-read";
 import { stacksBalance } from "@/lib/chains/stacks";
@@ -34,7 +35,10 @@ export async function readBalance(coin, address, endpoint) {
   if (coin.family === "polkadot") return polkadotBalance(address);
   if (coin.family === "aptos") return aptosBalance(address);
   if (coin.family === "near") return nearBalance(address);
-  if (coin.family === "ton") return tonBalance(address);
+  if (coin.family === "ton") {
+    // USDT on TON is a jetton: its own balance, not the wallet's TON.
+    return coin.kind === "token" ? tonJettonBalance(address, coin.address, coin.decimals) : tonBalance(address);
+  }
   if (coin.family === "sui") return suiBalance(address);
   if (coin.family === "solana") return solanaBalance(address);
   if (coin.family === "stacks") return stacksBalance(address, endpoint);
