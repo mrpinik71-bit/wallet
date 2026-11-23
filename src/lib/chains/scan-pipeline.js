@@ -148,6 +148,9 @@ const HOST_CAPS = {
   // One free Etherscan key allows five calls a second, and five networks are
   // discovered through it, so its lane stays at the key's own budget.
   "etherscan.io": 4,
+  // Chains the free plan refuses: asked at a trickle, and rested once it is clear
+  // the key does not cover them.
+  "etherscan-paid": 2,
 };
 
 // Every measured host budget is widened by half again for this pass. The lane
@@ -221,10 +224,13 @@ for (const coin of SCAN_ASSETS) {
 // they all share one lane: the key's budget is what paces them, not the host.
 const DISCOVERY_HOSTS = [
   ["ethereum", "etherscan.io"],
-  ["base", "etherscan.io"],
   ["arbitrum", "etherscan.io"],
   ["polygon", "etherscan.io"],
-  ["gnosis", "etherscan.io"],
+  // Base and Gnosis sit outside the free Etherscan plan. They share their own
+  // lane, so the key's refusal there rests that lane instead of the working one
+  // — and a paid key starts covering them with no code change.
+  ["base", "etherscan-paid"],
+  ["gnosis", "etherscan-paid"],
   ["optimism", "optimism.blockscout.com"],
   ["bsc", "api.binplorer.com"],
   ["solana", "api.mainnet-beta.solana.com"],
