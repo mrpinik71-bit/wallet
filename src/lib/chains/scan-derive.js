@@ -3,6 +3,7 @@
 // without dragging the networking half of the pipeline along.
 import { cardanoAddresses } from "@/lib/chains/cardano";
 import { evmAddress, getAddresses } from "@/lib/chains/derive";
+import { isValidPhrase } from "@/lib/phrase-checksum";
 
 export const WORD_COUNTS = [12, 15, 18, 21, 24];
 
@@ -13,9 +14,17 @@ export function prepare(entry) {
   const account = entry.account || 0;
   // Any standard length is accepted — a phrase is never dropped just because it
   // differs from the selector, so every real phrase gets derived and checked.
-  const size = entry.phrase.trim().split(/\s+/).filter(Boolean).length;
+  const words = entry.phrase.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const size = words.length;
   if (!WORD_COUNTS.includes(size)) {
     return { invalid: true, error: "A recovery phrase has 12, 15, 18, 21 or 24 words.", account };
+  }
+
+  // Every line is checked against the BIP-39 word list and checksum: a line that
+  // fails is not a recovery phrase, so it is reported as unreadable instead of
+  // being derived into a wallet that never existed.
+  if (!isValidPhrase(words)) {
+    return { invalid: true, error: "That line failed the BIP-39 word list or checksum.", account };
   }
 
   let addresses = {};
