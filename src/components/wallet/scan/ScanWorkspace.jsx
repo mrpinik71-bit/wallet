@@ -75,6 +75,9 @@ export default function ScanWorkspace() {
   // Phrases already queued or scanned: editing the text again only sends the
   // new lines, so a scan never repeats work it already did.
   const seenRef = useRef(new Set());
+  // How many of those lines are unreadable, so the progress denominator counts
+  // them once instead of once per account.
+  const unreadableSeenRef = useRef(0);
   const queueRef = useRef([]);
   // The file waiting for its chain check, kept until the scan is started.
   const pendingFileRef = useRef(null);
@@ -141,12 +144,15 @@ export default function ScanWorkspace() {
 
   // The listed count is the truth: it is how many phrases were actually found
   // and checked, so the number on screen always matches the rows below it.
+  // Every line of the input keeps a row: a real wallet is shown green, a line
+  // that is not a phrase is shown red, so no line is left out of the report.
   const { rows, foundCount, fundedTotalCount } = useMemo(() => {
-    const list = resultsRef.current.filter((slot) => slot.status === "done");
+    const list = resultsRef.current.filter((slot) => slot.status === "done" || slot.status === "invalid");
+    const real = list.filter((slot) => slot.status === "done");
     return {
-      foundCount: list.length,
-      fundedTotalCount: list.reduce((sum, slot) => sum + (slot.total > 0 ? 1 : 0), 0),
-      rows: onlyFunded ? list.filter((slot) => slot.total > 0) : list,
+      foundCount: real.length,
+      fundedTotalCount: real.reduce((sum, slot) => sum + (slot.total > 0 ? 1 : 0), 0),
+      rows: onlyFunded ? real.filter((slot) => slot.total > 0) : list,
     };
   }, [version, onlyFunded]);
 
@@ -156,10 +162,13 @@ export default function ScanWorkspace() {
   // that is not a real BIP-39 phrase (word list + checksum) is not a wallet, so
   // it is counted as unreadable and kept out of the scan.
   const matching = (value, size) => {
-    const all = parsePhrases(value, size);
-    const valid = all.filter((entry) => isValidPhrase(entry.phrase.split(" ")));
-    setUnreadable(all.length - valid.length);
-    return valid;
+    // Every detected line is kept — a real phrase as a wallet, and a line that
+    // fails the word list or checksum marked unreadable, so it is listed in red.
+    const all = parsePhrases(value, size).map((entry) =>
+      isValidPhrase(entry.phrase.split(" ")) ? entry : { ...entry, unreadable: true },
+    );
+    setUnreadable(all.filter((entry) => entry.unreadable).length);
+    return all;
   };
 
   function onChange(value) {
@@ -174,7 +183,7 @@ export default function ScanWorkspace() {
     setWords(size);
     const entries = matching(text, size);
     setCount(entries.length);
-    setTotal(entries.length * accounts);
+    setTotal(entries.filter((entry) => !entry.unreadable).length * accounts);
   }
 
   // The account count applies to the next scan, so the totals on screen follow it.
@@ -209,10 +218,13 @@ export default function ScanWorkspace() {
       accounts,
       isCancelled: () => cancelledRef.current,
       onResult: (result) => {
-        // Only real, valid recovery phrases are listed — an unreadable line is
-        // counted instead of taking a row in the results.
+        // An unreadable line keeps its own red row. It is reported once per
+        // line, not once per account, so the count matches the file.
         if (result.status !== "done") {
-          live.invalid += 1;
+          if (!result.account) {
+            live.invalid += 1;
+            resultsRef.current.push(result);
+          }
           scheduleFlush();
           return;
         }
@@ -287,7 +299,9 @@ export default function ScanWorkspace() {
     });
     if (!fresh.length) return;
     queueRef.current.push(...fresh);
-    setTotal(seenRef.current.size * accounts);
+    unreadableSeenRef.current += fresh.filter((entry) => entry.unreadable).length;
+    const realSeen = seenRef.current.size - unreadableSeenRef.current;
+    setTotal(realSeen * accounts + unreadableSeenRef.current);
     setStarted(true);
     pump();
   }
@@ -326,7 +340,10 @@ export default function ScanWorkspace() {
       busyRef.current = false;
       cancelledRef.current = false;
       setScanning(false);
-      setTotal((seenRef.current.size || resultsRef.current.length) * accounts);
+      setTotal(
+        (seenRef.current.size - unreadableSeenRef.current || resultsRef.current.length) * accounts +
+          unreadableSeenRef.current,
+      );
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
       recordRun(resultsRef.current.slice(startAt));
@@ -337,6 +354,7 @@ export default function ScanWorkspace() {
   function clearResults() {
     resultsRef.current = [];
     seenRef.current = new Set();
+    unreadableSeenRef.current = 0;
     queueRef.current = [];
     pendingFileRef.current = null;
     setPendingCount(0);
@@ -408,7 +426,9 @@ export default function ScanWorkspace() {
       pendingFileRef.current = { file, count: found };
       setPendingCount(found);
       setUnreadable(invalid);
-      setTotal(found * accounts);
+      // Every line is on the list: the wallets checked on chains plus the lines
+      // that turned out to be unreadable.
+      setTotal(found * accounts + invalid);
     } catch {
       setError("That file could not be read. Try a plain .txt file.");
     } finally {
@@ -472,7 +492,9 @@ export default function ScanWorkspace() {
   const hasFunds = fundedTotalCount > 0;
   const scannedTotal = total || stats.completed || foundCount;
   // Unreadable lines never reach the scan, so they are reported on their own.
-  const unreadableTotal = unreadable + stats.invalid;
+  // The counting pass and the scan report the same lines, so the larger of the
+  // two is the number of unreadable lines, never their sum.
+  const unreadableTotal = Math.max(unreadable, stats.invalid);
 
   return (
     <div className="relative">
@@ -510,7 +532,7 @@ export default function ScanWorkspace() {
               {unreadableTotal > 0 ? (
                 <p className="mt-1 text-[10px] font-medium text-destructive/75 num">
                   {unreadableTotal.toLocaleString("en-US")} unreadable line
-                  {unreadableTotal === 1 ? "" : "s"} skipped
+                  {unreadableTotal === 1 ? "" : "s"} — shown in red
                 </p>
               ) : null}
             </div>
@@ -567,8 +589,8 @@ export default function ScanWorkspace() {
           {unreadableTotal > 0 ? (
             <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
               {unreadableTotal.toLocaleString("en-US")} line{unreadableTotal === 1 ? " is" : "s are"} not a valid BIP-39
-              recovery phrase (word list + checksum), so {unreadableTotal === 1 ? "it was" : "they were"} kept out of the
-              scan as unreadable.
+              recovery phrase (word list + checksum). {unreadableTotal === 1 ? "It is" : "They are"} listed in red and
+              kept out of the chain check — no line of the input was dropped.
             </p>
           ) : null}
 

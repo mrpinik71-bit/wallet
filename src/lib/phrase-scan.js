@@ -10,8 +10,6 @@ export const scanAssets = SCAN_ASSETS;
 export const scanChains = SCAN_CHAINS;
 export { parsePhrases };
 
-const DEDUPE_LIMIT = 300000;
-
 /** A line is only a wallet when it is a real BIP-39 phrase (word list + checksum). */
 const isRealPhrase = (phrase) =>
   isValidPhrase(
@@ -22,9 +20,12 @@ const isRealPhrase = (phrase) =>
       .filter(Boolean),
   );
 
-/** Reads a .txt file and streams its phrases, de-duplicated. */
+/**
+ * Reads a .txt file and streams every line of it, in order: a real phrase is a
+ * wallet, and a line that fails the word list or checksum is handed on too, so
+ * it is reported as unreadable instead of disappearing. Nothing is skipped.
+ */
 export async function* phrasesFromFile(file, { onCount, onInvalid, words } = {}) {
-  const seen = new Set();
   let count = 0;
   let reported = 0;
   let invalid = 0;
@@ -33,17 +34,12 @@ export async function* phrasesFromFile(file, { onCount, onInvalid, words } = {})
   const size = words || 12;
   for await (const entry of phrasesFromLines(readLines(file), size)) {
     const { phrase, line } = entry;
-    // An unreadable line is not a wallet: it is counted on its own and never
-    // sent through the scan.
     if (!isRealPhrase(phrase)) {
       invalid += 1;
-      if (invalid % 200 === 0) onInvalid?.(invalid);
+      if (invalid % 50 === 0) onInvalid?.(invalid);
+      yield { phrase, words: entry.words || size, line, unreadable: true };
       continue;
     }
-    if (seen.has(phrase)) continue;
-    // The de-duplication set is capped: past a few hundred thousand entries a
-    // repeat is simply scanned again instead of exhausting browser memory.
-    if (seen.size < DEDUPE_LIMIT) seen.add(phrase);
     count += 1;
     // Reported often, so the detected total on screen grows while the file is read.
     if (count - reported >= 200) {
@@ -63,19 +59,19 @@ export async function* phrasesFromFile(file, { onCount, onInvalid, words } = {})
  * lines that are not recovery phrases are counted apart.
  */
 export async function countPhrasesInFile(file, { onProgress, words } = {}) {
-  const seen = new Set();
   const size = words || 12;
   let count = 0;
   let invalid = 0;
 
+  // The whole file is read through line by line: every real phrase is counted,
+  // and every line that is not one is counted as unreadable, so the two numbers
+  // always account for the entire file.
   for await (const entry of phrasesFromLines(readLines(file), size)) {
     if (!isRealPhrase(entry.phrase)) {
       invalid += 1;
       if (invalid % 500 === 0) onProgress?.(count, invalid);
       continue;
     }
-    if (seen.has(entry.phrase)) continue;
-    if (seen.size < DEDUPE_LIMIT) seen.add(entry.phrase);
     count += 1;
     if (count % 500 === 0) onProgress?.(count, invalid);
   }

@@ -57,10 +57,14 @@ export default function ScanResultRow({ result, index }) {
 
   return (
     <div
+      // A real wallet is green (stronger when it holds funds); a line that is
+      // not a recovery phrase is red, so the two never look alike.
       className={`overflow-hidden rounded-[18px] border transition-colors ${
-        hasBalance
-          ? "border-primary/30 bg-primary/[0.05]"
-          : "border-foreground/[0.07] bg-foreground/[0.02]"
+        invalid
+          ? "border-destructive/40 bg-destructive/[0.07]"
+          : hasBalance
+            ? "border-primary/45 bg-primary/[0.08]"
+            : "border-primary/20 bg-primary/[0.03]"
       }`}
     >
       <button
@@ -69,7 +73,7 @@ export default function ScanResultRow({ result, index }) {
         className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
       >
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12px] font-medium">
+          <span className={`block truncate text-[12px] font-medium ${invalid ? "text-destructive" : ""}`}>
             {invalid
               ? result.line
                 ? `Line ${result.line} · unreadable`
@@ -78,7 +82,11 @@ export default function ScanResultRow({ result, index }) {
                   result.account > 0 ? ` · account ${result.account + 1}` : ""
                 }`}
           </span>
-          <span className="mt-0.5 block truncate text-[10px] text-muted-foreground/70">
+          <span
+            className={`mt-0.5 block truncate text-[10px] ${
+              invalid ? "text-destructive/70" : "text-muted-foreground/70"
+            }`}
+          >
             {invalid
               ? result.error
               : hasBalance
