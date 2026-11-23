@@ -18,6 +18,8 @@ export default function PhraseInput({
   error,
   words,
   onWords,
+  accounts = 1,
+  onAccounts,
 }) {
   const fileRef = useRef(null);
   // Dragging a file from the desktop onto the card is the quickest way in on a
@@ -77,6 +79,35 @@ export default function PhraseInput({
             ))}
           </div>
         </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+            Accounts
+          </span>
+          <div className="flex flex-1 gap-1.5">
+            {[1, 2, 3].map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onAccounts(value)}
+                disabled={scanning || reading || pendingCount > 0}
+                className={`flex-1 rounded-lg border py-1.5 text-[10.5px] font-medium num transition-colors disabled:opacity-50 ${
+                  accounts === value
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-foreground/[0.08] bg-foreground/[0.02] text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {value === 1 ? "1st only" : `1st–${value}`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-1.5 text-[9.5px] leading-relaxed text-muted-foreground/55">
+          {accounts === 1
+            ? "Only the first account of each phrase is checked."
+            : `Account 1 to ${accounts} of every phrase are checked — the 2nd and 3rd accounts are derived from the same phrase and hold their own addresses.`}
+        </p>
 
         <div className="relative mt-4">
           <textarea

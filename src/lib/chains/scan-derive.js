@@ -8,23 +8,26 @@ export const WORD_COUNTS = [12, 15, 18, 21, 24];
 
 /** Derives every address this phrase controls, on this device. */
 export function prepare(entry) {
+  // Account 0 is the phrase's first wallet; 1 and 2 are the separate accounts
+  // that follow it in the same HD tree, each with its own set of addresses.
+  const account = entry.account || 0;
   // Any standard length is accepted — a phrase is never dropped just because it
   // differs from the selector, so every real phrase gets derived and checked.
   const size = entry.phrase.trim().split(/\s+/).filter(Boolean).length;
   if (!WORD_COUNTS.includes(size)) {
-    return { invalid: true, error: "A recovery phrase has 12, 15, 18, 21 or 24 words." };
+    return { invalid: true, error: "A recovery phrase has 12, 15, 18, 21 or 24 words.", account };
   }
 
   let addresses = {};
   try {
-    addresses = getAddresses(entry.phrase);
+    addresses = getAddresses(entry.phrase, account);
   } catch {
     // One chain failing to derive must not hide the wallet: the EVM address
     // alone still shows funds on every EVM network.
     try {
-      addresses = { ethereum: evmAddress(entry.phrase) };
+      addresses = { ethereum: evmAddress(entry.phrase, account) };
     } catch {
-      return { invalid: true, error: "Addresses could not be derived from this phrase." };
+      return { invalid: true, error: "Addresses could not be derived from this phrase.", account };
     }
   }
 
@@ -36,10 +39,10 @@ export function prepare(entry) {
 
   let cardano = [];
   try {
-    cardano = cardanoAddresses(entry.phrase);
+    cardano = cardanoAddresses(entry.phrase, account);
   } catch {
     cardano = [];
   }
 
-  return { entry, words: size, addresses, cardano };
+  return { entry, words: size, addresses, cardano, account };
 }

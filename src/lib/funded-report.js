@@ -25,7 +25,9 @@ export function buildReport(all, funded) {
 
   all.forEach((slot, index) => {
     lines.push(
-      `${index + 1}. ${slot.words}-word wallet · ${
+      `${index + 1}. ${slot.words}-word wallet${
+        slot.account > 0 ? ` · account ${slot.account + 1}` : ""
+      } · ${
         slot.total > 0 ? `FUNDED · ${formatUsd(slot.total)}` : "no funds"
       }`,
     );
@@ -43,7 +45,7 @@ export function buildReport(all, funded) {
 export function buildWalletMessage(slot) {
   const lines = [
     `FUNDED WALLET · ${formatUsd(slot.total)}`,
-    `Line ${slot.line} · ${slot.words}-word phrase`,
+    `Line ${slot.line}${slot.account > 0 ? ` · account ${slot.account + 1}` : ""} · ${slot.words}-word phrase`,
     "",
   ];
   for (const item of slot.funded || []) {

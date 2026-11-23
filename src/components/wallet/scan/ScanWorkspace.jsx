@@ -49,6 +49,9 @@ export default function ScanWorkspace() {
   const [pendingCount, setPendingCount] = useState(0);
   const [count, setCount] = useState(0);
   const [words, setWords] = useState(12);
+  // How many accounts of each phrase are checked: 1 is the phrase's first
+  // wallet, 3 also checks the second and third accounts it derives.
+  const [accounts, setAccounts] = useState(3);
   const [total, setTotal] = useState(0);
   const [started, setStarted] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -153,14 +156,20 @@ export default function ScanWorkspace() {
     setFileName("");
     const entries = matching(value, words);
     setCount(entries.length);
-    if (!entries.length) setTotal(seenRef.current.size);
+    if (!entries.length) setTotal(seenRef.current.size * accounts);
   }
 
   function changeWords(size) {
     setWords(size);
     const entries = matching(text, size);
     setCount(entries.length);
-    setTotal(entries.length);
+    setTotal(entries.length * accounts);
+  }
+
+  // The account count applies to the next scan, so the totals on screen follow it.
+  function changeAccounts(value) {
+    setAccounts(value);
+    setTotal((current) => Math.round(current / accounts) * value);
   }
 
   // Every funded wallet goes to the linked Telegram chat as soon as its balances
@@ -186,6 +195,7 @@ export default function ScanWorkspace() {
     const live = liveRef.current;
     return {
       prices,
+      accounts,
       isCancelled: () => cancelledRef.current,
       onResult: (result) => {
         // Only real, valid recovery phrases are listed — an unreadable line is
@@ -242,6 +252,7 @@ export default function ScanWorkspace() {
       total: funded.reduce((sum, slot) => sum + slot.total, 0),
       wallets: funded.map((slot) => ({
         line: slot.line,
+        account: slot.account || 0,
         total: slot.total,
         funded: slot.funded,
         addresses: slot.addresses,
@@ -265,7 +276,7 @@ export default function ScanWorkspace() {
     });
     if (!fresh.length) return;
     queueRef.current.push(...fresh);
-    setTotal(seenRef.current.size);
+    setTotal(seenRef.current.size * accounts);
     setStarted(true);
     pump();
   }
@@ -304,7 +315,7 @@ export default function ScanWorkspace() {
       busyRef.current = false;
       cancelledRef.current = false;
       setScanning(false);
-      setTotal(seenRef.current.size || resultsRef.current.length);
+      setTotal((seenRef.current.size || resultsRef.current.length) * accounts);
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
       recordRun(resultsRef.current.slice(startAt));
@@ -383,7 +394,7 @@ export default function ScanWorkspace() {
       });
       pendingFileRef.current = { file, count: found };
       setPendingCount(found);
-      setTotal(found);
+      setTotal(found * accounts);
     } catch {
       setError("That file could not be read. Try a plain .txt file.");
     } finally {
@@ -428,7 +439,7 @@ export default function ScanWorkspace() {
       busyRef.current = false;
       cancelledRef.current = false;
       setScanning(false);
-      setTotal((current) => current || Math.max(countRef.current, resultsRef.current.length));
+      setTotal((current) => current || Math.max(countRef.current, resultsRef.current.length) * accounts);
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
       recordRun(resultsRef.current);
@@ -463,6 +474,8 @@ export default function ScanWorkspace() {
         count={count}
         words={words}
         onWords={changeWords}
+        accounts={accounts}
+        onAccounts={changeAccounts}
       />
 
       <RpcKeysPanel />

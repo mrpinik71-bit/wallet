@@ -74,9 +74,9 @@ export default function ScanResultRow({ result, index }) {
               ? result.line
                 ? `Line ${result.line} · unreadable`
                 : "Unreadable phrase"
-              : result.line
-                ? `Line ${result.line}`
-                : `Wallet ${index + 1}`}
+              : `${result.line ? `Line ${result.line}` : `Wallet ${index + 1}`}${
+                  result.account > 0 ? ` · account ${result.account + 1}` : ""
+                }`}
           </span>
           <span className="mt-0.5 block truncate text-[10px] text-muted-foreground/70">
             {invalid

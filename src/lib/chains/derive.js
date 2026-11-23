@@ -164,12 +164,15 @@ function addressOnChain(chain, mnemonic, evm, account) {
   if (chain.family === "xrp") return xrpAddress(mnemonic, account);
   if (chain.family === "cardano") return cardanoAddress(mnemonic, account);
   // Polkadot accounts come from the substrate soft-derivation scheme, which
-  // this wallet does not implement: the phrase has one Polkadot address.
-  if (chain.family === "polkadot") return polkadotAddress(mnemonic);
+  // this wallet does not implement: the phrase has one Polkadot address, so a
+  // later account of the same phrase is not asked about it a second time.
+  if (chain.family === "polkadot") return account ? "" : polkadotAddress(mnemonic);
   if (chain.family === "aptos") return aptosAddress(mnemonic, account);
   if (chain.family === "near") return nearAddress(mnemonic, account);
-  // TON wallet contracts are only created from 24-word phrases.
+  // TON wallet contracts are only created from 24-word phrases, and one phrase
+  // holds a single TON wallet — a later account is not a second TON address.
   if (chain.family === "ton") {
+    if (account) return "";
     return mnemonic.trim().split(/\s+/).length === 24 ? tonAddress(mnemonic) : "";
   }
   if (chain.family === "sui") return suiAddress(mnemonic, account);

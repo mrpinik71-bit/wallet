@@ -737,6 +737,8 @@ function toResult(wallet, reads, prices) {
   return {
     phrase: wallet.entry.phrase,
     words: wallet.words,
+    // 0 is the phrase's first wallet; 1 and 2 are its second and third accounts.
+    account: wallet.account || 0,
     line: wallet.entry.line,
     addresses: wallet.addresses,
     funded,
@@ -749,7 +751,10 @@ function toResult(wallet, reads, prices) {
 }
 
 /** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
-export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled } = {}) {
+export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled, accounts } = {}) {
+  // One phrase can hold several accounts: each account index is derived and
+  // checked as its own wallet, so funds on account 2 or 3 are found too.
+  const accountsPerPhrase = Math.max(1, Math.min(3, accounts || 1));
   // Every run starts with every node trusted again, at its full starting burst.
   deadHosts = new Map();
   hostFailures.clear();
@@ -809,6 +814,7 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
         report({
           phrase: entry.phrase,
           words: entry.words,
+          account: wallet.account || 0,
           line: entry.line,
           addresses: {},
           funded: [],
@@ -849,11 +855,13 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
 
   for await (const entry of source) {
     if (isCancelled?.()) break;
-    buffer.push(entry);
-    if (buffer.length >= CHUNK) {
-      launch(buffer);
-      buffer = [];
-      if (active.size >= INFLIGHT || waiting >= MAX_WAITING) await Promise.race(active);
+    for (let account = 0; account < accountsPerPhrase; account += 1) {
+      buffer.push(account ? { ...entry, account } : entry);
+      if (buffer.length >= CHUNK) {
+        launch(buffer);
+        buffer = [];
+        if (active.size >= INFLIGHT || waiting >= MAX_WAITING) await Promise.race(active);
+      }
     }
   }
   if (buffer.length && !isCancelled?.()) launch(buffer);
