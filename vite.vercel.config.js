@@ -18,6 +18,10 @@ export default defineConfig({
         find: /^cloudflare:workers$/,
         replacement: fileURLToPath(new URL("./vercel/cloudflare-workers.js", import.meta.url)),
       },
+      {
+        find: /^base44:runtime$/,
+        replacement: fileURLToPath(new URL("./vercel/base44-runtime.js", import.meta.url)),
+      },
       { find: /^@\//, replacement: fileURLToPath(new URL("./src/", import.meta.url)) },
     ],
   },
