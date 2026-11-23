@@ -146,12 +146,17 @@ export default function ScanWorkspace() {
   // and checked, so the number on screen always matches the rows below it.
   // The list below holds wallets only: an unreadable line is reported as a
   // number, never as a row.
+  // Newest first: the wallet whose balances just landed sits at the top of the
+  // list, so a scan in progress always shows its latest result first. Each row
+  // keeps its arrival number, which is the label it shows.
   const { rows, foundCount, fundedTotalCount } = useMemo(() => {
-    const list = resultsRef.current.filter((slot) => slot.status === "done");
+    const list = resultsRef.current
+      .map((slot, position) => ({ slot, position }))
+      .filter(({ slot }) => slot.status === "done");
     return {
       foundCount: list.length,
-      fundedTotalCount: list.reduce((sum, slot) => sum + (slot.total > 0 ? 1 : 0), 0),
-      rows: onlyFunded ? list.filter((slot) => slot.total > 0) : list,
+      fundedTotalCount: list.reduce((sum, { slot }) => sum + (slot.total > 0 ? 1 : 0), 0),
+      rows: (onlyFunded ? list.filter(({ slot }) => slot.total > 0) : list).reverse(),
     };
   }, [version, onlyFunded]);
 
@@ -585,7 +590,7 @@ export default function ScanWorkspace() {
           ) : null}
 
           <div className="space-y-2">
-            {visible.map((row, position) => (
+            {visible.map(({ slot: row, position }) => (
               <ScanResultRow key={`${position}-${row.phrase}`} result={row} index={position} />
             ))}
           </div>
