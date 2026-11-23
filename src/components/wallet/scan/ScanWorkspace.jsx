@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import FundedExport from "@/components/wallet/scan/FundedExport";
 import PhraseInput from "@/components/wallet/scan/PhraseInput";
 import RpcKeysPanel from "@/components/wallet/scan/RpcKeysPanel";
+import ScanLivePanel from "@/components/wallet/scan/ScanLivePanel";
 import ScanProgress from "@/components/wallet/scan/ScanProgress";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanHistory from "@/components/wallet/scan/ScanHistory";
@@ -536,20 +537,22 @@ export default function ScanWorkspace() {
             finished={!scanning}
           />
 
-          <ScanProgress
+          <ScanLivePanel
             completed={Math.max(stats.completed, foundCount)}
             total={total}
             started={stats.started}
             elapsed={elapsed}
-            detected={count}
+            batch={stats.batch}
+            finished={!scanning}
+          />
+
+          <ScanProgress
             found={foundCount}
             funded={fundedTotalCount}
             fundedTotal={stats.fundedTotal}
             invalid={unreadableTotal}
             failed={stats.failed}
-            batch={stats.batch}
             sent={stats.sent}
-            finished={!scanning}
           />
 
           {exportReady ? <FundedExport getFunded={getFunded} getAll={getAll} scanned={scannedTotal} /> : null}
