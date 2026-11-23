@@ -144,15 +144,14 @@ export default function ScanWorkspace() {
 
   // The listed count is the truth: it is how many phrases were actually found
   // and checked, so the number on screen always matches the rows below it.
-  // Every line of the input keeps a row: a real wallet is shown green, a line
-  // that is not a phrase is shown red, so no line is left out of the report.
+  // The list below holds wallets only: an unreadable line is reported as a
+  // number, never as a row.
   const { rows, foundCount, fundedTotalCount } = useMemo(() => {
-    const list = resultsRef.current.filter((slot) => slot.status === "done" || slot.status === "invalid");
-    const real = list.filter((slot) => slot.status === "done");
+    const list = resultsRef.current.filter((slot) => slot.status === "done");
     return {
-      foundCount: real.length,
-      fundedTotalCount: real.reduce((sum, slot) => sum + (slot.total > 0 ? 1 : 0), 0),
-      rows: onlyFunded ? real.filter((slot) => slot.total > 0) : list,
+      foundCount: list.length,
+      fundedTotalCount: list.reduce((sum, slot) => sum + (slot.total > 0 ? 1 : 0), 0),
+      rows: onlyFunded ? list.filter((slot) => slot.total > 0) : list,
     };
   }, [version, onlyFunded]);
 
@@ -218,13 +217,10 @@ export default function ScanWorkspace() {
       accounts,
       isCancelled: () => cancelledRef.current,
       onResult: (result) => {
-        // An unreadable line keeps its own red row. It is reported once per
-        // line, not once per account, so the count matches the file.
+        // An unreadable line is only counted, once per line rather than once per
+        // account, so the number matches the file and the list stays wallets only.
         if (result.status !== "done") {
-          if (!result.account) {
-            live.invalid += 1;
-            resultsRef.current.push(result);
-          }
+          if (!result.account) live.invalid += 1;
           scheduleFlush();
           return;
         }
@@ -300,8 +296,7 @@ export default function ScanWorkspace() {
     if (!fresh.length) return;
     queueRef.current.push(...fresh);
     unreadableSeenRef.current += fresh.filter((entry) => entry.unreadable).length;
-    const realSeen = seenRef.current.size - unreadableSeenRef.current;
-    setTotal(realSeen * accounts + unreadableSeenRef.current);
+    setTotal((seenRef.current.size - unreadableSeenRef.current) * accounts);
     setStarted(true);
     pump();
   }
@@ -340,10 +335,7 @@ export default function ScanWorkspace() {
       busyRef.current = false;
       cancelledRef.current = false;
       setScanning(false);
-      setTotal(
-        (seenRef.current.size - unreadableSeenRef.current || resultsRef.current.length) * accounts +
-          unreadableSeenRef.current,
-      );
+      setTotal((seenRef.current.size - unreadableSeenRef.current || resultsRef.current.length) * accounts);
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
       recordRun(resultsRef.current.slice(startAt));
@@ -426,9 +418,7 @@ export default function ScanWorkspace() {
       pendingFileRef.current = { file, count: found };
       setPendingCount(found);
       setUnreadable(invalid);
-      // Every line is on the list: the wallets checked on chains plus the lines
-      // that turned out to be unreadable.
-      setTotal(found * accounts + invalid);
+      setTotal(found * accounts);
     } catch {
       setError("That file could not be read. Try a plain .txt file.");
     } finally {
@@ -532,7 +522,7 @@ export default function ScanWorkspace() {
               {unreadableTotal > 0 ? (
                 <p className="mt-1 text-[10px] font-medium text-destructive/75 num">
                   {unreadableTotal.toLocaleString("en-US")} unreadable line
-                  {unreadableTotal === 1 ? "" : "s"} — shown in red
+                  {unreadableTotal === 1 ? "" : "s"} skipped
                 </p>
               ) : null}
             </div>
