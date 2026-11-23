@@ -2,15 +2,17 @@
 // meme tokens that are not in this wallet's own catalog. Every source here is a
 // public, keyless endpoint read straight from the browser.
 
-// ERC-20 balances from each chain's public Blockscout indexer.
+// ERC-20 balances from each chain's public Blockscout indexer. Most of those
+// hosts now sit behind a Cloudflare challenge that refuses every request, so
+// only the one that still answers is read directly.
 export const DISCOVERY_CHAINS = {
-  ethereum: "https://eth.blockscout.com",
-  base: "https://base.blockscout.com",
   optimism: "https://optimism.blockscout.com",
-  arbitrum: "https://arbitrum.blockscout.com",
-  polygon: "https://polygon.blockscout.com",
-  gnosis: "https://gnosis.blockscout.com",
 };
+
+// The blocked networks go through the app's own route, which asks Etherscan V2
+// with a key kept on the server: one free key covers every network below.
+const ETHERSCAN_CHAINS = ["ethereum", "base", "arbitrum", "polygon", "gnosis"];
+const ETHERSCAN_RELAY = "/api/token-discovery";
 
 // BEP-20 on BNB Chain has no Blockscout, so it uses the public Binplorer indexer.
 const BSC_INDEXER = "https://api.binplorer.com";
@@ -67,6 +69,15 @@ async function blockscoutTokens(chainId, address, limit) {
   });
 
   return finish(tokens.filter((token) => token.erc20), limit);
+}
+
+/** ERC-20 balances through the app's Etherscan route, one network per call. */
+async function etherscanTokens(chainId, address, limit) {
+  const response = await fetch(`${ETHERSCAN_RELAY}?chain=${chainId}&address=${address}`);
+  if (!response.ok) throw new Error(`Token list unavailable (${response.status}).`);
+  const data = await response.json();
+  const tokens = (data?.tokens || []).map((token) => ({ ...token, logo: "" }));
+  return finish(tokens, limit);
 }
 
 async function bscTokens(address, limit) {
@@ -186,6 +197,7 @@ async function tonTokens(address, limit) {
 export async function discoverTokens(chainId, address, limit = 40) {
   if (!address) return [];
   if (DISCOVERY_CHAINS[chainId]) return blockscoutTokens(chainId, address, limit);
+  if (ETHERSCAN_CHAINS.includes(chainId)) return etherscanTokens(chainId, address, limit);
   if (chainId === "bsc") return bscTokens(address, limit);
   if (chainId === "solana") return solanaTokens(address, limit);
   if (chainId === "ton") return tonTokens(address, limit);
@@ -193,4 +205,10 @@ export async function discoverTokens(chainId, address, limit = 40) {
 }
 
 /** The networks whose tokens are discovered on top of the wallet's own catalog. */
-export const DISCOVERY_NETWORKS = [...Object.keys(DISCOVERY_CHAINS), "bsc", "solana", "ton"];
+export const DISCOVERY_NETWORKS = [
+  ...Object.keys(DISCOVERY_CHAINS),
+  ...ETHERSCAN_CHAINS,
+  "bsc",
+  "solana",
+  "ton",
+];

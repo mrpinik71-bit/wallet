@@ -145,6 +145,9 @@ const HOST_CAPS = {
   "base.blockscout.com": 36,
   "api.binplorer.com": 20,
   "api.mainnet-beta.solana.com": 20,
+  // One free Etherscan key allows five calls a second, and five networks are
+  // discovered through it, so its lane stays at the key's own budget.
+  "etherscan.io": 4,
 };
 
 // Every measured host budget is widened by half again for this pass. The lane
@@ -213,9 +216,16 @@ for (const coin of SCAN_ASSETS) {
 // Token discovery: the catalog only holds the big tokens, so these five
 // networks also report every other coin each wallet actually holds, one list
 // per wallet, next to the catalog reads.
+// The five networks whose indexer is behind a Cloudflare challenge are read
+// through the app's own route, which asks Etherscan with a server-side key, so
+// they all share one lane: the key's budget is what paces them, not the host.
 const DISCOVERY_HOSTS = [
-  ["ethereum", "eth.blockscout.com"],
-  ["base", "base.blockscout.com"],
+  ["ethereum", "etherscan.io"],
+  ["base", "etherscan.io"],
+  ["arbitrum", "etherscan.io"],
+  ["polygon", "etherscan.io"],
+  ["gnosis", "etherscan.io"],
+  ["optimism", "optimism.blockscout.com"],
   ["bsc", "api.binplorer.com"],
   ["solana", "api.mainnet-beta.solana.com"],
   ["ton", "tonapi.io"],
