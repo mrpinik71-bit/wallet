@@ -130,6 +130,16 @@ export default function ScanResultRow({ result, index }) {
             </p>
           )}
 
+          {!hasBalance && (result.addresses?.solana || result.addresses?.ton) ? (
+            <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground/55">
+              {result.addresses?.solana && result.addresses?.ton
+                ? "Solana and TON were confirmed on a second independent node before being reported empty."
+                : result.addresses?.solana
+                  ? "Solana was confirmed on a second independent node before being reported empty."
+                  : "TON was confirmed on a second independent node before being reported empty."}
+            </p>
+          ) : null}
+
           {funded.length > 0 && result.failed ? (
             <p className="mt-2 text-[10px] text-muted-foreground/60">
               {result.failed} chain read{result.failed === 1 ? "" : "s"} failed

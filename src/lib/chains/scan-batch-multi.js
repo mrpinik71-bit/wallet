@@ -8,6 +8,7 @@ import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { drpcRelay } from "@/lib/chains/drpc-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { request } from "@/lib/chains/scan-lanes";
+import { verifySolanaBalances } from "@/lib/chains/scan-verify";
 import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
 
 const hexOf = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -57,15 +58,21 @@ export async function solanaBalancesMany(addresses) {
 
   await Promise.all(
     group(addresses, SOLANA_ACCOUNTS).map(async ({ start, list }) => {
-      const data = await solanaCall({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "getMultipleAccounts",
-        params: [list, { encoding: "base64" }],
-      });
-
-      const values = data?.result?.value;
-      if (!Array.isArray(values)) throw new Error("Solana network error.");
+      let values = null;
+      try {
+        const data = await solanaCall({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getMultipleAccounts",
+          params: [list, { encoding: "base64" }],
+        });
+        values = data?.result?.value;
+      } catch {
+        // Unanswered group: the second opinion below asks an independent node,
+        // so one busy node never reports a whole wall of wallets as failed.
+        values = null;
+      }
+      if (!Array.isArray(values)) return;
       values.forEach((value, offset) => {
         if (offset >= list.length) return;
         // A missing account has never been funded.
@@ -73,6 +80,22 @@ export async function solanaBalancesMany(addresses) {
       });
     }),
   );
+
+  // Second opinion: every wallet this pass reported empty — or could not answer
+  // at all — is asked an independent node, and the higher answer stands.
+  const doubtful = [];
+  addresses.forEach((address, position) => {
+    const value = balances.get(position);
+    if (value === undefined || value === 0) doubtful.push({ position, address });
+  });
+  if (doubtful.length) {
+    const second = await verifySolanaBalances(doubtful.map((row) => row.address));
+    for (const row of doubtful) {
+      const confirmed = second.get(row.address);
+      if (confirmed === undefined) continue;
+      if (confirmed > (balances.get(row.position) || 0)) balances.set(row.position, confirmed);
+    }
+  }
 
   return balances;
 }

@@ -2,6 +2,7 @@
 import { chains } from "@/lib/chains/config";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
+import { verifyTonBalance } from "@/lib/chains/scan-verify";
 
 const hexOf = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 const bytesOf = (hex) =>
@@ -112,28 +113,29 @@ export async function nearBalance(address) {
   throw new Error(lastStatus ? `NEAR network error (${lastStatus}).` : "NEAR network error.");
 }
 
-/** TON balance in nanotons for a v4R2 wallet address. */
+/** TON balance for a v4R2 wallet address, confirmed on a second indexer. */
 export async function tonBalance(address) {
   if (!address) return 0;
 
-  // Toncenter refuses a burst of five after the first, so a busy answer is
-  // retried on TonAPI, which takes the same load — together they stay fast
-  // instead of stalling one wallet at a time.
+  // Toncenter answers first. A funded answer is taken as it is; an empty one is
+  // only trusted once TonAPI agrees, because a busy or lagging indexer answers
+  // zero for a wallet that does hold TON — and that would hide a funded wallet.
+  let fromToncenter;
   try {
     const response = await fetch(`${chains.ton.api}/getAddressBalance?address=${encodeURIComponent(address)}`);
     if (response.ok) {
       const data = await response.json();
-      if (data?.ok) return Number(data.result || 0) / 1e9;
+      if (data?.ok) fromToncenter = Number(data.result || 0) / 1e9;
     }
   } catch {
-    // Fall through to the second endpoint.
+    // Left unanswered: TonAPI below is the whole answer.
   }
 
-  const fallback = await fetch(`https://tonapi.io/v2/accounts/${encodeURIComponent(address)}`);
-  if (!fallback.ok) throw new Error(`TON network error (${fallback.status}).`);
-  const account = await fallback.json();
-  // An address that has never been funded simply reports no balance.
-  return Number(account?.balance || 0) / 1e9;
+  if (fromToncenter > 0) return fromToncenter;
+
+  const fromTonapi = await verifyTonBalance(address).catch(() => undefined);
+  if (fromTonapi === undefined && fromToncenter === undefined) throw new Error("TON network error.");
+  return Math.max(fromToncenter || 0, fromTonapi || 0);
 }
 
 /** SUI balance in MIST, read through the Sui GraphQL endpoint. */
