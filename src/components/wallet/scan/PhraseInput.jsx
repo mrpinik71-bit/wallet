@@ -11,6 +11,9 @@ export default function PhraseInput({
   onFile,
   onCancel,
   scanning,
+  reading,
+  pendingCount,
+  onStartFile,
   count,
   error,
   words,
@@ -28,7 +31,7 @@ export default function PhraseInput({
     event.preventDefault();
     depthRef.current = 0;
     setDragging(false);
-    if (scanning) return;
+    if (scanning || reading) return;
     const file = event.dataTransfer?.files?.[0];
     if (file) onFile(file);
   }
@@ -37,13 +40,13 @@ export default function PhraseInput({
     <section
       onDragEnter={(event) => {
         event.preventDefault();
-        if (scanning) return;
+        if (scanning || reading) return;
         depthRef.current += 1;
         setDragging(true);
       }}
       onDragOver={(event) => {
         event.preventDefault();
-        if (!scanning && !dragging) setDragging(true);
+        if (!scanning && !reading && !dragging) setDragging(true);
       }}
       onDragLeave={() => {
         depthRef.current = Math.max(0, depthRef.current - 1);
@@ -62,7 +65,7 @@ export default function PhraseInput({
                 key={size}
                 type="button"
                 onClick={() => onWords(size)}
-                disabled={scanning}
+                disabled={scanning || reading || pendingCount > 0}
                 className={`flex-1 rounded-lg border py-1.5 text-[11px] font-medium num transition-colors disabled:opacity-50 ${
                   words === size
                     ? "border-primary/50 bg-primary/15 text-primary"
@@ -82,7 +85,7 @@ export default function PhraseInput({
             rows={7}
             spellCheck={false}
             autoCapitalize="none"
-            disabled={scanning}
+            disabled={scanning || reading || pendingCount > 0}
             placeholder={"word one two three …\nword one two three …"}
             className="w-full resize-none rounded-2xl border border-foreground/[0.08] bg-foreground/[0.025] p-3.5 font-mono text-[11.5px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/40 disabled:opacity-60"
           />
@@ -102,7 +105,7 @@ export default function PhraseInput({
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            disabled={scanning}
+            disabled={scanning || reading}
             className="inline-flex items-center gap-1.5 rounded-full border border-foreground/[0.1] bg-foreground/[0.03] px-3 py-1.5 text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           >
             <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -123,9 +126,16 @@ export default function PhraseInput({
 
         <p className="mt-2 truncate text-[10px] text-muted-foreground/65">
           {fileName ? (
-            <span className="text-primary/85">{fileName} — scan starts automatically</span>
+            <span className="text-primary/85">
+              {fileName}
+              {reading
+                ? " — reading the whole file…"
+                : pendingCount > 0
+                  ? ` — ${pendingCount.toLocaleString("en-US")} wallets found`
+                  : ""}
+            </span>
           ) : (
-            "Pick a file or drag it onto this card from your computer (.txt, up to 2 GB) — the scan starts right away."
+            "Pick a file or drag it onto this card from your computer (.txt, up to 2 GB) — it is read and counted first."
           )}
         </p>
 
@@ -156,6 +166,20 @@ export default function PhraseInput({
           >
             <X className="h-4 w-4" />
             Stop scan
+          </button>
+        ) : reading ? (
+          <p className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-foreground/[0.1] bg-foreground/[0.025] px-3 py-2.5 text-center text-[10.5px] font-medium text-muted-foreground">
+            <ScanSearch className="h-3.5 w-3.5 animate-pulse" strokeWidth={2} />
+            Reading every line — counting the wallets first…
+          </p>
+        ) : pendingCount > 0 ? (
+          <button
+            type="button"
+            onClick={onStartFile}
+            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-[12.5px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <ScanSearch className="h-4 w-4" strokeWidth={2} />
+            Check {pendingCount.toLocaleString("en-US")} wallet{pendingCount === 1 ? "" : "s"} on all chains
           </button>
         ) : (
           <p className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2.5 text-center text-[10.5px] font-medium text-primary/90">

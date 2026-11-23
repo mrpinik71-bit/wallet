@@ -759,6 +759,7 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   resetBatching();
   let completed = 0;
   let started = 0;
+  let batchNumber = 0;
   const active = new Set();
   let buffer = [];
 
@@ -781,11 +782,11 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   // Derivation, spread over every core of the device for this whole scan.
   const pool = createDerivePool();
 
-  const runBatch = async (entries) => {
+  const runBatch = async (entries, batch) => {
     // Announced before the reads start, so the page shows wallets being checked
-    // while they are still being derived.
+    // while they are still being derived — with the batch they belong to.
     started += entries.length;
-    onProgress?.({ completed, started });
+    onProgress?.({ completed, started, batch });
 
     // Deriving and reading overlap: as soon as READ_CHUNK wallets are derived
     // they go to the network while the rest of the round is still deriving, so
@@ -836,8 +837,10 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   let waiting = 0;
   const launch = (entries) => {
     let task;
+    batchNumber += 1;
+    const batch = { number: batchNumber, from: started + 1, to: started + entries.length, size: entries.length };
     waiting += entries.length;
-    task = runBatch(entries).finally(() => {
+    task = runBatch(entries, batch).finally(() => {
       waiting -= entries.length;
       active.delete(task);
     });

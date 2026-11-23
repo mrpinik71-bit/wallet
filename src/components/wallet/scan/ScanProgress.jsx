@@ -18,6 +18,8 @@ export default function ScanProgress({
   fundedTotal,
   invalid,
   failed,
+  batch,
+  sent = 0,
   finished,
 }) {
   const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
@@ -68,6 +70,17 @@ export default function ScanProgress({
         </div>
       ) : null}
 
+      {!finished && batch ? (
+        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/60 num">
+          <span className="truncate">
+            Batch {batch.number} of {Math.max(batch.number, Math.ceil((total || batch.to) / batch.size))}
+          </span>
+          <span className="shrink-0 tabular">
+            wallets {batch.from.toLocaleString("en-US")}–{batch.to.toLocaleString("en-US")}
+          </span>
+        </div>
+      ) : null}
+
       <div className="mt-2.5 grid grid-cols-2 gap-1.5">
         <Cell label="Wallets found" value={found.toLocaleString("en-US")} tone="text-foreground" />
         <Cell label="With funds" value={funded.toLocaleString("en-US")} tone={funded > 0 ? "text-primary" : "text-foreground"} />
@@ -78,6 +91,12 @@ export default function ScanProgress({
           tone={invalid > 0 ? "text-destructive" : "text-foreground"}
         />
       </div>
+
+      {sent > 0 ? (
+        <p className="mt-2 text-[10px] leading-relaxed text-primary/85 num">
+          {sent.toLocaleString("en-US")} funded wallet{sent === 1 ? "" : "s"} sent to your Telegram chat
+        </p>
+      ) : null}
 
       {failed > 0 ? (
         <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/65 num">

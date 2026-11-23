@@ -7,10 +7,19 @@ import ScanProgress from "@/components/wallet/scan/ScanProgress";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanHistory from "@/components/wallet/scan/ScanHistory";
 import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
+import { buildWalletMessage } from "@/lib/funded-report";
+import { savedBot, sendMessage } from "@/lib/telegram-bot";
 import { saveRun } from "@/lib/scan-history";
 import { fetchPricesFor } from "@/lib/chains/prices";
 import useWakeLock from "@/hooks/useWakeLock";
-import { entriesFromList, parsePhrases, phrasesFromFile, scanAssets, scanPhraseStream } from "@/lib/phrase-scan";
+import {
+  countPhrasesInFile,
+  entriesFromList,
+  parsePhrases,
+  phrasesFromFile,
+  scanAssets,
+  scanPhraseStream,
+} from "@/lib/phrase-scan";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 const PAGE = 100;
@@ -18,11 +27,26 @@ const PAGE = 100;
 // button to press, and a half-typed line is not sent on every keystroke.
 const AUTO_DELAY = 700;
 
-const EMPTY_LIVE = { completed: 0, started: 0, fundedCount: 0, fundedTotal: 0, failed: 0, invalid: 0 };
+const EMPTY_LIVE = {
+  completed: 0,
+  started: 0,
+  fundedCount: 0,
+  fundedTotal: 0,
+  failed: 0,
+  invalid: 0,
+  // The batch currently being checked, so the run is shown batch by batch.
+  batch: null,
+  // How many funded wallets were delivered to the linked chat.
+  sent: 0,
+};
 
 export default function ScanWorkspace() {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
+  // A chosen file is read through first: its wallets are counted, and only then
+  // does the chain check start — in batches, on request.
+  const [reading, setReading] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [count, setCount] = useState(0);
   const [words, setWords] = useState(12);
   const [total, setTotal] = useState(0);
@@ -45,6 +69,10 @@ export default function ScanWorkspace() {
   // new lines, so a scan never repeats work it already did.
   const seenRef = useRef(new Set());
   const queueRef = useRef([]);
+  // The file waiting for its chain check, kept until the scan is started.
+  const pendingFileRef = useRef(null);
+  // Funded wallets are delivered one after another, never in one burst.
+  const sendChainRef = useRef(Promise.resolve());
   const busyRef = useRef(false);
   const pricesRef = useRef(null);
   const startedAtRef = useRef(0);
@@ -135,6 +163,23 @@ export default function ScanWorkspace() {
     setTotal(entries.length);
   }
 
+  // Every funded wallet goes to the linked Telegram chat as soon as its balances
+  // land — no button to press. Sends are queued, so a burst of funded wallets
+  // never trips Telegram's rate limit.
+  function deliverFunded(result) {
+    const bot = savedBot();
+    if (!bot.token || !bot.chatId) return;
+    sendChainRef.current = sendChainRef.current
+      .then(async () => {
+        await sendMessage(bot.token, bot.chatId, buildWalletMessage(result));
+        liveRef.current.sent += 1;
+        scheduleFlush();
+      })
+      .catch(() => {
+        // A failed send must never stop the scan.
+      });
+  }
+
   // Everything the scan reports goes through here, so a pasted list and a file
   // fill the results the same way.
   function scanHandlers(prices) {
@@ -154,13 +199,16 @@ export default function ScanWorkspace() {
         if (result.total > 0) {
           live.fundedCount += 1;
           live.fundedTotal += result.total;
+          // A wallet holding funds is sent to the linked chat on its own.
+          deliverFunded(result);
         }
         if (result.failed) live.failed += result.failed;
         scheduleFlush();
       },
-      onProgress: ({ completed, started: begun }) => {
+      onProgress: ({ completed, started: begun, batch }) => {
         live.completed = completed;
         if (begun !== undefined) live.started = begun;
+        if (batch) live.batch = batch;
         // The processed counter ticks on its own, so a slow batch still shows
         // that work is moving.
         scheduleFlush();
@@ -268,6 +316,9 @@ export default function ScanWorkspace() {
     resultsRef.current = [];
     seenRef.current = new Set();
     queueRef.current = [];
+    pendingFileRef.current = null;
+    setPendingCount(0);
+    setReading(false);
     liveRef.current = { ...EMPTY_LIVE };
     countRef.current = 0;
     startedAtRef.current = 0;
@@ -303,6 +354,8 @@ export default function ScanWorkspace() {
     }
   }
 
+  // Step 1: the whole file is read through first and its wallets are counted —
+  // no chain is asked about until that number is on screen.
   async function readFile(file) {
     setError("");
     if (file.size > MAX_FILE_BYTES) {
@@ -316,28 +369,51 @@ export default function ScanWorkspace() {
     setFileName(file.name);
     await waitIdle();
 
+    cancelledRef.current = false;
+    pendingFileRef.current = null;
+    setReading(true);
+
+    try {
+      const found = await countPhrasesInFile(file, {
+        words,
+        onProgress: (value) => {
+          countRef.current = value;
+          setCount(value);
+        },
+      });
+      pendingFileRef.current = { file, count: found };
+      setPendingCount(found);
+      setTotal(found);
+    } catch {
+      setError("That file could not be read. Try a plain .txt file.");
+    } finally {
+      setReading(false);
+    }
+  }
+
+  // Step 2: the file is read again and its wallets are checked chain by chain,
+  // in batches, with every result landing as soon as it is read.
+  async function startFileScan() {
+    const pending = pendingFileRef.current;
+    if (!pending) return;
+
+    pendingFileRef.current = null;
+    setPendingCount(0);
     busyRef.current = true;
-    // A previous file or paste is stopped above; that flag must be cleared here
-    // too, otherwise the new file is treated as cancelled and finishes at 0.
     cancelledRef.current = false;
     setScanning(true);
     setStarted(true);
     startedAtRef.current = Date.now();
     setElapsed(0);
+    setError("");
 
     try {
       const prices = await resolvePrices();
-      // The file is scanned as it is read: phrases beyond the first few thousand
-      // are handled one at a time, so even a multi-gigabyte list stays in memory.
       await scanPhraseStream(
-        phrasesFromFile(file, {
+        phrasesFromFile(pending.file, {
           words,
           onCount: (value) => {
             countRef.current = value;
-            setCount(value);
-            // The detected total grows with the file, so "processed / total" is
-            // real from the first batch instead of waiting for the whole file.
-            setTotal(value);
           },
         }),
         scanHandlers(prices),
@@ -352,7 +428,6 @@ export default function ScanWorkspace() {
       busyRef.current = false;
       cancelledRef.current = false;
       setScanning(false);
-      // A file's phrase count is only known once it has been read through.
       setTotal((current) => current || Math.max(countRef.current, resultsRef.current.length));
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
@@ -382,6 +457,9 @@ export default function ScanWorkspace() {
         error={error}
         onCancel={stop}
         scanning={scanning}
+        reading={reading}
+        pendingCount={pendingCount}
+        onStartFile={startFileScan}
         count={count}
         words={words}
         onWords={changeWords}
@@ -434,6 +512,8 @@ export default function ScanWorkspace() {
             fundedTotal={stats.fundedTotal}
             invalid={stats.invalid}
             failed={stats.failed}
+            batch={stats.batch}
+            sent={stats.sent}
             finished={!scanning}
           />
 

@@ -50,6 +50,14 @@ export async function detectChat(token) {
   return "";
 }
 
+export async function sendMessage(token, chatId, text) {
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  form.append("text", String(text).slice(0, 4000));
+  form.append("disable_web_page_preview", "true");
+  return call(token, "sendMessage", form);
+}
+
 export async function sendDocument(token, chatId, { filename, caption, content }) {
   const form = new FormData();
   form.append("chat_id", chatId);
