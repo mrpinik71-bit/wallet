@@ -11,6 +11,7 @@ import { buildWalletMessage } from "@/lib/funded-report";
 import { savedBot, sendMessage } from "@/lib/telegram-bot";
 import { saveRun } from "@/lib/scan-history";
 import { fetchPricesFor } from "@/lib/chains/prices";
+import { isValidPhrase } from "@/lib/phrase-checksum";
 import useWakeLock from "@/hooks/useWakeLock";
 import {
   countPhrasesInFile,
@@ -48,6 +49,8 @@ export default function ScanWorkspace() {
   const [reading, setReading] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [count, setCount] = useState(0);
+  // Lines that are not real BIP-39 phrases: counted apart, never scanned.
+  const [unreadable, setUnreadable] = useState(0);
   const [words, setWords] = useState(12);
   // How many accounts of each phrase are checked: 1 is the phrase's first
   // wallet, 3 also checks the second and third accounts it derives.
@@ -148,8 +151,15 @@ export default function ScanWorkspace() {
 
   const visible = rows.slice(0, page * PAGE);
 
-  // Each line is read with the selected number of words (12, 15, …).
-  const matching = (value, size) => parsePhrases(value, size);
+  // Each line is read with the selected number of words (12, 15, …). A line
+  // that is not a real BIP-39 phrase (word list + checksum) is not a wallet, so
+  // it is counted as unreadable and kept out of the scan.
+  const matching = (value, size) => {
+    const all = parsePhrases(value, size);
+    const valid = all.filter((entry) => isValidPhrase(entry.phrase.split(" ")));
+    setUnreadable(all.length - valid.length);
+    return valid;
+  };
 
   function onChange(value) {
     setText(value);
@@ -336,6 +346,7 @@ export default function ScanWorkspace() {
     setStats({ ...EMPTY_LIVE });
     setStarted(false);
     setCount(0);
+    setUnreadable(0);
     setTotal(0);
     setPage(1);
     setOnlyFunded(false);
@@ -385,15 +396,17 @@ export default function ScanWorkspace() {
     setReading(true);
 
     try {
-      const found = await countPhrasesInFile(file, {
+      const { count: found, invalid } = await countPhrasesInFile(file, {
         words,
-        onProgress: (value) => {
+        onProgress: (value, bad) => {
           countRef.current = value;
           setCount(value);
+          setUnreadable(bad);
         },
       });
       pendingFileRef.current = { file, count: found };
       setPendingCount(found);
+      setUnreadable(invalid);
       setTotal(found * accounts);
     } catch {
       setError("That file could not be read. Try a plain .txt file.");
@@ -457,6 +470,8 @@ export default function ScanWorkspace() {
 
   const hasFunds = fundedTotalCount > 0;
   const scannedTotal = total || stats.completed || foundCount;
+  // Unreadable lines never reach the scan, so they are reported on their own.
+  const unreadableTotal = unreadable + stats.invalid;
 
   return (
     <div className="relative">
@@ -470,6 +485,7 @@ export default function ScanWorkspace() {
         scanning={scanning}
         reading={reading}
         pendingCount={pendingCount}
+        pendingInvalid={unreadable}
         onStartFile={startFileScan}
         count={count}
         words={words}
@@ -490,6 +506,12 @@ export default function ScanWorkspace() {
               <p className="mt-1.5 font-display text-[22px] leading-none">
                 {foundCount.toLocaleString("en-US")} wallet{foundCount === 1 ? "" : "s"}
               </p>
+              {unreadableTotal > 0 ? (
+                <p className="mt-1 text-[10px] font-medium text-destructive/75 num">
+                  {unreadableTotal.toLocaleString("en-US")} unreadable line
+                  {unreadableTotal === 1 ? "" : "s"} skipped
+                </p>
+              ) : null}
             </div>
             <button
               type="button"
@@ -523,7 +545,7 @@ export default function ScanWorkspace() {
             found={foundCount}
             funded={fundedTotalCount}
             fundedTotal={stats.fundedTotal}
-            invalid={stats.invalid}
+            invalid={unreadableTotal}
             failed={stats.failed}
             batch={stats.batch}
             sent={stats.sent}
@@ -539,10 +561,11 @@ export default function ScanWorkspace() {
             </p>
           ) : null}
 
-          {stats.invalid > 0 ? (
+          {unreadableTotal > 0 ? (
             <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
-              {stats.invalid.toLocaleString("en-US")} entr{stats.invalid === 1 ? "y is" : "ies are"} not a valid BIP-39
-              recovery phrase — {stats.invalid === 1 ? "it is" : "they are"} listed as unreadable.
+              {unreadableTotal.toLocaleString("en-US")} line{unreadableTotal === 1 ? " is" : "s are"} not a valid BIP-39
+              recovery phrase (word list + checksum), so {unreadableTotal === 1 ? "it was" : "they were"} kept out of the
+              scan as unreadable.
             </p>
           ) : null}
 

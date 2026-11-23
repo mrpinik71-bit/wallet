@@ -13,6 +13,7 @@ export default function PhraseInput({
   scanning,
   reading,
   pendingCount,
+  pendingInvalid = 0,
   onStartFile,
   count,
   error,
@@ -162,7 +163,11 @@ export default function PhraseInput({
               {reading
                 ? " — reading the whole file…"
                 : pendingCount > 0
-                  ? ` — ${pendingCount.toLocaleString("en-US")} wallets found`
+                  ? ` — ${pendingCount.toLocaleString("en-US")} wallets found${
+                      pendingInvalid > 0
+                        ? ` · ${pendingInvalid.toLocaleString("en-US")} unreadable`
+                        : ""
+                    }`
                   : ""}
             </span>
           ) : (
