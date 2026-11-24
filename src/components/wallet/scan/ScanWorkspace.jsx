@@ -7,7 +7,7 @@ import ScanLivePanel from "@/components/wallet/scan/ScanLivePanel";
 import ScanProgress from "@/components/wallet/scan/ScanProgress";
 import ScanSummary from "@/components/wallet/scan/ScanSummary";
 import ScanHistory from "@/components/wallet/scan/ScanHistory";
-import ScanResultRow from "@/components/wallet/scan/ScanResultRow";
+import ScanResultsPanel from "@/components/wallet/scan/ScanResultsPanel";
 import { buildWalletMessage } from "@/lib/funded-report";
 import { savedBot, sendMessage } from "@/lib/telegram-bot";
 import { saveRun } from "@/lib/scan-history";
@@ -503,21 +503,15 @@ export default function ScanWorkspace() {
             </p>
           ) : null}
 
-          <div className="space-y-2">
-            {visible.map(({ slot: row, position }) => (
-              <ScanResultRow key={`${position}-${row.phrase}`} result={row} index={position} />
-            ))}
-          </div>
-
-          {rows.length > visible.length ? (
-            <button
-              type="button"
-              onClick={() => setPage((value) => value + 1)}
-              className="w-full rounded-xl border border-foreground/[0.1] py-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Show {Math.min(PAGE, rows.length - visible.length)} more · {rows.length - visible.length} left
-            </button>
-          ) : null}
+          <ScanResultsPanel
+            rows={visible}
+            fileName={fileName}
+            walletTotal={scannedTotal}
+            hasMore={rows.length > visible.length}
+            remaining={rows.length - visible.length}
+            onMore={() => setPage((value) => value + 1)}
+            liveCount={foundCount}
+          />
 
           {!scanning && foundCount > 0 && fundedTotalCount === 0 ? (
             <div className="lux noise relative p-4 text-center">
