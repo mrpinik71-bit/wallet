@@ -30,8 +30,8 @@ const CHUNK = 80; // wallets per batch round
 // address map, so a huge queue ran the tab out of memory and the scan stopped
 // dead. The network lanes below are the real ceiling on speed, not this count.
 const INFLIGHT = 150; // batch rounds kept in flight — 150 rounds of 80 run together
-const MAX_WAITING = 9600; // wallets prepared and waiting across all rounds — the memory ceiling
-const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
+const MAX_WAITING = 800; // wallets prepared and waiting across all rounds — the memory ceiling
+const READ_CHUNK = 12; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
 // requests at once usually stops answering instead of refusing them, which read
 // as a failed chain; a modest start that widens while the node keeps answering
@@ -399,7 +399,7 @@ const asCoinMap = (values, items, coins) => {
 };
 
 /** Reads every asset for a batch of wallets, batching wherever a chain allows it. */
-async function readBatch(batch, onWallet) {
+async function readBatch(batch, onWallet, deep = true) {
   const jobs = [];
   const collect = (chainId, read) => {
     const items = [];
@@ -634,7 +634,11 @@ async function readBatch(batch, onWallet) {
 
   // Everything else held on the five discovery networks is looked up per wallet
   // and reported next to the catalog assets.
-  for (const [chainId, host] of DISCOVERY_HOSTS) {
+  // Deep scan: every other token a wallet holds, on the nine indexed networks.
+  // The indexer's key allows a few calls a second and a wallet costs it several,
+  // which is what makes a big scan slow; switched off, only the catalog assets
+  // are read — all of them batched, so a round answers in a second or two.
+  for (const [chainId, host] of deep ? DISCOVERY_HOSTS : []) {
     const items = [];
     batch.forEach((wallet, index) => {
       const address = wallet.addresses[chainId];
@@ -856,7 +860,7 @@ function toResult(wallet, reads, prices) {
 }
 
 /** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
-export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled, accounts } = {}) {
+export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled, accounts, deep = true } = {}) {
   // One phrase can hold several accounts: each account index is derived and
   // checked as its own wallet, so funds on account 2 or 3 are found too.
   const accountsPerPhrase = Math.max(1, Math.min(3, accounts || 1));
@@ -885,18 +889,23 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
     for (let position = 0; position < entries.length; position += 1) {
       if (isCancelled?.()) break;
       onWallet?.(position, prepare(entries[position]));
-      if (position % 25 === 24) await new Promise((resolve) => setTimeout(resolve, 0));
+      // A phrase takes a phone a good fraction of a second to derive, so the
+      // thread is handed back every couple of phrases: the page keeps painting.
+      if (position % 2 === 1) await new Promise((resolve) => setTimeout(resolve, 0));
     }
   };
 
   // Derivation, spread over every core of the device for this whole scan.
   const pool = createDerivePool();
+  // Reported up front: one core means the device refused worker threads and every
+  // phrase is being derived on this thread, which is worth seeing on screen.
+  onProgress?.({ completed, started, cores: pool?.size || 1 });
 
   const runBatch = async (entries, batch) => {
     // Announced before the reads start, so the page shows wallets being checked
     // while they are still being derived — with the batch they belong to.
     started += entries.length;
-    onProgress?.({ completed, started, batch });
+    onProgress?.({ completed, started, batch, cores: pool ? pool.alive() : 1 });
 
     // Deriving and reading overlap: as soon as READ_CHUNK wallets are derived
     // they go to the network while the rest of the round is still deriving, so
@@ -908,9 +917,11 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
       if (!pending.length) return;
       const part = pending.splice(0, pending.length);
       reads.push(
-        readBatch(part, (index, walletReads) => report(toResult(part[index], walletReads, prices))),
+        readBatch(part, (index, walletReads) => report(toResult(part[index], walletReads, prices)), deep),
       );
     };
+
+    let handoverTimer = null;
 
     const take = (position, wallet) => {
       if (!wallet || isCancelled?.()) return;
@@ -931,11 +942,26 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
         return;
       }
       pending.push(wallet);
-      if (pending.length >= READ_CHUNK) handOver();
+      if (pending.length >= READ_CHUNK) {
+        handOver();
+      } else if (!handoverTimer) {
+        // The first wallets go to the network on their own, a moment after they
+        // arrive: waiting for a full group kept the screen at zero for as long as
+        // that whole group took to derive, which read as a frozen scan.
+        handoverTimer = setTimeout(() => {
+          handoverTimer = null;
+          handOver();
+        }, 1000);
+      }
     };
 
     if (pool) await pool.map(entries, isCancelled, take);
     else await prepareInline(entries, take);
+
+    if (handoverTimer) {
+      clearTimeout(handoverTimer);
+      handoverTimer = null;
+    }
 
     handOver();
     // Each wallet is reported as soon as its own chains have answered.

@@ -33,7 +33,7 @@ const Metric = ({ icon: Icon, label, value, hint }) => (
   </div>
 );
 
-export default function ScanLivePanel({ completed = 0, total = 0, started = 0, elapsed = 0, batch, finished }) {
+export default function ScanLivePanel({ completed = 0, total = 0, started = 0, elapsed = 0, batch, cores = 0, finished }) {
   // Live speed: the processed counter is sampled as it moves, so the number on
   // screen is what the scan is doing right now, not an average since start.
   const [rate, setRate] = useState(0);
@@ -96,6 +96,7 @@ export default function ScanLivePanel({ completed = 0, total = 0, started = 0, e
             {finished ? "Scan complete" : "Live scan"}
           </span>
           <span className="rounded-full border border-foreground/[0.08] bg-foreground/[0.02] px-2 py-0.5 text-[9.5px] font-medium num text-muted-foreground/75">
+            {cores ? `${cores} core${cores === 1 ? "" : "s"} · ` : ""}
             {clock(elapsed)}
           </span>
         </div>

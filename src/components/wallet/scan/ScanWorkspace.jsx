@@ -10,7 +10,7 @@ import ScanHistory from "@/components/wallet/scan/ScanHistory";
 import ScanResultsPanel from "@/components/wallet/scan/ScanResultsPanel";
 import { buildWalletMessage } from "@/lib/funded-report";
 import { savedBot, sendMessage } from "@/lib/telegram-bot";
-import { saveRun } from "@/lib/scan-history";
+import { clearHistory, saveRun } from "@/lib/scan-history";
 import { fetchPricesFor } from "@/lib/chains/prices";
 import useWakeLock from "@/hooks/useWakeLock";
 import { countPhrasesInFile, phrasesFromFile, scanAssets, scanPhraseStream } from "@/lib/phrase-scan";
@@ -31,6 +31,8 @@ const EMPTY_LIVE = {
   batch: null,
   // How many funded wallets were delivered to the linked chat.
   sent: 0,
+  // Cores deriving the phrases: one means worker threads are unavailable.
+  cores: 0,
 };
 
 export default function ScanWorkspace() {
@@ -53,6 +55,11 @@ export default function ScanWorkspace() {
   // How many accounts of each phrase are checked: 1 is the phrase's first
   // wallet, 3 also checks the second and third accounts it derives.
   const [accounts, setAccounts] = useState(3);
+  // Whether every other token a wallet holds is looked up as well. Off by
+  // default: the indexer's key allows a few calls a second and a wallet costs
+  // several, which is what made a big scan take minutes. On, only as many
+  // wallets a second are found as the keys allow.
+  const [deep, setDeep] = useState(false);
   const [total, setTotal] = useState(0);
   const [started, setStarted] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -67,6 +74,8 @@ export default function ScanWorkspace() {
   const [exportReady, setExportReady] = useState(false);
   // Bumped whenever a run is logged, so the history section re-reads its list.
   const [historyKey, setHistoryKey] = useState(0);
+  // Set once a finished run has been delivered to the chat and wiped here.
+  const [wiped, setWiped] = useState(false);
 
   const resultsRef = useRef([]);
   const queueRef = useRef([]);
@@ -213,10 +222,11 @@ export default function ScanWorkspace() {
         if (result.failed) live.failed += result.failed;
         scheduleFlush();
       },
-      onProgress: ({ completed, started: begun, batch }) => {
+      onProgress: ({ completed, started: begun, batch, cores }) => {
         live.completed = completed;
         if (begun !== undefined) live.started = begun;
         if (batch) live.batch = batch;
+        if (cores) live.cores = cores;
         // The processed counter ticks on its own, so a slow batch still shows
         // that work is moving.
         scheduleFlush();
@@ -302,6 +312,15 @@ export default function ScanWorkspace() {
     setFileName("");
   }
 
+  // Delivered to the linked chat: the funded wallets are there now, so the run is
+  // wiped from this device — results, history, file name, nothing left behind.
+  function wipeAfterDelivery() {
+    clearAll();
+    clearHistory();
+    setHistoryKey((value) => value + 1);
+    setWiped(true);
+  }
+
   // A scan already running is stopped first: the file then starts from a clean
   // slate instead of racing the run in progress.
   async function waitIdle(maxMs = 5000) {
@@ -315,6 +334,7 @@ export default function ScanWorkspace() {
   // no chain is asked about until that number is on screen.
   async function readFile(file, size = words) {
     setError("");
+    setWiped(false);
     if (file.size > MAX_FILE_BYTES) {
       setError("That file is larger than 2 GB. Split it into smaller .txt files.");
       return;
@@ -388,7 +408,7 @@ export default function ScanWorkspace() {
             countRef.current = value;
           },
         }),
-        scanHandlers(prices),
+        { ...scanHandlers(prices), deep },
       );
     } catch (cause) {
       setError(
@@ -443,9 +463,17 @@ export default function ScanWorkspace() {
         onWords={changeWords}
         accounts={accounts}
         onAccounts={changeAccounts}
+        deep={deep}
+        onDeep={setDeep}
         lines={lines}
         linesTotal={linesTotal}
       />
+
+      {wiped ? (
+        <p className="mt-3 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2 text-[10.5px] leading-relaxed text-primary/90">
+          Funded wallets sent to your Telegram chat — the scan was wiped from this device.
+        </p>
+      ) : null}
 
       <RpcKeysPanel />
 
@@ -495,6 +523,7 @@ export default function ScanWorkspace() {
             started={stats.started}
             elapsed={elapsed}
             batch={stats.batch}
+            cores={stats.cores}
             finished={!scanning}
           />
 
@@ -507,7 +536,14 @@ export default function ScanWorkspace() {
             sent={stats.sent}
           />
 
-          {exportReady ? <FundedExport getFunded={getFunded} getAll={getAll} scanned={scannedTotal} /> : null}
+          {exportReady ? (
+            <FundedExport
+              getFunded={getFunded}
+              getAll={getAll}
+              scanned={scannedTotal}
+              onDelivered={wipeAfterDelivery}
+            />
+          ) : null}
 
           {stats.failed > 0 ? (
             <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">

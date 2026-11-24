@@ -2,6 +2,10 @@
 // every core of the device busy while the main thread stays responsive.
 import { prepare } from "@/lib/chains/scan-derive";
 
+// Says it is alive the moment the module loads. A worker that cannot load never
+// says anything, so the pool retires it instead of waiting on it.
+self.postMessage({ ready: true });
+
 self.onmessage = (event) => {
   const { id, entries } = event.data || {};
   const wallets = (entries || []).map((entry) => {

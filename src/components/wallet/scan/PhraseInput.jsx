@@ -21,6 +21,8 @@ export default function PhraseInput({
   onWords,
   accounts = 1,
   onAccounts,
+  deep = true,
+  onDeep,
   lines = [],
   linesTotal = 0,
 }) {
@@ -121,6 +123,38 @@ export default function PhraseInput({
           {accounts === 1
             ? "Only the first account of each phrase is checked."
             : `Account 1 to ${accounts} of every phrase are checked — the 2nd and 3rd accounts are derived from the same phrase and hold their own addresses.`}
+        </p>
+
+        <div className="mt-2 flex items-center gap-2">
+          <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+            Deep scan
+          </span>
+          <div className="flex flex-1 gap-1.5">
+            {[
+              [true, "Every token"],
+              [false, "Fast"],
+            ].map(([value, label]) => (
+              <button
+                key={String(value)}
+                type="button"
+                onClick={() => onDeep(value)}
+                disabled={scanning || reading || pendingCount > 0}
+                className={`flex-1 rounded-lg border py-1.5 text-[10.5px] font-medium transition-colors disabled:opacity-50 ${
+                  deep === value
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-foreground/[0.08] bg-foreground/[0.02] text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-1.5 text-[9.5px] leading-relaxed text-muted-foreground/55">
+          {deep
+            ? "Every other token each wallet holds is looked up too — the indexer allows a few calls a second, so this is the slow part."
+            : "Only the catalog assets are checked — every chain answers in one batch, so a scan runs far faster."}
         </p>
 
         <div className="mt-3 flex items-center gap-2 rounded-xl border border-dashed border-foreground/[0.14] bg-foreground/[0.02] px-2.5 py-2">

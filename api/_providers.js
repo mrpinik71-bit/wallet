@@ -357,7 +357,12 @@ export async function tokenDiscovery(query) {
     if (!keyed || keyed.status === 404 || keyed.status >= 500) keyedUp = false;
   }
 
-  const key = env("ETHERSCAN_API_KEY");
+  // The key may hold a list, separated by commas or spaces: one free key allows
+  // five calls a second, so several are used in turn and the scan widens with them.
+  const keys = env("ETHERSCAN_API_KEY")
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  const key = keys.length ? keys[Math.floor(Math.random() * keys.length)] : "";
   const base = key
     ? `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=`
     : `${BLOCKSCOUT[chain]}/api?module=account&action=`;

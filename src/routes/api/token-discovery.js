@@ -16,15 +16,43 @@ const CHAIN_IDS = {
 
 const API = "https://api.etherscan.io/v2/api";
 const TX_ROWS = 300; // transfer rows read to find the wallet's tokens
-const VERIFY_LIMIT = 8; // exact balances confirmed per wallet
+// Exact balances confirmed per wallet. Every confirmation is another call on the
+// key, and the key is what caps a scan's speed, so only the tokens the transfer
+// history says were received are confirmed.
+const VERIFY_LIMIT = 3;
 
 const isAddress = (value) => typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value);
 
-async function call(key, chainId, action, address, extra = "") {
-  const url = `${API}?chainid=${chainId}&module=account&action=${action}&address=${address}${extra}&apikey=${key}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Indexer error (${response.status}).`);
-  return response.json().catch(() => null);
+// One free Etherscan key allows five calls a second, and a wallet costs several,
+// so the key is a list: ETHERSCAN_API_KEY may hold as many keys as you have,
+// separated by commas or spaces, and the calls are spread over them in turn.
+// Every extra key widens the scan in proportion.
+function keyPool() {
+  return String(secrets.get("ETHERSCAN_API_KEY") || "")
+    .split(/[\s,]+/)
+    .filter(Boolean);
+}
+
+let keyCursor = 0;
+const nextKey = (keys) => keys[keyCursor++ % keys.length];
+const isLimited = (body) => /rate limit|max calls|max rate|too many/i.test(`${body?.result || ""} ${body?.message || ""}`);
+
+/** One indexer call, moved to the next key when this one is out of calls. */
+async function call(keys, chainId, action, address, extra = "") {
+  let last = null;
+  for (let attempt = 0; attempt < Math.min(keys.length, 4); attempt += 1) {
+    const url = `${API}?chainid=${chainId}&module=account&action=${action}&address=${address}${extra}&apikey=${nextKey(keys)}`;
+    const response = await fetch(url);
+    if (response.status === 429) continue;
+    if (!response.ok) throw new Error(`Indexer error (${response.status}).`);
+    const body = await response.json().catch(() => null);
+    if (isLimited(body)) {
+      last = body;
+      continue;
+    }
+    return body;
+  }
+  return last;
 }
 
 /** Tokens this wallet received more of than it sent, newest transfers first. */
@@ -53,8 +81,8 @@ export const Route = createFileRoute("/api/token-discovery")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const key = secrets.get("ETHERSCAN_API_KEY");
-        if (!key) return Response.json({ error: "No Etherscan key configured." }, { status: 503 });
+        const keys = keyPool();
+        if (!keys.length) return Response.json({ error: "No Etherscan key configured." }, { status: 503 });
 
         const params = new URL(request.url).searchParams;
         const chainId = CHAIN_IDS[params.get("chain")];
@@ -63,7 +91,7 @@ export const Route = createFileRoute("/api/token-discovery")({
         if (!isAddress(address)) return Response.json({ error: "Bad address." }, { status: 400 });
 
         const history = await call(
-          key,
+          keys,
           chainId,
           "tokentx",
           address,
@@ -85,7 +113,7 @@ export const Route = createFileRoute("/api/token-discovery")({
           // The transfer history only says the token was touched: its exact
           // balance comes from the token contract itself.
           const payload = await call(
-            key,
+            keys,
             chainId,
             "tokenbalance",
             address,
