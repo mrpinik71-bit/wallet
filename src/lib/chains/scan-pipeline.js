@@ -33,8 +33,14 @@ const CHUNK = 80; // wallets per batch round
 // is what decides the burst a node sees. Too many rounds and every read waits so
 // long in its lane that the round looks stalled; this keeps the burst wide
 // enough to be fast and small enough that reads actually land.
-const INFLIGHT = 4000; // batch rounds kept in flight
-const MAX_WAITING = 32000; // wallets prepared and waiting across all rounds — the memory ceiling
+// Rounds kept in flight. This is a window, not a queue: every round puts a whole
+// wallet's worth of chain reads into the node lanes at once, so thousands of
+// rounds at the same time do not read faster — they bury every lane under
+// hundreds of thousands of queued requests, the tab stops painting and not a
+// single wallet is reported for minutes. This window is wide enough to keep
+// every lane full, so the first results land within seconds.
+const INFLIGHT = 60;
+const MAX_WAITING = 4800; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
 // requests at once usually stops answering instead of refusing them, which read
@@ -1042,7 +1048,7 @@ export async function scanPhrases(
         handoverTimer = setTimeout(() => {
           handoverTimer = null;
           handOver();
-        }, 1000);
+        }, 400);
       }
     };
 
