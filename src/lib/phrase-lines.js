@@ -163,17 +163,35 @@ export function parsePhrases(text, size = 12) {
   return entries;
 }
 
-/** Streams the file line by line, one phrase per line, without holding it. */
+/**
+ * One line is one phrase of exactly the selected length: the checksum-valid run
+ * of that many words inside the line is the phrase, and every other word on the
+ * line is dropped. A line shorter than the selection cannot be that phrase, so it
+ * comes back as it is and is reported unreadable instead of being joined with the
+ * next line.
+ */
+function phraseOnLine(raw, line, size) {
+  const words = tokenize(raw);
+  if (!words.length) return null;
+  if (words.length < size) return { phrase: words.join(" "), words: words.length, line };
+
+  for (let start = 0; start + size <= words.length; start += 1) {
+    const slice = words.slice(start, start + size);
+    if (isValidPhrase(slice)) return { phrase: slice.join(" "), words: size, line };
+  }
+
+  // Nothing of that length passed the checksum: the line's first `size` words are
+  // handed on so the line is counted as unreadable, never silently dropped.
+  return { phrase: words.slice(0, size).join(" "), words: size, line };
+}
+
+/** Streams the file line by line, one phrase of the selected length per line. */
 export async function* phrasesFromLines(lines, size = 12) {
-  const reader = createReader(size);
   let line = 0;
 
   for await (const raw of lines) {
     line += 1;
-    reader.push(String(raw || "").replace(/\r/g, ""), line);
-    while (reader.has()) yield reader.next();
+    const entry = phraseOnLine(String(raw || "").replace(/\r/g, ""), line, size);
+    if (entry) yield entry;
   }
-
-  reader.end(size);
-  while (reader.has()) yield reader.next();
 }

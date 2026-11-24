@@ -41,6 +41,8 @@ export default function ScanWorkspace() {
   // A chosen file is read through first: its wallets are counted, and only then
   // does the chain check start — in batches, on request.
   const [reading, setReading] = useState(false);
+  // How far the file itself has been read, so a big file shows real progress.
+  const [readStats, setReadStats] = useState({ bytes: 0, size: 0, lines: 0 });
   const [pendingCount, setPendingCount] = useState(0);
   // Lines that are not real BIP-39 phrases: counted apart, never scanned.
   const [unreadable, setUnreadable] = useState(0);
@@ -274,6 +276,7 @@ export default function ScanWorkspace() {
     setStarted(false);
     setLines([]);
     setLinesTotal(0);
+    setReadStats({ bytes: 0, size: 0, lines: 0 });
     setUnreadable(0);
     setTotal(0);
     setPage(1);
@@ -322,14 +325,17 @@ export default function ScanWorkspace() {
     cancelledRef.current = false;
     pendingFileRef.current = null;
     setReading(true);
+    setReadStats({ bytes: 0, size: file.size, lines: 0 });
 
     try {
       const { count: found, invalid, preview } = await countPhrasesInFile(file, {
         words: size,
         preview: PREVIEW_LINES,
+        onBytes: (bytes) => setReadStats((current) => ({ ...current, bytes })),
         onProgress: (value, bad) => {
           countRef.current = value;
           setUnreadable(bad);
+          setReadStats((current) => ({ ...current, lines: value + bad }));
         },
       });
       // The first lines of the file are listed by line number under the picker —
@@ -341,7 +347,9 @@ export default function ScanWorkspace() {
       setUnreadable(invalid);
       setTotal(found * accounts);
     } catch {
-      setError("That file could not be read. Try a plain .txt file.");
+      setError(
+        "That file could not be read — a very large file can run the browser out of memory. Split it into smaller .txt files and try again.",
+      );
     } finally {
       setReading(false);
     }
@@ -368,6 +376,9 @@ export default function ScanWorkspace() {
       await scanPhraseStream(
         phrasesFromFile(pending.file, {
           words,
+          // Only the lines that passed the checksum pass reach the chain check.
+          onlyValid: true,
+          onInvalid: (bad) => setUnreadable((current) => Math.max(current, bad)),
           onCount: (value) => {
             countRef.current = value;
           },
@@ -416,6 +427,7 @@ export default function ScanWorkspace() {
         onCancel={stop}
         scanning={scanning}
         reading={reading}
+        readStats={readStats}
         pendingCount={pendingCount}
         pendingInvalid={unreadable}
         onStartFile={startFileScan}

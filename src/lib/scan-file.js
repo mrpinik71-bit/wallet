@@ -25,13 +25,14 @@ export async function readChunks(file, onChunk, { chunkSize = 4 * 1024 * 1024 } 
 // Same chunked read, handed out line by line as a stream: the scanner can start
 // working on the first phrase while the rest of a multi-gigabyte file is still
 // being read, and only one chunk is ever held in memory.
-export async function* readLines(file, { chunkSize = 4 * 1024 * 1024 } = {}) {
+export async function* readLines(file, { chunkSize = 4 * 1024 * 1024, onBytes } = {}) {
   let offset = 0;
   let carry = "";
 
   while (offset < file.size) {
     const text = await file.slice(offset, Math.min(offset + chunkSize, file.size)).text();
-    offset += chunkSize;
+    offset = Math.min(offset + chunkSize, file.size);
+    onBytes?.(offset);
 
     const lines = (carry + text).split("\n");
     carry = lines.pop() ?? "";

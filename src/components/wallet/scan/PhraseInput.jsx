@@ -11,6 +11,7 @@ export default function PhraseInput({
   onCancel,
   scanning,
   reading,
+  readStats = { bytes: 0, size: 0, lines: 0 },
   pendingCount,
   pendingInvalid = 0,
   onStartFile,
@@ -29,6 +30,11 @@ export default function PhraseInput({
   // Moving over the card's own children fires leave events too, so entering and
   // leaving are counted: the hint only clears once the file leaves the card.
   const depthRef = useRef(0);
+  // Reading a big file takes a while: the bar shows how much of it is done.
+  const readPercent = readStats.size
+    ? Math.min(100, Math.round((readStats.bytes / readStats.size) * 100))
+    : 0;
+  const mb = (bytes) => (bytes / 1048576).toFixed(bytes >= 10 * 1048576 ? 0 : 1);
 
   function dropFile(event) {
     event.preventDefault();
@@ -62,6 +68,9 @@ export default function PhraseInput({
     >
       <div className="relative">
         <div>
+          <p className="mb-1.5 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+            Phrase length
+          </p>
           <div className="flex gap-1.5">
             {SIZES.map((size) => (
               <button
@@ -79,6 +88,9 @@ export default function PhraseInput({
               </button>
             ))}
           </div>
+          <p className="mt-1.5 text-[9.5px] leading-relaxed text-muted-foreground/55">
+            The file is read as {words}-word phrases — a line of another length is counted as unreadable.
+          </p>
         </div>
 
         <div className="mt-2 flex items-center gap-2">
@@ -183,10 +195,22 @@ export default function PhraseInput({
             Stop scan
           </button>
         ) : reading ? (
-          <p className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-foreground/[0.1] bg-foreground/[0.025] px-3 py-2.5 text-center text-[10.5px] font-medium text-muted-foreground">
-            <ScanSearch className="h-3.5 w-3.5 animate-pulse" strokeWidth={2} />
-            Reading every line — counting the wallets first…
-          </p>
+          <div className="mt-4 rounded-xl border border-foreground/[0.1] bg-foreground/[0.025] px-3 py-2.5">
+            <p className="flex items-center justify-center gap-1.5 text-center text-[10.5px] font-medium text-muted-foreground">
+              <ScanSearch className="h-3.5 w-3.5 animate-pulse" strokeWidth={2} />
+              Reading every line — counting the wallets first…
+            </p>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-foreground/[0.08]">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${readPercent}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-center text-[9.5px] num text-muted-foreground/70">
+              {readStats.lines.toLocaleString("en-US")} lines · {mb(readStats.bytes)} of{" "}
+              {mb(readStats.size)} MB · {readPercent}%
+            </p>
+          </div>
         ) : pendingCount > 0 ? (
           <button
             type="button"
