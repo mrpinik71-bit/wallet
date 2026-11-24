@@ -11,6 +11,8 @@ export default function PhraseInput({
   scanning,
   reading,
   readStats = { bytes: 0, size: 0, lines: 0 },
+  // Phrases that already passed the checksum while the file is still being read.
+  foundLive = 0,
   pendingCount,
   pendingInvalid = 0,
   // How many chain-check rounds this file needs, and the size of one round.
@@ -166,10 +168,17 @@ export default function PhraseInput({
               </p>
               {!reading && pendingCount > 0 ? (
                 <p className="mt-0.5 leading-relaxed num">
+                  {pendingCount.toLocaleString("en-US")} phrase{pendingCount === 1 ? "" : "s"} passed the checksum ·{" "}
                   {(pendingCount * accounts).toLocaleString("en-US")} wallet
                   {pendingCount * accounts === 1 ? "" : "s"} · {batches.toLocaleString("en-US")} batch
                   {batches === 1 ? "" : "es"} of {batchSize}
                   {pendingInvalid > 0 ? ` · ${pendingInvalid.toLocaleString("en-US")} unreadable` : ""}
+                </p>
+              ) : null}
+              {!reading && pendingCount === 0 && readStats.lines > 0 && !error ? (
+                <p className="mt-0.5 leading-relaxed num text-destructive/80">
+                  0 phrases found — none of the {readStats.lines.toLocaleString("en-US")} lines is a valid {words}-word
+                  recovery phrase{pendingInvalid > 0 ? ` (${pendingInvalid.toLocaleString("en-US")} failed the checksum)` : ""}.
                 </p>
               ) : null}
             </>
@@ -226,7 +235,10 @@ export default function PhraseInput({
                 style={{ width: `${readPercent}%` }}
               />
             </div>
-            <p className="mt-1.5 text-center text-[9.5px] num text-muted-foreground/70">
+            <p className="mt-1.5 text-center text-[10px] font-medium num text-primary/85">
+              {foundLive.toLocaleString("en-US")} phrase{foundLive === 1 ? "" : "s"} passed the checksum so far
+            </p>
+            <p className="mt-0.5 text-center text-[9.5px] num text-muted-foreground/70">
               {readStats.lines.toLocaleString("en-US")} lines · {mb(readStats.bytes)} of{" "}
               {mb(readStats.size)} MB · {readPercent}%
             </p>

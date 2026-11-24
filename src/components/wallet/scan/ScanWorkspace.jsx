@@ -45,6 +45,9 @@ export default function ScanWorkspace() {
   const [reading, setReading] = useState(false);
   // How far the file itself has been read, so a big file shows real progress.
   const [readStats, setReadStats] = useState({ bytes: 0, size: 0, lines: 0 });
+  // Phrases that already passed the checksum while the file is still being read,
+  // so the found count grows on screen instead of only appearing at the end.
+  const [foundLive, setFoundLive] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   // When the file's lines are real phrases of another length, that length: the
   // screen offers it instead of leaving "0 wallets" unexplained.
@@ -301,6 +304,7 @@ export default function ScanWorkspace() {
     setLines([]);
     setLinesTotal(0);
     setReadStats({ bytes: 0, size: 0, lines: 0 });
+    setFoundLive(0);
     setUnreadable(0);
     setSuggest(0);
     setTotal(0);
@@ -366,6 +370,7 @@ export default function ScanWorkspace() {
         onProgress: (value, bad) => {
           countRef.current = value;
           setUnreadable(bad);
+          setFoundLive(value);
           setReadStats((current) => ({ ...current, lines: value + bad }));
         },
       });
@@ -465,6 +470,7 @@ export default function ScanWorkspace() {
         scanning={scanning}
         reading={reading}
         readStats={readStats}
+        foundLive={foundLive}
         pendingCount={pendingCount}
         pendingInvalid={unreadable}
         batches={pendingBatches}
