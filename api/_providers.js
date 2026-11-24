@@ -67,8 +67,10 @@ async function keyedOrPublic(route, init, publicTargets) {
   if (keyedUp) {
     const answer = await once(`${KEYED}${route}`, init);
     if (answer && answer.status >= 200 && answer.status < 300) return answer;
+    // A 400 from the keyed route is usually the gateway refusing a batch this
+    // wide (a free key caps one at three calls): the public nodes below carry
+    // this read, and the route stays in use for the narrower ones.
     if (!answer || answer.status === 404 || answer.status >= 500) keyedUp = false;
-    else if (answer.status === 400) return answer;
   }
   return firstAnswer(publicTargets, init);
 }
