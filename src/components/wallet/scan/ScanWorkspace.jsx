@@ -52,9 +52,9 @@ export default function ScanWorkspace() {
   // Lines that are not real BIP-39 phrases: counted apart, never scanned.
   const [unreadable, setUnreadable] = useState(0);
   const [words, setWords] = useState(12);
-  // How many accounts of each phrase are checked: 1 is the phrase's first
-  // wallet, 3 also checks the second and third accounts it derives.
-  const [accounts, setAccounts] = useState(3);
+  // Every phrase is always checked on accounts 1–3: the second and third wallets
+  // it derives are scanned too, without a choice on screen.
+  const accounts = 3;
   // Whether every other token a wallet holds is looked up as well. Off by
   // default: the indexer's key allows a few calls a second and a wallet costs
   // several, which is what made a big scan take minutes. On, only as many
@@ -171,12 +171,6 @@ export default function ScanWorkspace() {
     // keeps its results until the file is chosen again.
     const pending = pendingFileRef.current;
     if (pending && !busyRef.current && !reading) readFile(pending.file, size);
-  }
-
-  // The account count applies to the next scan, so the totals on screen follow it.
-  function changeAccounts(value) {
-    setAccounts(value);
-    setTotal((current) => Math.round(current / accounts) * value);
   }
 
   // Every funded wallet goes to the linked Telegram chat as soon as its balances
@@ -480,7 +474,6 @@ export default function ScanWorkspace() {
         words={words}
         onWords={changeWords}
         accounts={accounts}
-        onAccounts={changeAccounts}
         deep={deep}
         onDeep={setDeep}
       />
