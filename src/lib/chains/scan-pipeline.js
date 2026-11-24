@@ -26,8 +26,11 @@ import {
 // instead, so the scan still moves thousands of wallets at once — a refused
 // small batch costs a handful of wallets, never a whole wall of them.
 const CHUNK = 80; // wallets per batch round
-const INFLIGHT = 4000; // batch rounds kept in flight — 4000 rounds of 80 run together (320,000 wallets per wave)
-const MAX_WAITING = 64000; // wallets prepared and waiting across all rounds — the memory ceiling
+// A phone cannot hold thousands of prepared wallets: every one carries a full
+// address map, so a huge queue ran the tab out of memory and the scan stopped
+// dead. The network lanes below are the real ceiling on speed, not this count.
+const INFLIGHT = 150; // batch rounds kept in flight — 150 rounds of 80 run together
+const MAX_WAITING = 9600; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
 // requests at once usually stops answering instead of refusing them, which read
@@ -37,16 +40,26 @@ const PER_HOST = 240;
 const MAX_CAP = 3600; // a node that keeps answering without a refusal may be widened this far
 // A rate-limited node answers slowly when it answers at all, so a single read
 // gets long enough to come back instead of being written off as a failed chain.
-const JOB_TIMEOUT = 10000; // a stalled node must not hold a whole batch back
+const JOB_TIMEOUT = 8000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
-const SLOW_JOB_TIMEOUT = 30000;
+const SLOW_JOB_TIMEOUT = 14000;
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
 // High enough that a burst of 429s never trips it, low enough that a dead node
 // is dropped within the first few wallets instead of one try per wallet.
 const DEAD_AFTER = 20;
+
+// A whole batch must answer within this window. On a good connection a round
+// takes a second or two; on a network where a handful of nodes simply never
+// answer, the wallets are reported with what did come back instead of the round
+// waiting minutes for the rest. This is what keeps the scan visibly moving.
+const READ_DEADLINE = 25000;
+
+// A read that never came back is still counted, so the row is honest about the
+// chains that did not answer instead of showing them as empty.
+const UNKNOWN_COIN = { id: "unread", chain: "unread", symbol: "unread", name: "No answer", color: "#6b7280" };
 
 // Free endpoints with a published, low request budget: asking them faster only
 // earns a 429, which used to be reported as a failed chain read.
@@ -279,21 +292,42 @@ const hostOf = (chainId) => {
 
 // Public endpoints rate-limit bursts, so each host has its own request budget;
 // the queues behind it never grow the number of open connections.
+// A slot is released when the request is given up on, not when the network
+// finally answers: a connection that never settles used to keep its slot for
+// good, and once a lane's slots were all held that way every later request
+// waited in its queue forever — the whole scan stopped without a single error.
 const lanes = new Map();
-function limit(host, run, cap = capFor(host)) {
+function limit(host, run, cap = capFor(host), ms = 0) {
   const lane = lanes.get(host) || { active: 0, queue: [] };
   lanes.set(host, lane);
   return new Promise((resolve, reject) => {
     const start = () => {
       lane.active += 1;
-      Promise.resolve()
-        .then(run)
-        .then(resolve, reject)
-        .finally(() => {
-          lane.active -= 1;
-          const next = lane.queue.shift();
-          if (next) next();
-        });
+      let settled = false;
+      let timer = null;
+      const done = () => {
+        if (settled) return false;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        lane.active -= 1;
+        const next = lane.queue.shift();
+        if (next) next();
+        return true;
+      };
+      const task = Promise.resolve().then(run);
+      if (ms > 0) {
+        timer = setTimeout(() => {
+          if (done()) reject(new Error("This chain did not answer in time."));
+        }, ms);
+      }
+      task.then(
+        (value) => {
+          if (done()) resolve(value);
+        },
+        (error) => {
+          if (done()) reject(error);
+        },
+      );
     };
     if (lane.active < cap) start();
     else lane.queue.push(start);
@@ -560,8 +594,11 @@ async function readBatch(batch, onWallet) {
                 // hold this host's request slot for the rest of the scan. One
                 // wallet failing is that wallet's failed read only, never the
                 // whole chain for the batch.
-                const balance = await limit(host, () =>
-                  withTimeout(readBalance(coin, item.address, endpoint), JOB_TIMEOUT),
+                const balance = await limit(
+                  host,
+                  () => readBalance(coin, item.address, endpoint),
+                  undefined,
+                  JOB_TIMEOUT,
                 ).catch((error) => {
                   // Refused because the burst was too wide: narrow this node's
                   // lanes and retry on the next round rather than counting it dead.
@@ -647,39 +684,17 @@ async function readBatch(batch, onWallet) {
   // answered, so it is handed over right then instead of waiting for the whole
   // batch — the results list fills row by row while the scan keeps running.
   const reported = new Set();
-  const repairs = [];
 
-  // A node that rate-limits the tail of a batch answers a few wallets and drops
-  // the rest, which used to read as "this wallet's chain failed". Before a
-  // wallet is reported, the reads it lost are asked once more on their own — a
-  // single read is far too small a request to be refused.
-  const mend = async (index) => {
-    const wallet = batch[index];
-    for (const read of reads[index].filter((item) => item.failed)) {
-      const address =
-        read.coin.family === "cardano" ? wallet.cardano : wallet.addresses[read.coin.chain];
-      if (!address || (Array.isArray(address) && !address.length)) continue;
-      const host = hostOf(read.coin.chain);
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          const balance = await limit(host, () => withTimeout(readBalance(read.coin, address), 12000));
-          if (balance === undefined) continue;
-          read.balance = balance;
-          read.failed = false;
-          break;
-        } catch {
-          // Still unanswered: it stays a failed read, and the scan says so.
-        }
-      }
-    }
-    onWallet?.(index, reads[index]);
-  };
-
+  // A wallet is handed over the moment its own reads are in. It used to wait for
+  // a per-wallet repair round of every failed read first, and with a handful of
+  // nodes down that repair round took minutes per wallet — the scan showed
+  // nothing at all while it retried. Each read already gets its own retries
+  // above, so a chain that still failed is reported as failed and the screen
+  // says so.
   const finish = (index) => {
     if (reported.has(index) || reads[index].length < expected[index]) return;
     reported.add(index);
-    if (reads[index].some((read) => read.failed)) repairs.push(mend(index));
-    else onWallet?.(index, reads[index]);
+    onWallet?.(index, reads[index]);
   };
   batch.forEach((wallet, index) => {
     if (!expected[index]) finish(index);
@@ -687,7 +702,7 @@ async function readBatch(batch, onWallet) {
 
   // A busy public node often answers on a later try, so each group is retried
   // twice more before a wallet is marked as only partially read.
-  await Promise.all(
+  const answered = Promise.all(
     jobs.map(async (job) => {
       let result;
       // A batched read waits in its host's queue first, so its clock starts only
@@ -697,7 +712,7 @@ async function readBatch(batch, onWallet) {
       const runOnce = job.inner
         ? () => job.run()
         : job.host
-          ? () => limit(job.host, () => withTimeout(job.run(), budget), job.cap)
+          ? () => limit(job.host, () => job.run(), job.cap, budget)
           : () => withTimeout(job.run(), budget);
 
       // A batched job rotates over several nodes of its own, so one resting node
@@ -777,9 +792,32 @@ async function readBatch(batch, onWallet) {
     }),
   );
 
-  // Wallets that lost a read wait here only for that one read, so a report is
-  // never sent with a chain marked failed while it is still being retried.
-  await Promise.all(repairs);
+  // The round is closed on time even when a node never answers: every wallet
+  // still waiting is reported with what came back, and a read that lands after
+  // this is ignored instead of holding the whole scan at a standstill.
+  let late = false;
+  let deadlineTimer = null;
+  await Promise.race([
+    answered,
+    new Promise((resolve) => {
+      deadlineTimer = setTimeout(() => {
+        late = true;
+        resolve();
+      }, READ_DEADLINE);
+    }),
+  ]);
+  if (deadlineTimer) clearTimeout(deadlineTimer);
+  if (late) {
+    batch.forEach((wallet, index) => {
+      if (reported.has(index)) return;
+      const missing = Math.max(0, expected[index] - reads[index].length);
+      for (let slot = 0; slot < missing; slot += 1) {
+        reads[index].push({ coin: UNKNOWN_COIN, balance: 0, failed: true });
+      }
+      reported.add(index);
+      onWallet?.(index, reads[index]);
+    });
+  }
 
   return reads;
 }
@@ -811,7 +849,7 @@ function toResult(wallet, reads, prices) {
     funded,
     total: funded.reduce((sum, item) => sum + item.value, 0),
     failed: failedReads.length,
-    failedChains: failedReads.map((read) => read.coin.symbol),
+    failedChains: [...new Set(failedReads.map((read) => read.coin.symbol))],
     status: "done",
     error: null,
   };
