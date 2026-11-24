@@ -25,7 +25,8 @@ import {
 // wallets are grouped a few at a time. Many small rounds are kept in flight
 // instead, so the scan still moves thousands of wallets at once — a refused
 // small batch costs a handful of wallets, never a whole wall of them.
-const CHUNK = 80; // wallets per batch round
+export const SCAN_BATCH_SIZE = 80;
+const CHUNK = SCAN_BATCH_SIZE; // wallets per batch round
 // A phone cannot hold thousands of prepared wallets: every one carries a full
 // address map, so a huge queue ran the tab out of memory and the scan stopped
 // dead. The network lanes below are the real ceiling on speed, not this count.

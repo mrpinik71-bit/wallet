@@ -14,8 +14,8 @@ import { clearHistory, saveRun } from "@/lib/scan-history";
 import { fetchPricesFor } from "@/lib/chains/prices";
 import useWakeLock from "@/hooks/useWakeLock";
 import { countPhrasesInFile, phrasesFromFile, scanAssets, scanPhraseStream } from "@/lib/phrase-scan";
+import { SCAN_BATCH_SIZE } from "@/lib/chains/scan-pipeline";
 
-const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 const PAGE = 100;
 // How many of the file's first lines are kept for the line-by-line list.
 const PREVIEW_LINES = 5000;
@@ -352,10 +352,6 @@ export default function ScanWorkspace() {
   async function readFile(file, size = words) {
     setError("");
     setWiped(false);
-    if (file.size > MAX_FILE_BYTES) {
-      setError("That file is larger than 2 GB. Split it into smaller .txt files.");
-      return;
-    }
 
     stop();
     clearResults();
@@ -461,6 +457,9 @@ export default function ScanWorkspace() {
   // The counting pass and the scan report the same lines, so the larger of the
   // two is the number of unreadable lines, never their sum.
   const unreadableTotal = Math.max(unreadable, stats.invalid);
+  // How many rounds the chain check needs for this file. Shown before the scan
+  // starts, so a file of any length is a known number of batches up front.
+  const pendingBatches = pendingCount ? Math.ceil((pendingCount * accounts) / SCAN_BATCH_SIZE) : 0;
 
   return (
     <div className="relative">
@@ -474,6 +473,8 @@ export default function ScanWorkspace() {
         readStats={readStats}
         pendingCount={pendingCount}
         pendingInvalid={unreadable}
+        batches={pendingBatches}
+        batchSize={SCAN_BATCH_SIZE}
         suggest={suggest}
         onStartFile={startFileScan}
         words={words}

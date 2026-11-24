@@ -14,6 +14,9 @@ export default function PhraseInput({
   readStats = { bytes: 0, size: 0, lines: 0 },
   pendingCount,
   pendingInvalid = 0,
+  // How many chain-check rounds this file needs, and the size of one round.
+  batches = 0,
+  batchSize = 80,
   suggest = 0,
   onStartFile,
   error,
@@ -168,7 +171,7 @@ export default function PhraseInput({
             {fileName ? "Change file" : "Choose file"}
           </button>
           <p className="min-w-0 flex-1 truncate text-[9.5px] leading-relaxed text-muted-foreground/55">
-            or drag a .txt file here — up to 2 GB
+            or drag a .txt file here — any size, any number of lines
           </p>
           <input
             ref={fileRef}
@@ -183,24 +186,26 @@ export default function PhraseInput({
           />
         </div>
 
-        <p className="mt-2 truncate text-[10px] text-muted-foreground/65">
+        <div className="mt-2 text-[10px] text-muted-foreground/65">
           {fileName ? (
-            <span className="text-primary/85">
-              {fileName}
-              {reading
-                ? " — reading the whole file…"
-                : pendingCount > 0
-                  ? ` — ${pendingCount.toLocaleString("en-US")} wallets found${
-                      pendingInvalid > 0
-                        ? ` · ${pendingInvalid.toLocaleString("en-US")} unreadable`
-                        : ""
-                    }`
-                  : ""}
-            </span>
+            <>
+              <p className="truncate text-primary/85">
+                {fileName}
+                {reading ? " — reading the whole file…" : ""}
+              </p>
+              {!reading && pendingCount > 0 ? (
+                <p className="mt-0.5 leading-relaxed num">
+                  {(pendingCount * accounts).toLocaleString("en-US")} wallet
+                  {pendingCount * accounts === 1 ? "" : "s"} · {batches.toLocaleString("en-US")} batch
+                  {batches === 1 ? "" : "es"} of {batchSize}
+                  {pendingInvalid > 0 ? ` · ${pendingInvalid.toLocaleString("en-US")} unreadable` : ""}
+                </p>
+              ) : null}
+            </>
           ) : (
-            "The file is read and counted first, then every wallet in it is checked."
+            <p>The file is read and counted first, then every wallet in it is checked.</p>
           )}
-        </p>
+        </div>
 
         <PhraseLinesList
           lines={lines}
