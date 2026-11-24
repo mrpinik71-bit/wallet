@@ -73,7 +73,7 @@ async function blockscoutTokens(chainId, address, limit) {
 
 /** ERC-20 balances through the app's Etherscan route, one network per call. */
 async function etherscanTokens(chainId, address, limit) {
-  const response = await fetch(`${ETHERSCAN_RELAY}?chain=${chainId}&address=${address}`);
+  const response = await fetch(`${ETHERSCAN_RELAY}?chain=${chainId}&address=${address}`, { method: "POST" });
   if (!response.ok) throw new Error(`Token list unavailable (${response.status}).`);
   const data = await response.json();
   const tokens = (data?.tokens || []).map((token) => ({ ...token, logo: "" }));
