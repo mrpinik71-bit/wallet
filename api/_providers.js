@@ -46,6 +46,22 @@ async function firstAnswer(targets, init) {
 
 const post = (body) => ({ method: "POST", headers: { "content-type": "application/json" }, body });
 
+// The provider keys are saved on the app's own server, never in this project.
+// That server is asked first, so the read is keyed and fast without a key here;
+// the public nodes carry it whenever the server cannot answer.
+const KEYED = "https://glorious-vault-chain-core.base44.app";
+let keyedUp = true;
+
+async function keyedOrPublic(route, init, publicTargets) {
+  if (keyedUp) {
+    const answer = await once(`${KEYED}${route}`, init);
+    if (answer && answer.status >= 200 && answer.status < 300) return answer;
+    if (!answer || answer.status === 404 || answer.status >= 500) keyedUp = false;
+    else if (answer.status === 400) return answer;
+  }
+  return firstAnswer(publicTargets, init);
+}
+
 // ---------------------------------------------------------------- TRON
 const TRON_OPS = {
   account: "/wallet/getaccount",
@@ -60,8 +76,12 @@ export async function tronRead(query, raw) {
   const key = env("TRONGRID_API_KEY");
   const headers = { "content-type": "application/json" };
   if (key) headers["TRON-PRO-API-KEY"] = key;
+  const init = { method: "POST", headers, body: raw };
+  if (key) return firstAnswer([`https://api.trongrid.io${path}`], init);
 
-  return firstAnswer([`https://api.trongrid.io${path}`], { method: "POST", headers, body: raw });
+  return keyedOrPublic(`/api/rpc-tron?op=${encodeURIComponent(String(query.op))}`, init, [
+    `https://api.trongrid.io${path}`,
+  ]);
 }
 
 // ---------------------------------------------------------------- TON
@@ -73,11 +93,10 @@ export async function tonBalance(query) {
   if (!isTonAddress(address)) return fail(400, "Bad address.");
 
   const key = env("TONCENTER_API_KEY");
-  const headers = key ? { "X-API-Key": key } : undefined;
-  const answer = await firstAnswer(
-    [`https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(address)}`],
-    headers ? { headers } : undefined,
-  );
+  const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(address)}`;
+  const answer = key
+    ? await firstAnswer([url], { headers: { "X-API-Key": key } })
+    : await keyedOrPublic(`/api/rpc-ton?address=${encodeURIComponent(address)}`, { method: "POST" }, [url]);
   if (answer.status < 300) return answer;
 
   // TonAPI answers the same question in nanoton, in the shape the app reads.
@@ -121,13 +140,12 @@ export async function solanaRpc(raw) {
   if (!raw || raw.length > MAX_BODY || !readsOnly(raw)) return fail(400, "Bad request.");
 
   const key = env("HELIUS_API_KEY");
-  const targets = [
-    key ? `https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(key)}` : null,
-    "https://api.mainnet-beta.solana.com",
-    "https://solana-rpc.publicnode.com",
-  ].filter(Boolean);
+  const publicNodes = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
+  if (key) {
+    return firstAnswer([`https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(key)}`, ...publicNodes], post(raw));
+  }
 
-  return firstAnswer(targets, post(raw));
+  return keyedOrPublic("/api/rpc-solana", post(raw), publicNodes);
 }
 
 // ---------------------------------------------------------------- EVM (dRPC + public nodes)
@@ -183,12 +201,12 @@ export async function drpcRead(query, raw) {
   if (!raw || raw.length > MAX_BODY || !evmReadsOnly(raw)) return fail(400, "Bad request.");
 
   const key = env("DRPC_API_KEY");
-  const targets = [
-    key ? `https://lb.drpc.live/${encodeURIComponent(network)}/${encodeURIComponent(key)}` : null,
-    ...publicNodes,
-  ].filter(Boolean);
+  if (key) {
+    const keyed = `https://lb.drpc.live/${encodeURIComponent(network)}/${encodeURIComponent(key)}`;
+    return firstAnswer([keyed, ...publicNodes], post(raw));
+  }
 
-  return firstAnswer(targets, post(raw));
+  return keyedOrPublic(`/api/rpc-drpc?network=${encodeURIComponent(network)}`, post(raw), publicNodes);
 }
 
 // ---------------------------------------------------------------- Stacks
@@ -199,9 +217,10 @@ export async function hiroBalances(query) {
   if (!isStacksAddress(address)) return fail(400, "Bad address.");
 
   const key = env("HIRO_API_KEY");
-  return firstAnswer([`https://api.mainnet.hiro.so/extended/v1/address/${address}/balances`], {
-    headers: key ? { "x-api-key": key } : undefined,
-  });
+  const url = `https://api.mainnet.hiro.so/extended/v1/address/${address}/balances`;
+  if (key) return firstAnswer([url], { headers: { "x-api-key": key } });
+
+  return keyedOrPublic(`/api/rpc-hiro?address=${encodeURIComponent(address)}`, { method: "GET" }, [url]);
 }
 
 // ---------------------------------------------------------------- Cardano
@@ -218,6 +237,13 @@ export async function cardanoBalances(raw) {
   const asked = Array.isArray(body?.addresses) ? body.addresses.map((item) => String(item)) : [];
   const addresses = [...new Set(asked.filter(isCardanoAddress))].slice(0, 50);
   if (!addresses.length) return { status: 200, text: JSON.stringify({ balances: {} }) };
+
+  // The app's own route reads Cardano with its key once the app is published.
+  if (keyedUp) {
+    const keyed = await once(`${KEYED}/api/cardano-balances`, post(JSON.stringify({ addresses })));
+    if (keyed && keyed.status === 200) return keyed;
+    if (!keyed || keyed.status === 404 || keyed.status >= 500) keyedUp = false;
+  }
 
   // Koios answers without any key, so Cardano never depends on one.
   const answer = await once("https://api.koios.rest/api/v1/address_info", post(JSON.stringify({ _addresses: addresses })));
@@ -308,6 +334,15 @@ export async function tokenDiscovery(query) {
   const address = String(query?.address || "");
   if (!chainId) return fail(400, "Unknown chain.");
   if (!isEvmAddress(address)) return fail(400, "Bad address.");
+
+  // The app's own route reads this with its Etherscan key once it is published.
+  if (keyedUp) {
+    const keyed = await once(
+      `${KEYED}/api/token-discovery?chain=${encodeURIComponent(chain)}&address=${encodeURIComponent(address)}`,
+    );
+    if (keyed && keyed.status === 200) return keyed;
+    if (!keyed || keyed.status === 404 || keyed.status >= 500) keyedUp = false;
+  }
 
   const key = env("ETHERSCAN_API_KEY");
   const base = key
