@@ -33,12 +33,23 @@ async function once(target, init) {
   }
 }
 
+/** A 200 that carries only an error is a refusal, not an answer. */
+function refused(answer) {
+  try {
+    const body = JSON.parse(answer.text);
+    if (Array.isArray(body)) return body.length > 0 && body.every((call) => call && call.error);
+    return Boolean(body && body.error);
+  } catch {
+    return false;
+  }
+}
+
 /** The first endpoint that answers, so a busy public node never ends a read. */
 async function firstAnswer(targets, init) {
   let last = null;
   for (const target of targets) {
     const answer = await once(target, init);
-    if (answer && answer.status >= 200 && answer.status < 300) return answer;
+    if (answer && answer.status >= 200 && answer.status < 300 && !refused(answer)) return answer;
     if (answer) last = answer;
   }
   return last || fail(502, "Upstream unavailable.");
