@@ -887,7 +887,10 @@ function toResult(wallet, reads, prices) {
 }
 
 /** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
-export async function scanPhrases(source, { prices, onResult, onProgress, isCancelled, accounts, deep = true } = {}) {
+export async function scanPhrases(
+  source,
+  { prices, onResult, onProgress, onRepair, isCancelled, accounts, deep = true } = {},
+) {
   // One phrase can hold several accounts: each account index is derived and
   // checked as its own wallet, so funds on account 2 or 3 are found too.
   const accountsPerPhrase = Math.max(1, Math.min(3, accounts || 1));
@@ -904,10 +907,81 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   const active = new Set();
   let buffer = [];
 
-  const report = (result) => {
+  // Reads that came back empty are kept aside, not written off: once the burst
+  // of the scan is over the nodes are quiet again, so a chain that was only busy
+  // answers on a second ask instead of the wallet keeping a failed read forever.
+  const repairs = [];
+
+  const report = (result, wallet, walletReads) => {
     completed += 1;
     onResult?.(result);
+    if (result.status === "done" && result.failed > 0 && wallet) {
+      const failed = walletReads.filter((read) => read.failed && read.coin?.chain !== "unread");
+      if (failed.length) repairs.push({ wallet, result, failed });
+    }
     onProgress?.({ completed, started, result });
+  };
+
+  /**
+   * Asks every failed read again, a few wallets at a time so the repair itself
+   * does not become another burst. A balance that answers is folded into the
+   * wallet's result on screen, so a chain stops being reported as failed the
+   * moment it answers.
+   */
+  const repairPass = async () => {
+    const queue = repairs.splice(0, repairs.length);
+    let repaired = 0;
+    const worker = async () => {
+      while (queue.length && !isCancelled?.()) {
+        const item = queue.shift();
+        const left = [];
+        for (const read of item.failed) {
+          const coin = read.coin;
+          const address = item.wallet.addresses?.[coin.chain];
+          if (!address) {
+            left.push(read);
+            continue;
+          }
+          let balance;
+          const endpoints = endpointsFor(coin.chain, chains[coin.chain]?.rpc || chains[coin.chain]?.api);
+          for (const endpoint of endpoints) {
+            try {
+              const value = await readBalance(coin, address, endpoint);
+              if (Number.isFinite(value)) {
+                balance = value;
+                break;
+              }
+            } catch {
+              // This node did not answer: the next one that serves the chain is asked.
+            }
+          }
+          if (balance === undefined) {
+            left.push(read);
+            continue;
+          }
+          repaired += 1;
+          item.result.failed = Math.max(0, item.result.failed - 1);
+          if (balance > 0) {
+            item.result.funded.push({
+              id: coin.id,
+              chain: coin.chain,
+              symbol: coin.symbol,
+              name: coin.name,
+              color: coin.color,
+              logo: coin.logo,
+              balance,
+              value: balance * priceOf(prices, coin),
+            });
+          }
+        }
+        item.result.funded.sort((a, b) => b.value - a.value);
+        item.result.total = item.result.funded.reduce((sum, entry) => sum + entry.value, 0);
+        item.result.failedChains = [...new Set(left.map((read) => read.coin.symbol))];
+        if (left.length) repairs.push({ ...item, failed: left });
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, worker));
+    if (repaired) onRepair?.(repaired);
   };
 
   // Without worker threads a phrase is derived on this thread, yielding often
@@ -944,7 +1018,11 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
       if (!pending.length) return;
       const part = pending.splice(0, pending.length);
       reads.push(
-        readBatch(part, (index, walletReads) => report(toResult(part[index], walletReads, prices)), deep),
+        readBatch(
+          part,
+          (index, walletReads) => report(toResult(part[index], walletReads, prices), part[index], walletReads),
+          deep,
+        ),
       );
     };
 
@@ -1025,4 +1103,12 @@ export async function scanPhrases(source, { prices, onResult, onProgress, isCanc
   if (buffer.length && !isCancelled?.()) launch(buffer);
   await Promise.all(active);
   pool?.close();
+
+  // The scan's own burst is over, so the nodes are quiet: everything that came
+  // back empty is asked again, twice, before the run is allowed to end with a
+  // chain reported as failed.
+  for (let pass = 0; pass < 2 && repairs.length && !isCancelled?.(); pass += 1) {
+    if (pass) await new Promise((resolve) => setTimeout(resolve, 1500));
+    await repairPass();
+  }
 }

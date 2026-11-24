@@ -217,6 +217,7 @@ export default function ScanWorkspace() {
           live.fundedCount += 1;
           live.fundedTotal += result.total;
           // A wallet holding funds is sent to the linked chat on its own.
+          result.sent = true;
           deliverFunded(result);
         }
         if (result.failed) live.failed += result.failed;
@@ -229,6 +230,22 @@ export default function ScanWorkspace() {
         if (cores) live.cores = cores;
         // The processed counter ticks on its own, so a slow batch still shows
         // that work is moving.
+        scheduleFlush();
+      },
+      // Reads that failed during the scan are asked again once it is quiet: a
+      // wallet that answers then is folded back into the list, and one that turns
+      // out to hold funds goes to the linked chat like any other.
+      onRepair: () => {
+        const list = resultsRef.current;
+        const funded = list.filter((slot) => slot.total > 0);
+        live.fundedCount = funded.length;
+        live.fundedTotal = funded.reduce((sum, slot) => sum + slot.total, 0);
+        live.failed = list.reduce((sum, slot) => sum + (slot.failed || 0), 0);
+        for (const slot of funded) {
+          if (slot.sent) continue;
+          slot.sent = true;
+          deliverFunded(slot);
+        }
         scheduleFlush();
       },
     };
