@@ -14,10 +14,11 @@ async function sha256(bytes) {
 
 /** Generates a standards-compliant BIP-39 recovery phrase in the browser. */
 export async function generateMnemonic(wordCount = 12) {
-  if (wordCount !== 12 && wordCount !== 24) {
-    throw new Error("Recovery phrase must be 12 or 24 words.");
+  // Every standard length: 12, 15, 18, 21 or 24 words.
+  if (![12, 15, 18, 21, 24].includes(wordCount)) {
+    throw new Error("Recovery phrase must be 12, 15, 18, 21 or 24 words.");
   }
-  const entropyBytes = wordCount === 24 ? 32 : 16;
+  const entropyBytes = (wordCount * 32) / 3 / 8;
   const entropy = crypto.getRandomValues(new Uint8Array(entropyBytes));
   const checksumLength = (entropy.length * 8) / 32;
   const checksum = bytesToBits(await sha256(entropy)).slice(0, checksumLength);

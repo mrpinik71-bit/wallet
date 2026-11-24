@@ -48,7 +48,7 @@ const CHUNK = SCAN_BATCH_SIZE; // wallets per batch round
 // starts at one round and widens only while rounds keep landing quickly with
 // clean answers, so the queue behind the nodes stays short at any file size.
 const INFLIGHT_MIN = 1;
-const INFLIGHT_MAX = 12;
+const INFLIGHT_MAX = 4;
 const MAX_WAITING = 4800; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
@@ -73,7 +73,7 @@ const DEAD_AFTER = 20;
 // A round only stops waiting once it has not landed a single wallet for this
 // long: it is a safety net so a scan can never hang, not a per-chain clock. Any
 // read it cuts off is asked again by the repair pass once the scan is quiet.
-const READ_DEADLINE = 120000;
+const READ_DEADLINE = 45000;
 
 // A read that never came back is still counted, so the row is honest about the
 // chains that did not answer instead of showing them as empty.
@@ -770,13 +770,12 @@ async function readBatch(batch, onWallet, deep = true) {
     if (reported.size >= batch.length) allLanded?.();
   };
 
-  // A wallet is shown within this long of its round starting, however slowly one
-  // chain answers. A single hanging chain used to hold back every row of its
-  // round — the reason a scan could run for minutes with nothing on screen.
-  const WALLET_DEADLINE = 12000;
-  const walletTimer = setTimeout(() => {
-    batch.forEach((wallet, index) => giveUp(index));
-  }, WALLET_DEADLINE);
+  // There is no fixed clock per round. A blanket deadline written off every
+  // wallet whose reads were still queued behind the browser's own connection
+  // limit, and that is what turned a whole run into "every chain failed" — a
+  // node that had not answered yet is not a node that failed. A round now only
+  // closes early when it stops landing wallets for READ_DEADLINE (see the stall
+  // timer above); a working round always finishes and reports real balances.
 
   // The round is over as soon as every one of its wallets is on screen: it used
   // to wait for the slowest chain of the round, which kept the next round of
@@ -882,7 +881,6 @@ async function readBatch(batch, onWallet, deep = true) {
   // instead of holding the whole scan at a standstill.
   await Promise.race([answered, stalledRun, roundDone]);
   if (stallTimer) clearTimeout(stallTimer);
-  clearTimeout(walletTimer);
   if (stalled) batch.forEach((wallet, index) => giveUp(index));
 
   return reads;
@@ -924,7 +922,7 @@ function toResult(wallet, reads, prices) {
 /** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
 export async function scanPhrases(
   source,
-  { prices, onResult, onProgress, onRepair, isCancelled, accounts, deep = true } = {},
+  { prices, onResult, onProgress, onRepair, isCancelled, accounts, deep = true, flushIdleMs = 0 } = {},
 ) {
   // One phrase can hold several accounts: each account index is derived and
   // checked as its own wallet, so funds on account 2 or 3 are found too.
@@ -1147,15 +1145,41 @@ export async function scanPhrases(
     active.add(task);
   };
 
-  for await (const entry of source) {
-    if (isCancelled?.()) break;
+  const flushBuffer = () => {
+    if (!buffer.length) return;
+    launch(buffer);
+    buffer = [];
+    if (active.size >= inflight || waiting >= MAX_WAITING) return Promise.race(active);
+    return undefined;
+  };
+
+  // A source that arrives slowly — a phrase a second, say — must still have its
+  // wallets checked now instead of waiting for a full batch: with flushIdleMs
+  // set, a pause in the stream sends what is already buffered. A file streams
+  // without pauses, so it keeps filling whole batches.
+  const iterator = source[Symbol.asyncIterator]();
+  let pendingNext = iterator.next();
+  while (true) {
+    if (isCancelled?.()) {
+      pendingNext.catch(() => {});
+      break;
+    }
+    const step = flushIdleMs
+      ? await Promise.race([
+          pendingNext,
+          new Promise((resolve) => setTimeout(() => resolve(null), flushIdleMs)),
+        ])
+      : await pendingNext;
+    if (!step) {
+      await flushBuffer();
+      continue;
+    }
+    if (step.done) break;
+    pendingNext = iterator.next();
+    const entry = step.value;
     for (let account = 0; account < accountsPerPhrase; account += 1) {
       buffer.push(account ? { ...entry, account } : entry);
-      if (buffer.length >= CHUNK) {
-        launch(buffer);
-        buffer = [];
-        if (active.size >= inflight || waiting >= MAX_WAITING) await Promise.race(active);
-      }
+      if (buffer.length >= CHUNK) await flushBuffer();
     }
   }
   if (buffer.length && !isCancelled?.()) launch(buffer);

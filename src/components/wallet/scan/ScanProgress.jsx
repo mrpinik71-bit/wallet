@@ -30,7 +30,7 @@ export default function ScanProgress({ found, funded, fundedTotal, invalid, fail
             {funded.toLocaleString("en-US")} wallet{funded === 1 ? "" : "s"} with funds
           </p>
           <p className="mt-2 text-[10.5px] num text-muted-foreground/60">
-            {failed.toLocaleString("en-US")} failed read{failed === 1 ? "" : "s"}
+            {failed.toLocaleString("en-US")} failed network read{failed === 1 ? "" : "s"}
           </p>
         </Side>
       </div>
@@ -43,8 +43,8 @@ export default function ScanProgress({ found, funded, fundedTotal, invalid, fail
 
       {failed > 0 ? (
         <p className="mt-2 px-1 text-[10px] leading-relaxed text-muted-foreground/65 num">
-          {failed.toLocaleString("en-US")} chain read{failed === 1 ? "" : "s"} failed — run the scan again for a full
-          picture.
+          {failed.toLocaleString("en-US")} network read{failed === 1 ? "" : "s"} did not answer — run the scan again for
+          a full picture.
         </p>
       ) : null}
     </section>

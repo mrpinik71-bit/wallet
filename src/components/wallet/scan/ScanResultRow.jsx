@@ -23,6 +23,9 @@ export default function ScanResultRow({ result, index }) {
   // A wallet can hold only tokens whose price is unknown, so the list decides.
   const hasBalance = funded.length > 0;
   const invalid = result.status === "invalid";
+  // Counted per network: one chain that stayed silent is one failed read here,
+  // however many tokens it tracks.
+  const failedChainCount = result.failedChains?.length || 0;
 
   const addressRows = [
     { label: "EVM · all networks", value: result.addresses?.ethereum },
@@ -129,10 +132,10 @@ export default function ScanResultRow({ result, index }) {
           ) : (
             <p className="text-[10.5px] text-muted-foreground/70">
               Nothing found on the scanned assets
-              {result.failed
-                ? ` · ${result.failed} chain read${result.failed === 1 ? "" : "s"} failed${
-                    result.failedChains?.length ? ` (${result.failedChains.slice(0, 4).join(", ")})` : ""
-                  }`
+              {failedChainCount
+                ? ` · ${failedChainCount} network${failedChainCount === 1 ? "" : "s"} did not answer (${result.failedChains
+                    .slice(0, 4)
+                    .join(", ")})`
                 : ""}
               .
             </p>
@@ -148,11 +151,10 @@ export default function ScanResultRow({ result, index }) {
             </p>
           ) : null}
 
-          {funded.length > 0 && result.failed ? (
+          {funded.length > 0 && failedChainCount > 0 ? (
             <p className="mt-2 text-[10px] text-muted-foreground/60">
-              {result.failed} chain read{result.failed === 1 ? "" : "s"} failed
-              {result.failedChains?.length ? ` (${result.failedChains.slice(0, 4).join(", ")})` : ""} — open the
-              address on a block explorer to be sure.
+              {failedChainCount} network{failedChainCount === 1 ? "" : "s"} did not answer (
+              {result.failedChains.slice(0, 4).join(", ")}) — open the address on a block explorer to be sure.
             </p>
           ) : null}
 
