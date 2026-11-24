@@ -7,7 +7,13 @@ import { TRON_RELAY } from "@/lib/chains/keyed-relay";
 
 // Three public hosts serve the same node API, so a busy one is not a failed
 // chain: a read falls through to the next host that answers.
-const APIS = [chains.tron.api, "https://tron-rpc.publicnode.com", "https://api.tronstack.io"];
+// The two public hosts answer the contract read fastest and need no key, so they
+// are asked first; TronGrid's own public endpoint comes last.
+const APIS = ["https://tron-rpc.publicnode.com", "https://api.tronstack.io", chains.tron.api];
+
+// A relay or node that never answers must not eat a wallet's whole read time.
+const RELAY_MS = 4000;
+const NODE_MS = 9000;
 // A transfer stays on the primary node — a write is not worth spreading around.
 const PRIMARY = [chains.tron.api];
 
@@ -31,45 +37,52 @@ function isAnswer(data, op) {
   return true;
 }
 
+// One read from the app's relay, which carries the saved key's own budget. It is
+// cut off after a few seconds: a relay that is down or still starting must never
+// hold a read until its timeout, or every TRON balance comes back missing.
+async function relayPost(path, body, op) {
+  const relayed = await fetch(`${TRON_RELAY}?op=${op}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(RELAY_MS),
+  });
+  if (!relayed.ok) throw new Error(`TRON relay error (${relayed.status}).`);
+  const data = await relayed.json();
+  if (!isAnswer(data, op)) throw new Error("TRON relay error.");
+  return data;
+}
+
+async function nodePost(api, path, body, op) {
+  const response = await fetch(`${api}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(NODE_MS),
+  });
+  if (!response.ok) throw new Error(`TRON network error (${response.status}).`);
+  const data = await response.json();
+  if (!isAnswer(data, op)) throw new Error("TRON network error.");
+  return data;
+}
+
 async function post(path, body, apis = APIS) {
   const op = RELAY_OPS[path] || null;
+  let lastError = null;
   // Reads go through the app's relay first: the key's own budget answers far
-  // more wallets at once than the public node. No key saved answers 503 here,
-  // and the public nodes below carry the read exactly as before.
+  // more wallets at once than a public node. No key saved, or a relay that does
+  // not answer, and the public nodes below carry the read.
   if (op) {
     try {
-      const relayed = await fetch(`${TRON_RELAY}?op=${op}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (relayed.ok) {
-        const data = await relayed.json();
-        if (isAnswer(data, op)) return data;
-      }
-    } catch {
-      // Fall through to the public nodes.
+      return await relayPost(path, body, op);
+    } catch (cause) {
+      lastError = cause;
     }
   }
 
-  let lastError = null;
   for (const api of apis) {
     try {
-      const response = await fetch(`${api}${path}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) {
-        lastError = new Error(`TRON network error (${response.status}).`);
-        continue;
-      }
-      const data = await response.json();
-      if (!isAnswer(data, op)) {
-        lastError = new Error("TRON network error.");
-        continue;
-      }
-      return data;
+      return await nodePost(api, path, body, op);
     } catch (cause) {
       lastError = cause;
     }
@@ -122,9 +135,29 @@ export async function trc20Balance(address, coin) {
     parameter: padParameter(address),
     visible: false,
   };
-  // Every host is asked until one answers with a real balance, so a zero here
-  // means the node read the contract and the wallet holds none of it.
-  return amountFrom(await post("/wallet/triggerconstantcontract", body), coin);
+  // A node that is out of quota or throttled still answers 200 with a successful
+  // result of all zeros, which used to be believed and hid every wallet holding
+  // TRC-20 USDT. A positive answer is taken at once; a zero is only reported once
+  // a second source has also read zero for this wallet.
+  const sources = [
+    (payload) => relayPost("/wallet/triggerconstantcontract", payload, "call"),
+    ...APIS.map((api) => (payload) => nodePost(api, "/wallet/triggerconstantcontract", payload, "call")),
+  ];
+
+  let zeros = 0;
+  let lastError = null;
+  for (const source of sources) {
+    try {
+      const amount = amountFrom(await source(body), coin);
+      if (amount > 0) return amount;
+      zeros += 1;
+      if (zeros >= 2) return 0;
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+  if (zeros > 0) return 0;
+  throw lastError || new Error("TRON network error.");
 }
 
 async function signAndBroadcast(transaction, mnemonic, account = 0) {
