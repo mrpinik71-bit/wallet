@@ -486,7 +486,7 @@ export default function ScanWorkspace() {
 
       {wiped ? (
         <p className="mt-3 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2 text-[10.5px] leading-relaxed text-primary/90">
-          Funded wallets sent to your Telegram chat — the scan was wiped from this device.
+          Funded wallets sent to your Telegram chat — the scan was wiped from this browser.
         </p>
       ) : null}
 

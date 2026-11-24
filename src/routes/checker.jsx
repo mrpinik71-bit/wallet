@@ -8,7 +8,7 @@ export const Route = createFileRoute("/checker")({
       { title: "Phrase checker — Helix" },
       {
         name: "description",
-        content: "Check recovery phrases for balances across supported chains — derived on this device.",
+        content: "Check recovery phrases for balances across supported chains — derived in your browser.",
       },
     ],
   }),
