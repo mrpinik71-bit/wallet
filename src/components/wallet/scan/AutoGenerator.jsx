@@ -50,8 +50,9 @@ export default function AutoGenerator({
         </div>
 
         <p className="mt-2 text-[9.5px] leading-relaxed text-muted-foreground/60">
-          New random phrases of each selected length every second, checked on every chain as they arrive. Nobody holds
-          these keys, so every wallet is empty — a failed network read is the only thing left to see.
+          One new random phrase a second, taking the lengths in turn — 12, 15, 18, 21, 24 — then starting over with
+          fresh randomness: a full round every five seconds. Nobody holds these keys, so every wallet is empty — a
+          failed network read is the only thing left to see.
         </p>
 
         <div className="mt-2.5 flex gap-1.5">
