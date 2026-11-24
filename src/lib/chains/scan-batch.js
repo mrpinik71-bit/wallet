@@ -132,14 +132,14 @@ async function postCalls(chainId, calls) {
   }
 
   const chain = chains[chainId];
-  // A node the user saved is asked first, then the mirrors, which are the nodes
-  // that actually take a wide batch. The keyed dRPC gateway comes after them:
-  // a free dRPC key refuses any batch over three calls, so asking it first cost
-  // every batch a round trip that could only end in a refusal.
+  // The keyed dRPC gateway is asked first: it is the fastest lane, and the relay
+  // now splits a wide batch into the size the plan accepts, so it answers
+  // instead of refusing. The public mirrors follow, for a chain the key does not
+  // serve or a gateway that is resting.
   const endpoints = [
     customEndpoint(chainId),
-    ...(EVM_MIRRORS[chainId] || []),
     drpcRelay(chainId),
+    ...(EVM_MIRRORS[chainId] || []),
     chain.rpc,
     ...(chain.rpcs || []),
   ].filter(Boolean);

@@ -44,6 +44,36 @@ function refused(answer) {
   }
 }
 
+/**
+ * Runs these tasks a few at a time. A wide batch is answered by many small
+ * upstream requests, and firing all of them at once is exactly what a gateway
+ * refuses: the call then spends its whole life in 429s and the deployment times
+ * it out, which reads as a failed chain for every wallet in that batch.
+ */
+async function pooled(items, limit, run) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  const lanes = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(
+    Array.from({ length: lanes }, async () => {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        out[index] = await run(items[index], index);
+      }
+    }),
+  );
+  return out;
+}
+
+// How many upstream requests one relay call keeps in flight. Every extra key is
+// another budget to spend, so the burst widens with the key list — a single key
+// starts narrow instead of burying it.
+const burstFor = (candidates) => {
+  const keys = candidates.filter((candidate) => candidate.key).length;
+  return Math.min(24, Math.max(6, keys * 4));
+};
+
 /** The first endpoint that answers, so a busy public node never ends a read. */
 async function firstAnswer(targets, init) {
   let last = null;
@@ -57,22 +87,102 @@ async function firstAnswer(targets, init) {
 
 const post = (body) => ({ method: "POST", headers: { "content-type": "application/json" }, body });
 
-// The provider keys are saved on the app's own server, never in this project.
-// That server is asked first, so the read is keyed and fast without a key here;
-// the public nodes carry it whenever the server cannot answer.
-const KEYED = "https://glorious-vault-chain-core.base44.app";
-let keyedUp = true;
+// Every provider key may hold a list, separated by commas or spaces: several
+// free keys then add up to one wider lane instead of one narrow one. A key that
+// refuses is rested and the next one carries the read, so one busy key never
+// ends a chain read.
+const keysOf = (name) => env(name).split(/[\s,]+/).filter(Boolean);
+const keyRest = new Map();
+let keyCursor = 0;
 
-async function keyedOrPublic(route, init, publicTargets) {
-  if (keyedUp) {
-    const answer = await once(`${KEYED}${route}`, init);
-    if (answer && answer.status >= 200 && answer.status < 300) return answer;
-    // A 400 from the keyed route is usually the gateway refusing a batch this
-    // wide (a free key caps one at three calls): the public nodes below carry
-    // this read, and the route stays in use for the narrower ones.
-    if (!answer || answer.status === 404 || answer.status >= 500) keyedUp = false;
+function orderedKeys(name) {
+  const list = keysOf(name);
+  if (list.length < 2) return list;
+  const now = Date.now();
+  const live = list.filter((key) => (keyRest.get(key) || 0) <= now);
+  const usable = live.length ? live : list;
+  // Round-robin, so the load of a scan is spread over every key instead of
+  // landing on the first one until it refuses.
+  keyCursor = (keyCursor + 1) % usable.length;
+  return [...usable.slice(keyCursor), ...usable.slice(0, keyCursor)];
+}
+
+/** A key that refused is rested: a 429 for a moment, a dead key for a long while. */
+function restKey(key, status) {
+  if (!key) return;
+  if (status === 429) keyRest.set(key, Date.now() + 20000);
+  else if (status === 401 || status === 402 || status === 403) keyRest.set(key, Date.now() + 900000);
+}
+
+/** The first candidate that answers with a real result; a refusal rests its key. */
+async function firstOf(candidates, init) {
+  let last = null;
+  for (const candidate of candidates) {
+    const request = candidate.headers
+      ? { ...init, headers: { ...(init?.headers || {}), ...candidate.headers } }
+      : init;
+    const answer = await once(candidate.url, request);
+    if (!answer) continue;
+    if (answer.status >= 200 && answer.status < 300 && !refused(answer)) return answer;
+    restKey(candidate.key, answer.status);
+    last = answer;
   }
-  return firstAnswer(publicTargets, init);
+  return last || fail(502, "Upstream unavailable.");
+}
+
+// A free plan caps one JSON-RPC batch at a few calls, so a wide batch is split
+// into chunks the plan accepts and the answers are merged back in call order.
+// Without this the gateway refused the whole batch and the read fell through to
+// a public node, which throttles a scan — the reason EVM chains slowed down.
+const batchCap = new Map();
+
+async function rpcAnswer(provider, candidates, raw, splitAt) {
+  let calls = null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) calls = parsed;
+  } catch {
+    calls = null;
+  }
+  if (!calls) return firstOf(candidates, post(raw));
+
+  const known = batchCap.get(provider);
+  if (!known || calls.length <= known) {
+    const answer = await firstOf(candidates, post(raw));
+    // A refused wide batch: remember the width this plan accepts and split.
+    if (calls.length > splitAt && answer.status === 400) batchCap.set(provider, splitAt);
+    else return answer;
+  }
+
+  const size = batchCap.get(provider) || splitAt;
+  const chunks = [];
+  for (let index = 0; index < calls.length; index += size) chunks.push(calls.slice(index, index + size));
+  const answers = await pooled(chunks, burstFor(candidates), async (chunk, position) => {
+    // Every chunk starts on a different key, so a wide batch is spread over
+    // the whole key list instead of landing on the first one.
+    const turn = candidates.length > 1 ? position % candidates.length : 0;
+    const order = turn ? [...candidates.slice(turn), ...candidates.slice(0, turn)] : candidates;
+    const answer = await firstOf(order, post(JSON.stringify(chunk)));
+    if (answer && answer.status < 300) return answer;
+    // A chunk that was refused is asked once more starting on the next key
+    // instead of being dropped: a missing answer used to read as a failed chain
+    // for every wallet in that part of the batch.
+    if (candidates.length < 2) return answer;
+    return firstOf([...candidates.slice(1), candidates[0]], post(JSON.stringify(chunk)));
+  });
+  const merged = [];
+  for (const answer of answers) {
+    if (!answer || answer.status >= 300) continue;
+    try {
+      const parsed = JSON.parse(answer.text);
+      if (Array.isArray(parsed)) merged.push(...parsed);
+    } catch {
+      // This chunk did not answer; the rest of the batch still stands.
+    }
+  }
+  if (!merged.length) return answers.find((answer) => answer && answer.status >= 300) || fail(502, "Upstream unavailable.");
+  merged.sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  return { status: 200, text: JSON.stringify(merged) };
 }
 
 // ---------------------------------------------------------------- TRON
@@ -86,15 +196,19 @@ export async function tronRead(query, raw) {
   if (!path) return fail(400, "Unknown operation.");
   if (!raw || raw.length > MAX_BODY) return fail(400, "Bad request.");
 
-  const key = env("TRONGRID_API_KEY");
-  const headers = { "content-type": "application/json" };
-  if (key) headers["TRON-PRO-API-KEY"] = key;
-  const init = { method: "POST", headers, body: raw };
-  if (key) return firstAnswer([`https://api.trongrid.io${path}`], init);
+  const candidates = orderedKeys("TRONGRID_API_KEY").map((key) => ({
+    url: `https://api.trongrid.io${path}`,
+    key,
+    headers: { "TRON-PRO-API-KEY": key },
+  }));
+  // No key saved: the provider's own public endpoint carries the read.
+  if (!candidates.length) candidates.push({ url: `https://api.trongrid.io${path}` });
 
-  return keyedOrPublic(`/api/rpc-tron?op=${encodeURIComponent(String(query.op))}`, init, [
-    `https://api.trongrid.io${path}`,
-  ]);
+  return firstOf(candidates, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: raw,
+  });
 }
 
 // ---------------------------------------------------------------- TON
@@ -105,11 +219,11 @@ export async function tonBalance(query) {
   const address = String(query?.address || "");
   if (!isTonAddress(address)) return fail(400, "Bad address.");
 
-  const key = env("TONCENTER_API_KEY");
   const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(address)}`;
-  const answer = key
-    ? await firstAnswer([url], { headers: { "X-API-Key": key } })
-    : await keyedOrPublic(`/api/rpc-ton?address=${encodeURIComponent(address)}`, { method: "POST" }, [url]);
+  const candidates = orderedKeys("TONCENTER_API_KEY").map((key) => ({ url, key, headers: { "X-API-Key": key } }));
+  // Toncenter answers without a key too, so it is asked either way.
+  candidates.push({ url });
+  const answer = await firstOf(candidates);
   if (answer.status < 300) return answer;
 
   // TonAPI answers the same question in nanoton, in the shape the app reads.
@@ -152,13 +266,16 @@ function readsOnly(raw) {
 export async function solanaRpc(raw) {
   if (!raw || raw.length > MAX_BODY || !readsOnly(raw)) return fail(400, "Bad request.");
 
-  const key = env("HELIUS_API_KEY");
   const publicNodes = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
-  if (key) {
-    return firstAnswer([`https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(key)}`, ...publicNodes], post(raw));
-  }
+  const candidates = orderedKeys("HELIUS_API_KEY").map((key) => ({
+    url: `https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(key)}`,
+    key,
+  }));
+  for (const url of publicNodes) candidates.push({ url });
 
-  return keyedOrPublic("/api/rpc-solana", post(raw), publicNodes);
+  // Helius takes a hundred accounts per read, which is the widest batch the
+  // app ever sends, so a wide read is not split here.
+  return rpcAnswer("helius", candidates, raw, 100);
 }
 
 // ---------------------------------------------------------------- EVM (dRPC + public nodes)
@@ -213,13 +330,15 @@ export async function drpcRead(query, raw) {
   if (!publicNodes) return fail(400, "Unknown network.");
   if (!raw || raw.length > MAX_BODY || !evmReadsOnly(raw)) return fail(400, "Bad request.");
 
-  const key = env("DRPC_API_KEY");
-  if (key) {
-    const keyed = `https://lb.drpc.live/${encodeURIComponent(network)}/${encodeURIComponent(key)}`;
-    return firstAnswer([keyed, ...publicNodes], post(raw));
-  }
+  const candidates = orderedKeys("DRPC_API_KEY").map((key) => ({
+    url: `https://lb.drpc.live/${encodeURIComponent(network)}/${encodeURIComponent(key)}`,
+    key,
+  }));
+  for (const url of publicNodes) candidates.push({ url });
 
-  return keyedOrPublic(`/api/rpc-drpc?network=${encodeURIComponent(network)}`, post(raw), publicNodes);
+  // A free dRPC plan answers three calls per batch and refuses a wider one, so a
+  // wide batch is split into threes and sent in parallel on the keyed lane.
+  return rpcAnswer("drpc", candidates, raw, 3);
 }
 
 // ---------------------------------------------------------------- Stacks
@@ -229,11 +348,12 @@ export async function hiroBalances(query) {
   const address = String(query?.address || "");
   if (!isStacksAddress(address)) return fail(400, "Bad address.");
 
-  const key = env("HIRO_API_KEY");
   const url = `https://api.mainnet.hiro.so/extended/v1/address/${address}/balances`;
-  if (key) return firstAnswer([url], { headers: { "x-api-key": key } });
+  const candidates = orderedKeys("HIRO_API_KEY").map((key) => ({ url, key, headers: { "x-api-key": key } }));
+  // Hiro answers without a key as well, at a lower budget.
+  candidates.push({ url });
 
-  return keyedOrPublic(`/api/rpc-hiro?address=${encodeURIComponent(address)}`, { method: "GET" }, [url]);
+  return firstOf(candidates, { method: "GET" });
 }
 
 // ---------------------------------------------------------------- Cardano
@@ -251,30 +371,30 @@ export async function cardanoBalances(raw) {
   const addresses = [...new Set(asked.filter(isCardanoAddress))].slice(0, 50);
   if (!addresses.length) return { status: 200, text: JSON.stringify({ balances: {} }) };
 
-  // The app's own route reads Cardano with its key once the app is published.
-  if (keyedUp) {
-    const keyed = await once(`${KEYED}/api/cardano-balances`, post(JSON.stringify({ addresses })));
-    if (keyed && keyed.status === 200) return keyed;
-    if (!keyed || keyed.status === 404 || keyed.status >= 500) keyedUp = false;
-  }
-
-  // Koios answers without any key, so Cardano never depends on one.
-  const answer = await once("https://api.koios.rest/api/v1/address_info", post(JSON.stringify({ _addresses: addresses })));
-  if (answer && answer.status === 200) {
-    try {
-      const rows = JSON.parse(answer.text || "[]");
-      const balances = {};
-      for (const row of Array.isArray(rows) ? rows : []) {
-        if (row?.address) balances[row.address] = String(row.balance ?? 0);
+  // Koios answers without any key, so Cardano never depends on one. A busy
+  // indexer answers on a later try, so it is asked a few times before the
+  // wallet is written off as a failed read.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const answer = await once("https://api.koios.rest/api/v1/address_info", post(JSON.stringify({ _addresses: addresses })));
+    if (answer && answer.status === 200) {
+      try {
+        const rows = JSON.parse(answer.text || "[]");
+        const balances = {};
+        for (const row of Array.isArray(rows) ? rows : []) {
+          if (row?.address) balances[row.address] = String(row.balance ?? 0);
+        }
+        return { status: 200, text: JSON.stringify({ balances }) };
+      } catch {
+        // Fall through to the keyed indexer.
       }
-      return { status: 200, text: JSON.stringify({ balances }) };
-    } catch {
-      // Fall through to the keyed indexer.
     }
+    if (answer && answer.status !== 429 && answer.status < 500) break;
+    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
   }
 
-  const projectId = env("BLOCKFROST_PROJECT_ID");
-  if (!projectId) return { status: 200, text: JSON.stringify({ balances: {} }) };
+  const projects = keysOf("BLOCKFROST_PROJECT_ID");
+  if (!projects.length) return { status: 200, text: JSON.stringify({ balances: {} }) };
+  let projectPick = 0;
 
   const balances = {};
   let next = 0;
@@ -282,8 +402,12 @@ export async function cardanoBalances(raw) {
     while (next < addresses.length) {
       const address = addresses[next];
       next += 1;
+      // Several projects share the reads, so one project's daily budget is not
+      // spent by a single scan.
+      const project = projects[projectPick % projects.length];
+      projectPick += 1;
       const read = await once(`https://cardano-mainnet.blockfrost.io/api/v0/addresses/${address}`, {
-        headers: { project_id: projectId },
+        headers: { project_id: project },
       });
       if (!read) continue;
       if (read.status === 404) {
@@ -348,37 +472,34 @@ export async function tokenDiscovery(query) {
   if (!chainId) return fail(400, "Unknown chain.");
   if (!isEvmAddress(address)) return fail(400, "Bad address.");
 
-  // The app's own route reads this with its Etherscan key once it is published.
-  if (keyedUp) {
-    const keyed = await once(
-      `${KEYED}/api/token-discovery?chain=${encodeURIComponent(chain)}&address=${encodeURIComponent(address)}`,
-    );
-    if (keyed && keyed.status === 200) return keyed;
-    if (!keyed || keyed.status === 404 || keyed.status >= 500) keyedUp = false;
-  }
-
-  // The key may hold a list, separated by commas or spaces: one free key allows
-  // five calls a second, so several are used in turn and the scan widens with them.
-  const keys = env("ETHERSCAN_API_KEY")
-    .split(/[\s,]+/)
-    .filter(Boolean);
-  const key = keys.length ? keys[Math.floor(Math.random() * keys.length)] : "";
-  const base = key
-    ? `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=`
-    : `${BLOCKSCOUT[chain]}/api?module=account&action=`;
-  if (!base.startsWith("http")) return { status: 200, text: JSON.stringify({ tokens: [] }) };
-  const suffix = key ? `&apikey=${encodeURIComponent(key)}` : "";
+  // One free key allows five calls a second and a wallet costs several, so every
+  // key in the list is used in turn and a key that refuses is rested instead of
+  // ending this wallet's discovery.
+  const keys = orderedKeys("ETHERSCAN_API_KEY");
+  const blockscout = BLOCKSCOUT[chain];
+  if (!keys.length && !blockscout) return { status: 200, text: JSON.stringify({ tokens: [] }) };
 
   const call = async (action, extra = "") => {
-    const read = await once(`${base}${action}&address=${address}${extra}${suffix}`, {
-      headers: { accept: "application/json", "user-agent": UA },
-    });
-    if (!read || read.status !== 200) return null;
-    try {
-      return JSON.parse(read.text);
-    } catch {
-      return null;
+    const targets = keys.length
+      ? keys.map((key) => ({
+          url: `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=${action}&address=${address}${extra}&apikey=${encodeURIComponent(key)}`,
+          key,
+        }))
+      : [{ url: `${blockscout}/api?module=account&action=${action}&address=${address}${extra}` }];
+    for (const target of targets) {
+      const read = await once(target.url, { headers: { accept: "application/json", "user-agent": UA } });
+      if (!read) continue;
+      if (read.status !== 200) {
+        restKey(target.key, read.status);
+        continue;
+      }
+      try {
+        return JSON.parse(read.text);
+      } catch {
+        return null;
+      }
     }
+    return null;
   };
 
   const history = await call("tokentx", "&page=1&offset=300&sort=desc");

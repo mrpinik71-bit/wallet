@@ -9,22 +9,35 @@
 // instead of being written off.
 
 const START_LANES = 48;
+// The deployment's own functions are one budget, not one per route: Vercel
+// throttles a deployment by how many functions run at once, so the relay lanes
+// share this ceiling. It is what several keys per provider are spent against.
+const RELAY = "relay";
+const RELAY_LANES = 64;
 const lanes = new Map();
 const caps = new Map();
 
-export const capOf = (host) => caps.get(host) ?? START_LANES;
+export const capOf = (host) => caps.get(host) ?? (host === RELAY ? RELAY_LANES : START_LANES);
 
 /** A node that refused the burst is busy, not gone: ask it less often. */
 export function slowHost(host) {
   if (!host) return;
-  caps.set(host, Math.max(1, Math.floor(capOf(host) / 2)));
+  // The relay is backed by the whole key list, so a refusal there is one busy
+  // key, not a spent budget: it narrows without giving up most of the lanes.
+  const floor = host === RELAY ? 32 : 1;
+  caps.set(host, Math.max(floor, Math.floor(capOf(host) / 2)));
 }
 
 export function hostKey(url) {
+  const text = String(url || "");
+  // A relative path is served by this deployment's own functions, so every relay
+  // call shares one lane instead of one lane per query string: a hundred lanes
+  // at once is what made the deployment throttle its own functions.
+  if (text.startsWith("/")) return RELAY;
   try {
-    return new URL(url).host;
+    return new URL(text).host;
   } catch {
-    return String(url || "");
+    return text;
   }
 }
 

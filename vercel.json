@@ -5,6 +5,11 @@
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "dist/vercel/client",
   "cleanUrls": false,
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",

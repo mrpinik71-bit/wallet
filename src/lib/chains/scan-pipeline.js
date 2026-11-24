@@ -50,11 +50,11 @@ const PER_HOST = 240;
 const MAX_CAP = 3600; // a node that keeps answering without a refusal may be widened this far
 // A rate-limited node answers slowly when it answers at all, so a single read
 // gets long enough to come back instead of being written off as a failed chain.
-const JOB_TIMEOUT = 10000; // a stalled node must not hold a whole batch back
+const JOB_TIMEOUT = 7000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
-const SLOW_JOB_TIMEOUT = 30000;
+const SLOW_JOB_TIMEOUT = 20000;
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
 // High enough that a burst of 429s never trips it, low enough that a dead node
@@ -693,6 +693,11 @@ async function readBatch(batch, onWallet, deep = true) {
     for (const index of job.targets) expected[index] += job.discover ? 1 : job.coins.length;
   }
 
+  // Which groups are still owed for each wallet: what a wallet that has waited
+  // long enough is missing, and what the repair pass asks for again.
+  const owed = batch.map(() => new Set());
+  for (const job of jobs) for (const index of job.targets) owed[index].add(job);
+
   // A wallet is finished the moment every group that asked about it has
   // answered, so it is handed over right then instead of waiting for the whole
   // batch — the results list fills row by row while the scan keeps running.
@@ -731,9 +736,45 @@ async function readBatch(batch, onWallet, deep = true) {
     onWallet?.(index, reads[index]);
     // Work landed: the round is alive, so its clock starts again.
     armStall();
+    if (reported.size >= batch.length) allLanded?.();
   };
   batch.forEach((wallet, index) => {
     if (!expected[index]) finish(index);
+  });
+
+  /**
+   * Reports a wallet that has waited long enough: everything still owed to it is
+   * marked as a failed read, which is exactly what the repair pass asks again.
+   */
+  const giveUp = (index) => {
+    if (reported.has(index)) return;
+    for (const job of owed[index]) {
+      if (job.discover) {
+        reads[index].push({ coin: UNKNOWN_COIN, balance: 0, failed: true });
+        continue;
+      }
+      for (const coin of job.coins) reads[index].push({ coin, balance: 0, failed: true });
+    }
+    owed[index].clear();
+    reported.add(index);
+    onWallet?.(index, reads[index]);
+    if (reported.size >= batch.length) allLanded?.();
+  };
+
+  // A wallet is shown within this long of its round starting, however slowly one
+  // chain answers. A single hanging chain used to hold back every row of its
+  // round — the reason a scan could run for minutes with nothing on screen.
+  const WALLET_DEADLINE = 8000;
+  const walletTimer = setTimeout(() => {
+    batch.forEach((wallet, index) => giveUp(index));
+  }, WALLET_DEADLINE);
+
+  // The round is over as soon as every one of its wallets is on screen: it used
+  // to wait for the slowest chain of the round, which kept the next round of
+  // wallets from starting while a single node sat on a request.
+  let allLanded = null;
+  const roundDone = new Promise((resolve) => {
+    allLanded = resolve;
   });
 
   // A busy public node often answers on a later try, so each group is retried
@@ -757,7 +798,7 @@ async function readBatch(batch, onWallet, deep = true) {
         // fails is asked again by the repair pass once the scan is quiet.
         // Holding a round on one chain for a whole minute is what turned a fast
         // scan into a crawl, and it stalled every wallet behind that round.
-        const tries = 3;
+        const tries = 2;
         for (let attempt = 0; attempt < tries; attempt += 1) {
           try {
             result = { job, values: await runOnce() };
@@ -786,6 +827,8 @@ async function readBatch(batch, onWallet, deep = true) {
       }
 
       for (const index of job.targets) {
+        // Answered for this wallet, so this group is no longer owed to it.
+        owed[index].delete(job);
         if (job.discover) {
           const tokens = result.error ? [] : result.values.get(index) || [];
           const listed = tokens.filter(
@@ -828,19 +871,10 @@ async function readBatch(batch, onWallet, deep = true) {
   // The round is closed once it stops moving: every wallet still waiting is
   // reported with what came back, and a read that lands after this is ignored
   // instead of holding the whole scan at a standstill.
-  await Promise.race([answered, stalledRun]);
+  await Promise.race([answered, stalledRun, roundDone]);
   if (stallTimer) clearTimeout(stallTimer);
-  if (stalled) {
-    batch.forEach((wallet, index) => {
-      if (reported.has(index)) return;
-      const missing = Math.max(0, expected[index] - reads[index].length);
-      for (let slot = 0; slot < missing; slot += 1) {
-        reads[index].push({ coin: UNKNOWN_COIN, balance: 0, failed: true });
-      }
-      reported.add(index);
-      onWallet?.(index, reads[index]);
-    });
-  }
+  clearTimeout(walletTimer);
+  if (stalled) batch.forEach((wallet, index) => giveUp(index));
 
   return reads;
 }
@@ -921,7 +955,9 @@ export async function scanPhrases(
    * moment it answers.
    */
   const repairPass = async () => {
-    const queue = repairs.splice(0, repairs.length);
+    // Bounded: a huge scan must not spend hours re-asking the same busy node,
+    // and the screen already reports the reads that stayed failed.
+    const queue = repairs.splice(0, Math.min(repairs.length, 4000));
     let repaired = 0;
     const worker = async () => {
       while (queue.length && !isCancelled?.()) {
@@ -972,7 +1008,7 @@ export async function scanPhrases(
         if (left.length) repairs.push({ ...item, failed: left });
       }
     };
-    await Promise.all(Array.from({ length: 6 }, worker));
+    await Promise.all(Array.from({ length: 16 }, worker));
     if (repaired) onRepair?.(repaired);
   };
 
@@ -1097,9 +1133,9 @@ export async function scanPhrases(
   pool?.close();
 
   // The scan's own burst is over, so the nodes are quiet: everything that came
-  // back empty is asked again, twice, before the run is allowed to end with a
-  // chain reported as failed.
-  for (let pass = 0; pass < 2 && repairs.length && !isCancelled?.(); pass += 1) {
+  // back empty is asked again until it answers, before the run is allowed to end
+  // with a chain reported as failed.
+  for (let pass = 0; pass < 3 && repairs.length && !isCancelled?.(); pass += 1) {
     if (pass) await new Promise((resolve) => setTimeout(resolve, 1500));
     await repairPass();
   }
