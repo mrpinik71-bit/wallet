@@ -40,7 +40,15 @@ const CHUNK = SCAN_BATCH_SIZE; // wallets per batch round
 // hundreds of thousands of queued requests, the tab stops painting and not a
 // single wallet is reported for minutes. This window is wide enough to keep
 // every lane full, so the first results land within seconds.
-const INFLIGHT = 60;
+// Rounds kept in flight. One round already fans out to every chain at once, so a
+// wide window does not read faster: it only pushes the same requests further back
+// in each node's queue, and a wallet whose reads are still waiting their turn
+// then hits its deadline and is written off as a failed read — that is what
+// turned a big file into a wall of "all chains failed". The window therefore
+// starts at one round and widens only while rounds keep landing quickly with
+// clean answers, so the queue behind the nodes stays short at any file size.
+const INFLIGHT_MIN = 1;
+const INFLIGHT_MAX = 12;
 const MAX_WAITING = 4800; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
@@ -765,7 +773,7 @@ async function readBatch(batch, onWallet, deep = true) {
   // A wallet is shown within this long of its round starting, however slowly one
   // chain answers. A single hanging chain used to hold back every row of its
   // round — the reason a scan could run for minutes with nothing on screen.
-  const WALLET_DEADLINE = 8000;
+  const WALLET_DEADLINE = 12000;
   const walletTimer = setTimeout(() => {
     batch.forEach((wallet, index) => giveUp(index));
   }, WALLET_DEADLINE);
@@ -931,6 +939,11 @@ export async function scanPhrases(
   let completed = 0;
   let started = 0;
   let batchNumber = 0;
+  // How many rounds may run at once for this scan: re-tuned after every round.
+  let inflight = INFLIGHT_MIN;
+  // Reads that came back failed across the whole run, so a round's own failure
+  // rate can be told apart from the run's.
+  let failedReads = 0;
   const active = new Set();
   let buffer = [];
 
@@ -941,6 +954,7 @@ export async function scanPhrases(
 
   const report = (result, wallet, walletReads) => {
     completed += 1;
+    if (result.failed) failedReads += result.failed;
     onResult?.(result);
     if (result.status === "done" && result.failed > 0 && wallet) {
       const failed = walletReads.filter((read) => read.failed && read.coin?.chain !== "unread");
@@ -955,13 +969,14 @@ export async function scanPhrases(
    * wallet's result on screen, so a chain stops being reported as failed the
    * moment it answers.
    */
-  const repairPass = async () => {
+  const repairPass = async (budgetMs = 40000) => {
     // Bounded: a huge scan must not spend hours re-asking the same busy node,
     // and the screen already reports the reads that stayed failed.
     const queue = repairs.splice(0, Math.min(repairs.length, 4000));
+    const until = Date.now() + budgetMs;
     let repaired = 0;
     const worker = async () => {
-      while (queue.length && !isCancelled?.()) {
+      while (queue.length && Date.now() < until && !isCancelled?.()) {
         const item = queue.shift();
         const left = [];
         for (const read of item.failed) {
@@ -975,7 +990,9 @@ export async function scanPhrases(
           const endpoints = endpointsFor(coin.chain, chains[coin.chain]?.rpc || chains[coin.chain]?.api);
           for (const endpoint of endpoints) {
             try {
-              const value = await readBalance(coin, address, endpoint);
+              // Timed out like every other read: one node that never answers used
+              // to hold the whole repair pass open, so a finished scan never ended.
+              const value = await withTimeout(readBalance(coin, address, endpoint), JOB_TIMEOUT);
               if (Number.isFinite(value)) {
                 balance = value;
                 break;
@@ -1106,14 +1123,26 @@ export async function scanPhrases(
   // many wallets are waiting as well as by how many rounds are running: without
   // that bound the bigger round size would exhaust the tab instead of going faster.
   let waiting = 0;
+  // The window is re-tuned after each round: a round that answered cleanly and
+  // quickly proves the nodes have headroom, so one more round is allowed to run
+  // beside the others; a round that came back with failed reads means the burst
+  // was too wide, so the window halves instead of piling more onto the same nodes.
+  const tune = (ms, lostReads, wallets) => {
+    const perWallet = wallets ? lostReads / wallets : 0;
+    if (perWallet > 0.2) inflight = Math.max(INFLIGHT_MIN, Math.floor(inflight / 2));
+    else if (ms < 8000) inflight = Math.min(INFLIGHT_MAX, inflight + 1);
+  };
   const launch = (entries) => {
     let task;
     batchNumber += 1;
+    const began = Date.now();
+    const lostBefore = failedReads;
     const batch = { number: batchNumber, from: started + 1, to: started + entries.length, size: entries.length };
     waiting += entries.length;
     task = runBatch(entries, batch).finally(() => {
       waiting -= entries.length;
       active.delete(task);
+      tune(Date.now() - began, failedReads - lostBefore, entries.length);
     });
     active.add(task);
   };
@@ -1125,7 +1154,7 @@ export async function scanPhrases(
       if (buffer.length >= CHUNK) {
         launch(buffer);
         buffer = [];
-        if (active.size >= INFLIGHT || waiting >= MAX_WAITING) await Promise.race(active);
+        if (active.size >= inflight || waiting >= MAX_WAITING) await Promise.race(active);
       }
     }
   }
