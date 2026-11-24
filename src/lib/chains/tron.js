@@ -11,6 +11,11 @@ import { TRON_RELAY } from "@/lib/chains/keyed-relay";
 // are asked first; TronGrid's own public endpoint comes last.
 const APIS = ["https://tron-rpc.publicnode.com", "https://api.tronstack.io", chains.tron.api];
 
+// The indexer's own account endpoint lists the TRC-20 balances a wallet holds.
+// It is a different read from a contract call, so it is the second opinion a
+// zero is checked against.
+const TRONSCAN = "https://apilist.tronscanapi.com";
+
 // A relay or node that never answers must not eat a wallet's whole read time.
 const RELAY_MS = 4000;
 const NODE_MS = 9000;
@@ -151,13 +156,40 @@ export async function trc20Balance(address, coin) {
       const amount = amountFrom(await source(body), coin);
       if (amount > 0) return amount;
       zeros += 1;
+      // Two independent nodes both saying zero is the wallet's real balance.
       if (zeros >= 2) return 0;
     } catch (cause) {
       lastError = cause;
     }
   }
-  if (zeros > 0) return 0;
+  // Two nodes already said zero above, so anything reaching here is either one
+  // lone zero or every node down. A throttled node answers a contract call with
+  // all zeros instead of an error, and believing that hid every wallet holding
+  // USDT: the indexer is asked before the wallet is reported as empty.
+  if (zeros < 2) {
+    try {
+      return await indexedTrc20(address, coin);
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
   throw lastError || new Error("TRON network error.");
+}
+
+/** The TRC-20 balance the indexer reports for this wallet. */
+async function indexedTrc20(address, coin) {
+  const response = await fetch(`${TRONSCAN}/api/account?address=${encodeURIComponent(address)}`, {
+    signal: AbortSignal.timeout(NODE_MS),
+  });
+  if (!response.ok) throw new Error(`TRON indexer error (${response.status}).`);
+  const data = await response.json();
+  const list = data?.trc20token_balances;
+  // An account the indexer knows nothing about holds no token at all.
+  if (!Array.isArray(list)) return 0;
+  const held = list.find((entry) => String(entry.tokenId) === coin.address);
+  if (!held) return 0;
+  const decimals = Number(held.tokenDecimal ?? coin.decimals);
+  return Number(held.balance) / 10 ** decimals;
 }
 
 async function signAndBroadcast(transaction, mnemonic, account = 0) {
