@@ -483,8 +483,6 @@ export default function ScanWorkspace() {
         onAccounts={changeAccounts}
         deep={deep}
         onDeep={setDeep}
-        lines={lines}
-        linesTotal={linesTotal}
       />
 
       {wiped ? (

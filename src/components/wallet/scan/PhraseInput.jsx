@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { FileText, ScanSearch, X } from "lucide-react";
-import PhraseLinesList from "@/components/wallet/scan/PhraseLinesList";
 import TelegramPanel from "@/components/wallet/scan/TelegramPanel";
 
 const SIZES = [12, 15, 18, 21, 24];
@@ -26,8 +25,6 @@ export default function PhraseInput({
   onAccounts,
   deep = true,
   onDeep,
-  lines = [],
-  linesTotal = 0,
 }) {
   const fileRef = useRef(null);
   // Dragging a file from the desktop onto the card is the quickest way in on a
@@ -206,12 +203,6 @@ export default function PhraseInput({
             <p>The file is read and counted first, then every wallet in it is checked.</p>
           )}
         </div>
-
-        <PhraseLinesList
-          lines={lines}
-          total={Math.max(0, linesTotal - pendingInvalid)}
-          unreadable={pendingInvalid}
-        />
 
         {suggest && !scanning && !reading && pendingCount === 0 ? (
           <div className="mt-2 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2">
