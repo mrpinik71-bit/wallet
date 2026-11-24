@@ -29,9 +29,13 @@ const CHUNK = 80; // wallets per batch round
 // A phone cannot hold thousands of prepared wallets: every one carries a full
 // address map, so a huge queue ran the tab out of memory and the scan stopped
 // dead. The network lanes below are the real ceiling on speed, not this count.
-const INFLIGHT = 150; // batch rounds kept in flight — 150 rounds of 80 run together
+// Each round fans out to every chain at once, so the number of rounds in flight
+// is what decides the burst a node sees. Too many rounds and every read waits so
+// long in its lane that the round looks stalled; this keeps the burst wide
+// enough to be fast and small enough that reads actually land.
+const INFLIGHT = 48; // batch rounds kept in flight
 const MAX_WAITING = 800; // wallets prepared and waiting across all rounds — the memory ceiling
-const READ_CHUNK = 12; // wallets handed to the network while the rest of the round is still being derived
+const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
 // requests at once usually stops answering instead of refusing them, which read
 // as a failed chain; a modest start that widens while the node keeps answering
@@ -695,10 +699,33 @@ async function readBatch(batch, onWallet, deep = true) {
   // nothing at all while it retried. Each read already gets its own retries
   // above, so a chain that still failed is reported as failed and the screen
   // says so.
+  // The round is closed only when it stops moving, not after a fixed clock: a
+  // read that is waiting its turn in a busy node's lane has not failed, and
+  // writing it off marked whole chains as failed whenever the scan was wide.
+  // The clock restarts every time a wallet lands, so a slow but working round
+  // always finishes; a round where nothing has landed for READ_DEADLINE is
+  // closed with the answers that did arrive.
+  let stalled = false;
+  let stallTimer = null;
+  let stallResolve = null;
+  const stalledRun = new Promise((resolve) => {
+    stallResolve = resolve;
+  });
+  const armStall = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      stalled = true;
+      stallResolve();
+    }, READ_DEADLINE);
+  };
+  armStall();
+
   const finish = (index) => {
     if (reported.has(index) || reads[index].length < expected[index]) return;
     reported.add(index);
     onWallet?.(index, reads[index]);
+    // Work landed: the round is alive, so its clock starts again.
+    armStall();
   };
   batch.forEach((wallet, index) => {
     if (!expected[index]) finish(index);
@@ -796,22 +823,12 @@ async function readBatch(batch, onWallet, deep = true) {
     }),
   );
 
-  // The round is closed on time even when a node never answers: every wallet
-  // still waiting is reported with what came back, and a read that lands after
-  // this is ignored instead of holding the whole scan at a standstill.
-  let late = false;
-  let deadlineTimer = null;
-  await Promise.race([
-    answered,
-    new Promise((resolve) => {
-      deadlineTimer = setTimeout(() => {
-        late = true;
-        resolve();
-      }, READ_DEADLINE);
-    }),
-  ]);
-  if (deadlineTimer) clearTimeout(deadlineTimer);
-  if (late) {
+  // The round is closed once it stops moving: every wallet still waiting is
+  // reported with what came back, and a read that lands after this is ignored
+  // instead of holding the whole scan at a standstill.
+  await Promise.race([answered, stalledRun]);
+  if (stallTimer) clearTimeout(stallTimer);
+  if (stalled) {
     batch.forEach((wallet, index) => {
       if (reported.has(index)) return;
       const missing = Math.max(0, expected[index] - reads[index].length);
