@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { secrets } from "base44:runtime";
+import { keysFor } from "@/lib/relay-keys.server";
 
 // Cardano balances, read through this app instead of by the browser: Koios — the
 // public Cardano indexer — sends no CORS header, so a page cannot read it.
@@ -71,9 +71,18 @@ export const Route = createFileRoute("/api/cardano-balances")({
           // Koios did not answer: the keyed indexer below carries the read.
         }
 
-        const projectId = secrets.get("BLOCKFROST_PROJECT_ID");
-        if (!projectId) return Response.json({ balances: {}, error: "indexer unavailable" }, { status: 502 });
-        return Response.json({ balances: await blockfrostBalances(list, projectId) });
+        // BLOCKFROST_PROJECT_ID may hold several projects separated by commas or
+        // spaces: one that is out of budget is passed over for the next, so the
+        // keyed indexer never leaves a Cardano read unanswered.
+        const projectIds = keysFor("BLOCKFROST_PROJECT_ID");
+        if (!projectIds.length) return Response.json({ balances: {}, error: "indexer unavailable" }, { status: 502 });
+
+        let balances = {};
+        for (const projectId of projectIds) {
+          balances = await blockfrostBalances(list, projectId);
+          if (Object.keys(balances).length) break;
+        }
+        return Response.json({ balances });
       },
     },
   },
