@@ -14,6 +14,7 @@ import { evmChainBalancesMany, resetBatching } from "@/lib/chains/scan-batch";
 import { endpointsFor } from "@/lib/chains/mirrors";
 import {
   cardanoBalancesMany,
+  polkadotAssetBalancesMany,
   polkadotBalancesMany,
   solanaBalancesMany,
   solanaTokenBalancesMany,
@@ -248,6 +249,12 @@ const CATALOG_TOKENS = new Set(
 // read per wallet, so the two are asked separately.
 const SOLANA_NATIVE = MULTI.solana.filter((coin) => coin.kind !== "token");
 const SOLANA_TOKENS = MULTI.solana.filter((coin) => coin.kind === "token");
+// Sui and Polkadot keep their native coin on the batched reader; USDT and USDC
+// there are a different coin type / a pallet-assets entry, so they are asked apart.
+const SUI_NATIVE = MULTI.sui.filter((coin) => coin.kind !== "token");
+const SUI_TOKENS = MULTI.sui.filter((coin) => coin.kind === "token");
+const POLKADOT_NATIVE = MULTI.polkadot.filter((coin) => coin.kind !== "token");
+const POLKADOT_TOKENS = MULTI.polkadot.filter((coin) => coin.kind === "token");
 
 const hostOfUrl = (url) => {
   try {
@@ -422,20 +429,64 @@ async function readBatch(batch, onWallet) {
   }
 
   collect("sui", (items) => ({
-    coins: MULTI.sui,
+    coins: SUI_NATIVE,
     targets: items.map((item) => item.index),
     host: hostOf("sui"),
     slow: true,
-    run: async () => asCoinMap(await suiBalancesMany(items.map((item) => item.address)), items, MULTI.sui),
+    run: async () => asCoinMap(await suiBalancesMany(items.map((item) => item.address)), items, SUI_NATIVE),
   }));
 
   collect("polkadot", (items) => ({
-    coins: MULTI.polkadot,
+    coins: POLKADOT_NATIVE,
     targets: items.map((item) => item.index),
     host: hostOf("polkadot"),
     slow: true,
-    run: async () => asCoinMap(await polkadotBalancesMany(items.map((item) => item.address)), items, MULTI.polkadot),
+    run: async () => asCoinMap(await polkadotBalancesMany(items.map((item) => item.address)), items, POLKADOT_NATIVE),
   }));
+
+  // USDT and USDC on Sui and Polkadot are their own batched read: a coin type on
+  // Sui, a pallet-assets entry on Polkadot's Asset Hub.
+  for (const coin of SUI_TOKENS) {
+    collect("sui", (items) => ({
+      coins: [coin],
+      targets: items.map((item) => item.index),
+      host: hostOf("sui"),
+      slow: true,
+      run: async () => {
+        const values = await suiBalancesMany(items.map((item) => item.address), coin.address, coin.decimals);
+        const out = new Map();
+        items.forEach((item, position) => {
+          const amount = values.get(position);
+          if (amount === undefined) return;
+          out.set(item.index, new Map([[coin.id, amount]]));
+        });
+        return out;
+      },
+    }));
+  }
+
+  for (const coin of POLKADOT_TOKENS) {
+    collect("polkadot", (items) => ({
+      coins: [coin],
+      targets: items.map((item) => item.index),
+      host: "asset-hub",
+      slow: true,
+      run: async () => {
+        const values = await polkadotAssetBalancesMany(
+          items.map((item) => item.address),
+          coin.address,
+          coin.decimals,
+        );
+        const out = new Map();
+        items.forEach((item, position) => {
+          const amount = values.get(position);
+          if (amount === undefined) return;
+          out.set(item.index, new Map([[coin.id, amount]]));
+        });
+        return out;
+      },
+    }));
+  }
 
   if (MULTI.cardano.length) {
     const items = [];

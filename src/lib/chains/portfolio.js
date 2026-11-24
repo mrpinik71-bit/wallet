@@ -6,12 +6,16 @@ import { utxoBalance } from "@/lib/chains/utxo";
 import { solanaBalance } from "@/lib/chains/solana";
 import { tronBalance, trc20Balance } from "@/lib/chains/tron";
 import {
+  aptosAssetBalance,
   aptosBalance,
   blockcypherBalance,
   cardanoBalance,
   nearBalance,
+  nearTokenBalance,
+  polkadotAssetBalance,
   polkadotBalance,
   suiBalance,
+  suiTokenBalance,
   tonBalance,
   tonJettonBalance,
   xrpBalance,
@@ -32,14 +36,23 @@ export async function readBalance(coin, address, endpoint) {
   if (coin.family === "blockcypher") return blockcypherBalance(coin.chain, address);
   if (coin.family === "xrp") return xrpBalance(address, endpoint);
   if (coin.family === "cardano") return cardanoBalance(address);
-  if (coin.family === "polkadot") return polkadotBalance(address);
-  if (coin.family === "aptos") return aptosBalance(address);
-  if (coin.family === "near") return nearBalance(address);
+  if (coin.family === "polkadot") {
+    // USDT and USDC are Asset Hub assets, not the relay chain's own coin.
+    return coin.kind === "token" ? polkadotAssetBalance(address, coin.address, coin.decimals) : polkadotBalance(address);
+  }
+  if (coin.family === "aptos") {
+    return coin.kind === "token" ? aptosAssetBalance(address, coin) : aptosBalance(address);
+  }
+  if (coin.family === "near") {
+    return coin.kind === "token" ? nearTokenBalance(address, coin.address, coin.decimals) : nearBalance(address);
+  }
   if (coin.family === "ton") {
     // USDT on TON is a jetton: its own balance, not the wallet's TON.
     return coin.kind === "token" ? tonJettonBalance(address, coin.address, coin.decimals) : tonBalance(address);
   }
-  if (coin.family === "sui") return suiBalance(address);
+  if (coin.family === "sui") {
+    return coin.kind === "token" ? suiTokenBalance(address, coin.address, coin.decimals) : suiBalance(address);
+  }
   if (coin.family === "solana") return solanaBalance(address);
   if (coin.family === "stacks") return stacksBalance(address, endpoint);
   if (coin.family === "babylon") return babylonBalance(address);

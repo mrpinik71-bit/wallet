@@ -168,6 +168,40 @@ const TOKENS = [
 
   // Airdrop tokens that live as SPL tokens on Solana rather than on their own chain.
   token("solana", "grass-sol", "GRASS", "Grass", "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs", 9, "grass", "#1DC46D"),
+
+  // Stablecoins on the remaining networks, each contract confirmed on its own
+  // chain (symbol and decimals read from the contract, not copied from a list).
+  token("gnosis", "usdc-gno", "USDC", "USD Coin (Gnosis)", "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("gnosis", "usdt-gno", "USDT", "Tether USD (Gnosis)", "0x4ECaBa5870353805a9F068101A40E0f32ed605C6", 6, "tether", "#26A17B", cdn("usdt")),
+  token("cronos", "usdt-cro", "USDT", "Tether USD (Cronos)", "0x66e428c3f67a68878562e79A0234c1F83c208770", 6, "tether", "#26A17B", cdn("usdt")),
+  token("fantom", "usdc-ftm", "USDC", "USD Coin (Fantom)", "0x04068DA6C83AFCFA0e13ba15A6696662335D5B75", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("fantom", "usdt-ftm", "USDT", "Tether USD (Fantom)", "0x049d68029688eAbF473097a2fC38ef61633A3C7A", 6, "tether", "#26A17B", cdn("usdt")),
+  token("unichain", "usdc-uni", "USDC", "USD Coin (Unichain)", "0x078D782b760474a361dDA0AF3839290b0EF57AD6", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("polygonzkevm", "usdc-zkevm", "USDC", "USD Coin (Polygon zkEVM)", "0xA8CE8aee21bC2A48a5EF670afCc9274C7bbbC035", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("polygonzkevm", "usdt-zkevm", "USDT", "Tether USD (Polygon zkEVM)", "0x1E4a5963aBFD975d8c9021ce480b42188849D41d", 6, "tether", "#26A17B", cdn("usdt")),
+  token("sei", "usdc-sei", "USDC", "USD Coin (Sei)", "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("sonic", "usdc-sonic", "USDC", "USD Coin (Sonic)", "0x29219dd400f2Bf60E5a23d13Be72B486D4038894", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("sonic", "usdt-sonic", "USDT", "Tether USD (Sonic)", "0x6047828dc181963ba44974801FF68e538dA5eaF9", 6, "tether", "#26A17B", cdn("usdt")),
+  token("berachain", "usdc-bera", "USDC", "USD Coin (Berachain)", "0x549943e04f40284185054145c6E4e9568C1D3241", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("kava", "usdt-kava", "USDT", "Tether USD (Kava)", "0x919C1c267BC06a7039e03fcc2eF738525769109c", 6, "tether", "#26A17B", cdn("usdt")),
+  token("core", "usdc-core", "USDC", "USD Coin (Core)", "0xa4151B2B3e269645181dCcF2D426cE75fcbDeca9", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("abstract", "usdc-abs", "USDC", "USD Coin (Abstract)", "0x84A71ccD554Cc1b02749b35d22F684CC8ec987e1", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("celo", "usdt-celo", "USDT", "Tether USD (Celo)", "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", 6, "tether", "#26A17B", cdn("usdt")),
+
+  // Stablecoins on the non-EVM networks: Aptos (a fungible asset and a coin
+  // type), NEAR (NEP-141), Sui (coin type) and Polkadot (a pallet-assets entry
+  // on Asset Hub). Each address was read on its own chain before being listed.
+  {
+    ...token("aptos", "usdc-apt", "USDC", "USD Coin (Aptos)", "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b", 6, "usd-coin", "#2775CA", cdn("usdc")),
+    fungibleAsset: true,
+  },
+  token("aptos", "usdt-apt", "USDT", "Tether USD (Aptos)", "0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDT", 6, "tether", "#26A17B", cdn("usdt")),
+  token("near", "usdt-near", "USDT", "Tether USD (NEAR)", "usdt.tether-token.near", 6, "tether", "#26A17B", cdn("usdt")),
+  token("near", "usdc-near", "USDC", "USD Coin (NEAR)", "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("sui", "usdc-sui", "USDC", "USD Coin (Sui)", "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC", 6, "usd-coin", "#2775CA", cdn("usdc")),
+  token("sui", "usdt-sui", "USDT", "Tether USD (Sui)", "0x375f70cf2ae4c00bf37117d0c85a2c71545e6ee05c4a5c7d282cd66a4504b068::usdt::USDT", 6, "tether", "#26A17B", cdn("usdt")),
+  token("polkadot", "usdt-dot", "USDT", "Tether USD (Polkadot)", "1984", 6, "tether", "#26A17B", cdn("usdt")),
+  token("polkadot", "usdc-dot", "USDC", "USD Coin (Polkadot)", "1337", 6, "usd-coin", "#2775CA", cdn("usdc")),
 ];
 
 // Botanix's own node is gone; the only node left (thirdweb) answers one call per

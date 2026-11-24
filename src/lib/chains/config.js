@@ -555,6 +555,7 @@ export const assets = [
   native("bsc", { coingecko: "binancecoin", logo: cdn("bnb"), name: "BNB" }),
   native("solana", { coingecko: "solana", logo: cg(4128, "solana.png"), name: "Solana", decimals: 9 }),
   native("tron", { coingecko: "tron", logo: cdn("trx"), name: "TRON", decimals: 6 }),
+  native("ton", { coingecko: "the-open-network", logo: cg(17980, "ton_symbol.png"), name: "Toncoin", decimals: 9 }),
   native("polygon", { coingecko: "polygon-ecosystem-token", logo: cg(4713, "polygon.png"), name: "Polygon" }),
   native("avalanche", { coingecko: "avalanche-2", logo: cg(12559, "avax.png"), name: "Avalanche" }),
   native("zksync", { coingecko: "ethereum", logo: cdn("eth"), name: "zkSync Era" }),
@@ -585,6 +586,11 @@ export const assets = [
 
   token("avalanche", "usdc-avax", "USDC", "USD Coin (Avalanche)", "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", 6, "usd-coin", "#2775CA", cdn("usdc")),
   token("avalanche", "usdt-avax", "USDT", "Tether USD (Avalanche)", "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", 6, "tether", "#26A17B", cdn("usdt")),
+
+  // TRON's USDT is what most of these wallets actually hold: it is a TRC-20
+  // contract, read and sent through the same TRON path as TRX.
+  token("tron", "usdt-tron", "USDT", "Tether USD (TRC-20)", "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", 6, "tether", "#26A17B", cdn("usdt")),
+  token("ton", "usdt-ton", "USDT", "Tether USD (TON)", "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", 6, "tether", "#26A17B", cdn("usdt")),
 ];
 
 export function coinById(id) {

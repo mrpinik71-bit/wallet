@@ -1,5 +1,6 @@
 // Balance readers for the extra networks the bulk scanner covers.
 import { chains } from "@/lib/chains/config";
+import { assetHubBalance } from "@/lib/chains/asset-hub";
 import { TON_RELAY } from "@/lib/chains/keyed-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
@@ -151,14 +152,29 @@ export async function tonBalance(address) {
 /** USDT and other jetton balances: the owner's jetton wallet, read on TonAPI. */
 export async function tonJettonBalance(address, jetton, decimals = 9) {
   if (!address || !jetton) return 0;
+  try {
+    const response = await fetch(
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(address)}/jettons/${encodeURIComponent(jetton)}`,
+    );
+    // No jetton wallet for this coin means the account holds none of it.
+    if (response.status === 404) return 0;
+    if (response.ok) {
+      const data = await response.json();
+      return Number(data?.balance || 0) / 10 ** decimals;
+    }
+  } catch {
+    // TonAPI is busy: Toncenter answers the same jetton wallet below.
+  }
+
+  // A bulk scan asks about many wallets at once, and TonAPI refuses the burst:
+  // without this second reader USDT on TON read as empty instead of throttled.
   const response = await fetch(
-    `https://tonapi.io/v2/accounts/${encodeURIComponent(address)}/jettons/${encodeURIComponent(jetton)}`,
+    `https://toncenter.com/api/v3/jetton/wallets?owner_address=${encodeURIComponent(address)}&jetton_address=${encodeURIComponent(jetton)}&limit=1`,
   );
-  // No jetton wallet for this coin means the account holds none of it.
-  if (response.status === 404) return 0;
   if (!response.ok) throw new Error(`TON network error (${response.status}).`);
   const data = await response.json();
-  return Number(data?.balance || 0) / 10 ** decimals;
+  const wallet = (data?.jetton_wallets || [])[0];
+  return Number(wallet?.balance || 0) / 10 ** decimals;
 }
 
 /** SUI balance in MIST, read through the Sui GraphQL endpoint. */
@@ -248,4 +264,99 @@ export async function xrpBalance(address, base) {
   }
 
   throw lastError || new Error("XRP Ledger network error.");
+}
+
+/** USDT and USDC on Aptos: a fungible asset's metadata, or a coin-standard type. */
+export async function aptosAssetBalance(address, coin) {
+  if (!address) return 0;
+  const request = coin.fungibleAsset
+    ? {
+        function: "0x1::primary_fungible_store::balance",
+        type_arguments: ["0x1::fungible_asset::Metadata"],
+        arguments: [address, coin.address],
+      }
+    : { function: "0x1::coin::balance", type_arguments: [coin.address], arguments: [address] };
+
+  const response = await fetch(`${chains.aptos.api}/view`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  // A wallet that never held this coin has no balance to report.
+  if (response.status === 400 || response.status === 404) return 0;
+  if (!response.ok) throw new Error(`Aptos network error (${response.status}).`);
+
+  const [raw] = await response.json();
+  return Number(raw || 0) / 10 ** (coin.decimals || 6);
+}
+
+/** USDT and USDC on NEAR are NEP-141 tokens, read through ft_balance_of. */
+export async function nearTokenBalance(address, contract, decimals = 6) {
+  if (!address || !contract) return 0;
+  const endpoints = ["https://free.rpc.fastnear.com", chains.near.rpc, "https://near.drpc.org"];
+  const args = btoa(JSON.stringify({ account_id: address }));
+  let lastStatus = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "query",
+          params: {
+            request_type: "call_function",
+            finality: "final",
+            account_id: contract,
+            method_name: "ft_balance_of",
+            args_base64: args,
+          },
+        }),
+      });
+      if (!response.ok) {
+        lastStatus = response.status;
+        continue;
+      }
+      const data = await response.json();
+      // The answer is the amount as a JSON string, delivered as bytes.
+      const bytes = data?.result?.result;
+      if (Array.isArray(bytes)) {
+        const text = new TextDecoder().decode(Uint8Array.from(bytes));
+        try {
+          return Number(JSON.parse(text)) / 10 ** decimals;
+        } catch {
+          return 0;
+        }
+      }
+    } catch {
+      // Try the next endpoint.
+    }
+  }
+
+  throw new Error(lastStatus ? `NEAR network error (${lastStatus}).` : "NEAR network error.");
+}
+
+/** USDT and USDC on Sui, read by coin type through the GraphQL endpoint. */
+export async function suiTokenBalance(address, coinType, decimals = 6) {
+  if (!address || !coinType) return 0;
+  const response = await fetch(chains.sui.api, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      query: `query($owner: SuiAddress!) { address(address: $owner) { balance(coinType: "${coinType}") { totalBalance } } }`,
+      variables: { owner: address },
+    }),
+  });
+  if (!response.ok) throw new Error(`Sui network error (${response.status}).`);
+  const data = await response.json();
+  const total = data?.data?.address?.balance?.totalBalance;
+  if (total === undefined) throw new Error("Sui network error.");
+  return Number(total) / 10 ** decimals;
+}
+
+/** USDT and USDC on Polkadot live on Asset Hub as pallet-assets entries. */
+export async function polkadotAssetBalance(address, assetId, decimals = 6) {
+  return assetHubBalance(address, assetId, decimals);
 }

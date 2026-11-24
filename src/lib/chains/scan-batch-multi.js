@@ -8,6 +8,7 @@ import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { drpcRelay } from "@/lib/chains/drpc-relay";
 import { SOLANA_RELAY } from "@/lib/chains/keyed-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
+import { assetBalancesMany } from "@/lib/chains/asset-hub";
 import { request } from "@/lib/chains/scan-lanes";
 import { verifySolanaBalances } from "@/lib/chains/scan-verify";
 import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
@@ -175,8 +176,11 @@ export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
   return balances;
 }
 
-/** SUI balances for many addresses, as aliased fields of one GraphQL query. */
-export async function suiBalancesMany(addresses) {
+/**
+ * Sui balances for many addresses, as aliased fields of one GraphQL query. The
+ * native coin is the default; USDT and USDC are the same read with a coin type.
+ */
+export async function suiBalancesMany(addresses, coinType = "0x2::sui::SUI", decimals = 9) {
   const balances = new Map();
 
   await Promise.all(
@@ -184,7 +188,7 @@ export async function suiBalancesMany(addresses) {
       const fields = list
         .map(
           (address, offset) =>
-            `a${offset}: address(address: "${address}") { balance(coinType: "0x2::sui::SUI") { totalBalance } }`,
+            `a${offset}: address(address: "${address}") { balance(coinType: "${coinType}") { totalBalance } }`,
         )
         .join(" ");
       const response = await request(chains.sui.api, {
@@ -199,7 +203,7 @@ export async function suiBalancesMany(addresses) {
       list.forEach((_, offset) => {
         const total = data.data[`a${offset}`]?.balance?.totalBalance;
         if (total === undefined || total === null) return;
-        balances.set(start + offset, Number(total) / 1e9);
+        balances.set(start + offset, Number(total) / 10 ** decimals);
       });
     }),
   );
@@ -280,6 +284,14 @@ export async function polkadotBalancesMany(addresses) {
     }),
   );
 
+  return balances;
+}
+
+/** USDT and USDC on Polkadot: one batched Assets.Account read on Asset Hub. */
+export async function polkadotAssetBalancesMany(addresses, assetId, decimals = 6) {
+  const raw = await assetBalancesMany(addresses.map((address) => ({ address, assetId })));
+  const balances = new Map();
+  for (const [index, amount] of raw) balances.set(index, amount / 10 ** decimals);
   return balances;
 }
 
