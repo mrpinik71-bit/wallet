@@ -332,8 +332,9 @@ export default function ScanWorkspace() {
           setUnreadable(bad);
         },
       });
-      // The first lines of the file are shown line by line under the picker.
-      setLines(preview || []);
+      // The first lines of the file are listed by line number under the picker —
+      // the phrase itself is never kept in the screen's state.
+      setLines((preview || []).map((entry) => ({ line: entry.line, unreadable: entry.unreadable })));
       setLinesTotal(found + invalid);
       pendingFileRef.current = { file, count: found };
       setPendingCount(found);

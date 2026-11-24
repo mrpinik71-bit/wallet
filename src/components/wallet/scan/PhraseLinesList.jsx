@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ListOrdered } from "lucide-react";
 
-// The file's wallets, opened on demand: every recovery phrase it holds on its own
-// scrolling row. A line that is not a phrase is only counted, never listed.
+// The file's wallets, opened on demand: the line number of each wallet on its own
+// row. The phrase itself is never rendered. A line that is not a phrase is only
+// counted, never listed.
 export default function PhraseLinesList({ lines = [], total = 0, unreadable = 0 }) {
   const [open, setOpen] = useState(false);
   const wallets = useMemo(() => lines.filter((entry) => !entry.unreadable), [lines]);
@@ -34,12 +35,20 @@ export default function PhraseLinesList({ lines = [], total = 0, unreadable = 0 
       {open ? (
         <div className="max-h-64 overflow-y-auto overscroll-contain border-t border-foreground/[0.06] px-3 py-1.5">
           {wallets.map((entry, position) => (
-            <div key={`${entry.line}-${position}`} className="flex gap-2 py-1">
-              <span className="w-8 shrink-0 pt-0.5 text-right text-[9.5px] num text-muted-foreground/45">
-                {position + 1}
+            <div
+              key={`${entry.line}-${position}`}
+              className="flex items-center justify-between gap-2 border-b border-foreground/[0.04] py-1.5 last:border-b-0"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="w-8 shrink-0 text-right text-[9.5px] num text-muted-foreground/45">
+                  {position + 1}
+                </span>
+                <span className="shrink-0 text-[10.5px] font-medium num text-foreground/85">
+                  Line {entry.line}
+                </span>
               </span>
-              <span className="min-w-0 break-words font-mono text-[10.5px] leading-relaxed text-foreground/85">
-                {entry.phrase}
+              <span className="shrink-0 font-mono text-[9.5px] tracking-[0.14em] text-muted-foreground/45">
+                ••••••••
               </span>
             </div>
           ))}
