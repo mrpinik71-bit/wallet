@@ -1,6 +1,6 @@
-// TronGrid balance reads. The provider key lives in the app's backend function
-// (`chainRelay`), so this host never holds a key of its own.
-const RELAY = "https://glorious-vault-chain-core.base44.app/functions/chainRelay";
+// TRON balance reads on this deployment: TronGrid is called with the project's
+// own TRONGRID_API_KEY. Without one, the read falls back to the app's relay.
+import { send, tronRead } from "./_providers.js";
 
 export default async function handler(req, res) {
   const query = { ...(req.query || {}) };
@@ -11,14 +11,6 @@ export default async function handler(req, res) {
         ? req.body
         : JSON.stringify(req.body || {});
 
-  const response = await fetch(RELAY, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ provider: "tron", query, body }),
-  });
-  const text = await response.text();
-  res.status(response.status);
-  res.setHeader("content-type", "application/json");
-  res.setHeader("cache-control", "no-store");
-  return res.send(text);
+  const { status, text } = await tronRead(query, body);
+  return send(res, status, text);
 }

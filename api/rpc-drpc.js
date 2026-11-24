@@ -1,16 +1,9 @@
-// EVM balance reads through the app's backend function (dRPC key server-side).
-const RELAY = "https://glorious-vault-chain-core.base44.app/functions/chainRelay";
+// EVM reads on this deployment: dRPC is called with the project's own
+// DRPC_API_KEY. Without one, the read falls back to the app's relay.
+import { drpcRead, send } from "./_providers.js";
 
 export default async function handler(req, res) {
   const body = typeof req.body === "string" ? req.body : JSON.stringify(req.body || {});
-  const response = await fetch(RELAY, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ provider: "drpc", query: { ...(req.query || {}) }, body }),
-  });
-  const text = await response.text();
-  res.status(response.status);
-  res.setHeader("content-type", "application/json");
-  res.setHeader("cache-control", "no-store");
-  return res.send(text);
+  const { status, text } = await drpcRead({ ...(req.query || {}) }, body);
+  return send(res, status, text);
 }
