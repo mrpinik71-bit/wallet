@@ -130,6 +130,29 @@ function associatedTokenAddress(owner, mint) {
   return bs58.encode(sha256(join([...seeds, Uint8Array.of(255), bs58.decode(ATA_PROGRAM), PDA_MARKER])));
 }
 
+/**
+ * Every token account the wallet holds for this mint, standard or not: older
+ * wallets and programs keep funds in accounts that are not the derived ATA.
+ */
+async function solanaOwnerTokenBalance(address, mint) {
+  const data = await solanaCall({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "getTokenAccountsByOwner",
+    params: [address, { mint }, { encoding: "jsonParsed" }],
+  });
+  const accounts = data?.result?.value;
+  if (!Array.isArray(accounts)) throw new Error("Solana network error.");
+
+  let total = 0;
+  for (const account of accounts) {
+    // The node already applied the mint's decimals, so this is a whole amount.
+    const amount = Number(account?.account?.data?.parsed?.info?.tokenAmount?.uiAmountString);
+    if (Number.isFinite(amount)) total += amount;
+  }
+  return total;
+}
+
 /** SPL token balances per wallet, read as each wallet's token account in one batch. */
 export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
   const balances = new Map();
@@ -172,6 +195,29 @@ export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
       });
     }),
   );
+
+  // The batch above only knows each wallet's standard token account. A wallet
+  // whose standard account is empty can still hold the token in an older or
+  // program-owned account, so those wallets are asked by owner — the one read
+  // that sees every account the wallet owns for this mint.
+  const doubtful = [];
+  addresses.forEach((address, position) => {
+    if (!(balances.get(position) > 0)) doubtful.push({ position, address });
+  });
+
+  const queue = [...doubtful];
+  const workers = Array.from({ length: Math.min(10, queue.length) }, async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) {
+      try {
+        const amount = await solanaOwnerTokenBalance(row.address, mint);
+        if (amount > (balances.get(row.position) || 0)) balances.set(row.position, amount);
+        else if (balances.get(row.position) === undefined) balances.set(row.position, 0);
+      } catch {
+        // Unanswered: the batched answer stands, and a lost read is reported.
+      }
+    }
+  });
+  await Promise.all(workers);
 
   return balances;
 }

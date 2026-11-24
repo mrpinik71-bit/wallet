@@ -14,6 +14,7 @@ import {
   nearTokenBalance,
   polkadotAssetBalance,
   polkadotBalance,
+  solanaTokenBalance,
   suiBalance,
   suiTokenBalance,
   tonBalance,
@@ -53,7 +54,10 @@ export async function readBalance(coin, address, endpoint) {
   if (coin.family === "sui") {
     return coin.kind === "token" ? suiTokenBalance(address, coin.address, coin.decimals) : suiBalance(address);
   }
-  if (coin.family === "solana") return solanaBalance(address);
+  if (coin.family === "solana") {
+    // USDT and USDC on Solana are SPL tokens, not the chain's own coin.
+    return coin.kind === "token" ? solanaTokenBalance(address, coin.address) : solanaBalance(address);
+  }
   if (coin.family === "stacks") return stacksBalance(address, endpoint);
   if (coin.family === "babylon") return babylonBalance(address);
   if (coin.chain === "tron") {

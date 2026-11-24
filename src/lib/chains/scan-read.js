@@ -1,7 +1,7 @@
 // Balance readers for the extra networks the bulk scanner covers.
 import { chains } from "@/lib/chains/config";
 import { assetHubBalance } from "@/lib/chains/asset-hub";
-import { TON_RELAY } from "@/lib/chains/keyed-relay";
+import { SOLANA_RELAY, TON_RELAY } from "@/lib/chains/keyed-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
 import { verifyTonBalance } from "@/lib/chains/scan-verify";
@@ -175,6 +175,52 @@ export async function tonJettonBalance(address, jetton, decimals = 9) {
   const data = await response.json();
   const wallet = (data?.jetton_wallets || [])[0];
   return Number(wallet?.balance || 0) / 10 ** decimals;
+}
+
+/** USDT and USDC on Solana: every token account the wallet holds for this mint. */
+export async function solanaTokenBalance(address, mint) {
+  if (!address || !mint) return 0;
+  // The app's relay answers first (its key is wider than a public node), then
+  // the configured node and the public one, so a busy node costs nothing.
+  const endpoints = [SOLANA_RELAY, chains.solana.rpc, "https://api.mainnet-beta.solana.com"].filter(Boolean);
+  let lastError = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getTokenAccountsByOwner",
+          params: [address, { mint }, { encoding: "jsonParsed" }],
+        }),
+      });
+      if (!response.ok) {
+        lastError = new Error(`Solana network error (${response.status}).`);
+        continue;
+      }
+      const data = await response.json();
+      const accounts = data?.result?.value;
+      if (!Array.isArray(accounts)) {
+        lastError = new Error("Solana network error.");
+        continue;
+      }
+      // Every account for this mint adds up — the wallet's standard token
+      // account or an older one — and the node has already applied decimals.
+      let total = 0;
+      for (const account of accounts) {
+        const amount = Number(account?.account?.data?.parsed?.info?.tokenAmount?.uiAmountString);
+        if (Number.isFinite(amount)) total += amount;
+      }
+      return total;
+    } catch (cause) {
+      lastError = cause instanceof Error ? cause : new Error("Solana network error.");
+    }
+  }
+
+  throw lastError || new Error("Solana network error.");
 }
 
 /** SUI balance in MIST, read through the Sui GraphQL endpoint. */
