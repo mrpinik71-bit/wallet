@@ -17,11 +17,25 @@ const RELAY_OPS = {
   "/wallet/triggerconstantcontract": "call",
 };
 
+// A busy node answers 200 with an error body. Reading that as "balance 0" hid
+// every wallet holding TRC-20 USDT, so an answer is checked before it is used.
+function isAnswer(data, op) {
+  if (!data || typeof data !== "object") return false;
+  if (data.Error || data.error) return false;
+  if (op === "call") {
+    return (
+      (Array.isArray(data.constant_result) && data.constant_result.length > 0) ||
+      data.result?.result === true
+    );
+  }
+  return true;
+}
+
 async function post(path, body, apis = APIS) {
+  const op = RELAY_OPS[path] || null;
   // Reads go through the app's relay first: the key's own budget answers far
   // more wallets at once than the public node. No key saved answers 503 here,
   // and the public nodes below carry the read exactly as before.
-  const op = apis === APIS ? RELAY_OPS[path] : null;
   if (op) {
     try {
       const relayed = await fetch(`${TRON_RELAY}?op=${op}`, {
@@ -29,7 +43,10 @@ async function post(path, body, apis = APIS) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (relayed.ok) return await relayed.json();
+      if (relayed.ok) {
+        const data = await relayed.json();
+        if (isAnswer(data, op)) return data;
+      }
     } catch {
       // Fall through to the public nodes.
     }
@@ -47,7 +64,12 @@ async function post(path, body, apis = APIS) {
         lastError = new Error(`TRON network error (${response.status}).`);
         continue;
       }
-      return response.json();
+      const data = await response.json();
+      if (!isAnswer(data, op)) {
+        lastError = new Error("TRON network error.");
+        continue;
+      }
+      return data;
     } catch (cause) {
       lastError = cause;
     }
@@ -86,17 +108,23 @@ export async function tronBalance(address) {
   return (data.balance || 0) / 1e6;
 }
 
+const amountFrom = (data, coin) => {
+  const hex = data?.constant_result?.[0];
+  if (!hex) return 0;
+  return Number(BigInt(`0x${hex}`)) / 10 ** coin.decimals;
+};
+
 export async function trc20Balance(address, coin) {
-  const data = await post("/wallet/triggerconstantcontract", {
+  const body = {
     owner_address: hexAddress(address),
     contract_address: hexAddress(coin.address),
     function_selector: "balanceOf(address)",
     parameter: padParameter(address),
     visible: false,
-  });
-  const hex = data?.constant_result?.[0];
-  if (!hex) return 0;
-  return Number(BigInt(`0x${hex}`)) / 10 ** coin.decimals;
+  };
+  // Every host is asked until one answers with a real balance, so a zero here
+  // means the node read the contract and the wallet holds none of it.
+  return amountFrom(await post("/wallet/triggerconstantcontract", body), coin);
 }
 
 async function signAndBroadcast(transaction, mnemonic, account = 0) {

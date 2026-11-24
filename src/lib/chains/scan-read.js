@@ -152,29 +152,40 @@ export async function tonBalance(address) {
 /** USDT and other jetton balances: the owner's jetton wallet, read on TonAPI. */
 export async function tonJettonBalance(address, jetton, decimals = 9) {
   if (!address || !jetton) return 0;
+  let fromTonapi;
   try {
     const response = await fetch(
       `https://tonapi.io/v2/accounts/${encodeURIComponent(address)}/jettons/${encodeURIComponent(jetton)}`,
     );
     // No jetton wallet for this coin means the account holds none of it.
-    if (response.status === 404) return 0;
-    if (response.ok) {
+    if (response.status === 404) fromTonapi = 0;
+    else if (response.ok) {
       const data = await response.json();
-      return Number(data?.balance || 0) / 10 ** decimals;
+      fromTonapi = Number(data?.balance || 0) / 10 ** decimals;
     }
   } catch {
     // TonAPI is busy: Toncenter answers the same jetton wallet below.
   }
+  // A funded answer stands as it is; a zero is confirmed on Toncenter, because
+  // a lagging indexer answers zero for a wallet that does hold the token.
+  if (fromTonapi > 0) return fromTonapi;
 
   // A bulk scan asks about many wallets at once, and TonAPI refuses the burst:
   // without this second reader USDT on TON read as empty instead of throttled.
-  const response = await fetch(
-    `https://toncenter.com/api/v3/jetton/wallets?owner_address=${encodeURIComponent(address)}&jetton_address=${encodeURIComponent(jetton)}&limit=1`,
-  );
-  if (!response.ok) throw new Error(`TON network error (${response.status}).`);
-  const data = await response.json();
-  const wallet = (data?.jetton_wallets || [])[0];
-  return Number(wallet?.balance || 0) / 10 ** decimals;
+  try {
+    const response = await fetch(
+      `https://toncenter.com/api/v3/jetton/wallets?owner_address=${encodeURIComponent(address)}&jetton_address=${encodeURIComponent(jetton)}&limit=1`,
+    );
+    if (!response.ok) throw new Error(`TON network error (${response.status}).`);
+    const data = await response.json();
+    const wallet = (data?.jetton_wallets || [])[0];
+    return Math.max(fromTonapi || 0, Number(wallet?.balance || 0) / 10 ** decimals);
+  } catch (cause) {
+    // Toncenter did not answer either: the zero TonAPI gave still stands as its
+    // answer, and only a wallet neither node answered is a failed read.
+    if (fromTonapi !== undefined) return fromTonapi;
+    throw cause;
+  }
 }
 
 /** USDT and USDC on Solana: every token account the wallet holds for this mint. */
