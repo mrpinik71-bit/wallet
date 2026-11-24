@@ -44,6 +44,9 @@ export default function ScanWorkspace() {
   // How far the file itself has been read, so a big file shows real progress.
   const [readStats, setReadStats] = useState({ bytes: 0, size: 0, lines: 0 });
   const [pendingCount, setPendingCount] = useState(0);
+  // When the file's lines are real phrases of another length, that length: the
+  // screen offers it instead of leaving "0 wallets" unexplained.
+  const [suggest, setSuggest] = useState(0);
   // Lines that are not real BIP-39 phrases: counted apart, never scanned.
   const [unreadable, setUnreadable] = useState(0);
   const [words, setWords] = useState(12);
@@ -278,6 +281,7 @@ export default function ScanWorkspace() {
     setLinesTotal(0);
     setReadStats({ bytes: 0, size: 0, lines: 0 });
     setUnreadable(0);
+    setSuggest(0);
     setTotal(0);
     setPage(1);
     setOnlyFunded(false);
@@ -328,7 +332,7 @@ export default function ScanWorkspace() {
     setReadStats({ bytes: 0, size: file.size, lines: 0 });
 
     try {
-      const { count: found, invalid, preview } = await countPhrasesInFile(file, {
+      const { count: found, invalid, preview, suggest: hint } = await countPhrasesInFile(file, {
         words: size,
         preview: PREVIEW_LINES,
         onBytes: (bytes) => setReadStats((current) => ({ ...current, bytes })),
@@ -345,6 +349,7 @@ export default function ScanWorkspace() {
       pendingFileRef.current = { file, count: found };
       setPendingCount(found);
       setUnreadable(invalid);
+      setSuggest(hint || 0);
       setTotal(found * accounts);
     } catch {
       setError(
@@ -385,8 +390,10 @@ export default function ScanWorkspace() {
         }),
         scanHandlers(prices),
       );
-    } catch {
-      setError("The scan stopped unexpectedly. Try again with fewer phrases.");
+    } catch (cause) {
+      setError(
+        `The scan stopped unexpectedly${cause?.message ? ` (${cause.message})` : ""}. Try again with fewer phrases.`,
+      );
     } finally {
       if (flushRef.current) {
         clearTimeout(flushRef.current);
@@ -430,6 +437,7 @@ export default function ScanWorkspace() {
         readStats={readStats}
         pendingCount={pendingCount}
         pendingInvalid={unreadable}
+        suggest={suggest}
         onStartFile={startFileScan}
         words={words}
         onWords={changeWords}

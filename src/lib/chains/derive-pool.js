@@ -11,6 +11,11 @@ const MAX_WORKERS = 32; // a 16-core machine uses all 16; a phone uses whatever 
 // round trip between phrases, which at this scale was most of the wall clock.
 const WAVE = 32;
 
+// A worker that never answers (a module the browser refused to load, a thread
+// killed under memory pressure) must not hold the whole scan: after this the
+// phrase is derived on the main thread instead.
+const DERIVE_TIMEOUT = 8000;
+
 /**
  * Derives phrases in parallel. Returns null on a device that cannot run workers,
  * so the caller simply derives on the main thread instead.
@@ -19,11 +24,22 @@ export function createDerivePool() {
   if (typeof Worker === "undefined" || typeof navigator === "undefined") return null;
 
   // Every core reports in, with no lane held back.
-  const target = Math.min(MAX_WORKERS, Math.max(2, navigator.hardwareConcurrency || 2));
+  // A phone reports 8 cores but has little memory for 8 copies of the derivation
+  // code, so a low-memory device gets a smaller pool rather than a stalled tab.
+  const memory = typeof navigator.deviceMemory === "number" ? navigator.deviceMemory : 8;
+  const ceiling = memory <= 4 ? 4 : MAX_WORKERS;
+  const target = Math.min(ceiling, Math.max(2, navigator.hardwareConcurrency || 2));
   const slots = [];
   for (let index = 0; index < target; index += 1) {
     try {
-      slots.push({ worker: new Worker(new URL("./scan-worker.js", import.meta.url), { type: "module" }), alive: true });
+      const worker = new Worker(new URL("./scan-worker.js", import.meta.url), { type: "module" });
+      const slot = { worker, alive: true };
+      // A module that cannot load fires its error before the first phrase is
+      // ever sent: the slot is retired now, so nothing waits on it.
+      worker.addEventListener("error", () => {
+        slot.alive = false;
+      });
+      slots.push(slot);
     } catch {
       // A device that refuses workers keeps the ones it allowed.
     }
@@ -35,26 +51,30 @@ export function createDerivePool() {
   const runOn = (slot, entries) =>
     new Promise((resolve, reject) => {
       const id = nextId++;
+      let timer = null;
       const cleanup = () => {
+        if (timer) clearTimeout(timer);
         slot.worker.removeEventListener("message", onMessage);
         slot.worker.removeEventListener("error", onError);
+      };
+      const fail = (reason) => {
+        cleanup();
+        slot.alive = false;
+        reject(new Error(reason));
       };
       const onMessage = (event) => {
         if (event.data?.id !== id) return;
         cleanup();
         resolve(event.data.wallets);
       };
-      const onError = () => {
-        cleanup();
-        reject(new Error("derive worker failed"));
-      };
+      const onError = () => fail("derive worker failed");
       slot.worker.addEventListener("message", onMessage);
       slot.worker.addEventListener("error", onError);
+      timer = setTimeout(() => fail("derive worker timed out"), DERIVE_TIMEOUT);
       try {
         slot.worker.postMessage({ id, entries });
       } catch (error) {
-        cleanup();
-        reject(error);
+        fail(error?.message || "derive worker failed");
       }
     });
 
@@ -97,6 +117,10 @@ export function createDerivePool() {
           wallets[position] = wallet;
           onWallet?.(position, wallet);
         });
+
+        // Derived here rather than in a worker: the thread is handed back
+        // between waves, so the scan's own progress keeps painting.
+        if (!derived) await new Promise((resolve) => setTimeout(resolve, 0));
       }
     };
 

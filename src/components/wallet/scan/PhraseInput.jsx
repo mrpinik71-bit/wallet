@@ -14,6 +14,7 @@ export default function PhraseInput({
   readStats = { bytes: 0, size: 0, lines: 0 },
   pendingCount,
   pendingInvalid = 0,
+  suggest = 0,
   onStartFile,
   error,
   words,
@@ -172,6 +173,21 @@ export default function PhraseInput({
           total={Math.max(0, linesTotal - pendingInvalid)}
           unreadable={pendingInvalid}
         />
+
+        {suggest && !scanning && !reading && pendingCount === 0 ? (
+          <div className="mt-2 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2">
+            <p className="text-[10px] leading-relaxed text-primary/90">
+              This file's lines are {suggest}-word phrases, but the length is set to {words} — so no wallet was found.
+            </p>
+            <button
+              type="button"
+              onClick={() => onWords(suggest)}
+              className="mt-1.5 rounded-full border border-primary/40 bg-primary/15 px-3 py-1 text-[10px] font-medium text-primary"
+            >
+              Read as {suggest}-word phrases
+            </button>
+          </div>
+        ) : null}
 
         {dragging ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-[26px] bg-background/85">

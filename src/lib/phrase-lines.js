@@ -168,12 +168,25 @@ export function parsePhrases(text, size = 12) {
  * of that many words inside the line is the phrase, and every other word on the
  * line is dropped. A line shorter than the selection cannot be that phrase, so it
  * comes back as it is and is reported unreadable instead of being joined with the
- * next line.
+ * next line. A line that is a real phrase of another length is reported with that
+ * length, so the screen can say which size the file was written in.
  */
+function otherLength(words, size) {
+  for (const length of STANDARD_LENGTHS) {
+    if (length === size || length > words.length) continue;
+    for (let start = 0; start + length <= words.length; start += 1) {
+      if (isValidPhrase(words.slice(start, start + length))) return length;
+    }
+  }
+  return 0;
+}
+
 function phraseOnLine(raw, line, size) {
   const words = tokenize(raw);
   if (!words.length) return null;
-  if (words.length < size) return { phrase: words.join(" "), words: words.length, line };
+  if (words.length < size) {
+    return { phrase: words.join(" "), words: words.length, line, suggest: otherLength(words, size) };
+  }
 
   for (let start = 0; start + size <= words.length; start += 1) {
     const slice = words.slice(start, start + size);
@@ -182,7 +195,12 @@ function phraseOnLine(raw, line, size) {
 
   // Nothing of that length passed the checksum: the line's first `size` words are
   // handed on so the line is counted as unreadable, never silently dropped.
-  return { phrase: words.slice(0, size).join(" "), words: size, line };
+  return {
+    phrase: words.slice(0, size).join(" "),
+    words: size,
+    line,
+    suggest: otherLength(words, size),
+  };
 }
 
 /** Streams the file line by line, one phrase of the selected length per line. */

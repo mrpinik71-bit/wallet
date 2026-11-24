@@ -75,6 +75,10 @@ export async function countPhrasesInFile(file, { onProgress, onBytes, words, pre
   // The first lines of the file, kept in order so the screen can show them line
   // by line without holding the whole file in memory.
   const head = [];
+  // Unreadable lines that are real phrases of another length, tallied by that
+  // length: a file written in 24-word phrases read as 12 finds no wallet, and
+  // this is what the screen needs to say so instead of leaving it unexplained.
+  const hints = new Map();
 
   // The whole file is read through line by line: every real phrase is counted,
   // and every line that is not one is counted as unreadable, so the two numbers
@@ -82,8 +86,10 @@ export async function countPhrasesInFile(file, { onProgress, onBytes, words, pre
   for await (const entry of phrasesFromLines(readLines(file, { onBytes }), size)) {
     const unreadable = !isRealPhrase(entry.phrase, size);
     if (head.length < preview) head.push({ phrase: entry.phrase, line: entry.line, unreadable });
-    if (unreadable) invalid += 1;
-    else count += 1;
+    if (unreadable) {
+      invalid += 1;
+      if (entry.suggest) hints.set(entry.suggest, (hints.get(entry.suggest) || 0) + 1);
+    } else count += 1;
 
     seen += 1;
     // A big file is read for minutes on a phone: handing the thread back now and
@@ -95,7 +101,13 @@ export async function countPhrasesInFile(file, { onProgress, onBytes, words, pre
   }
 
   onProgress?.(count, invalid);
-  return { count, invalid, preview: head };
+  // The length most of the unreadable lines actually are — only worth saying
+  // when the file yielded no wallet at the selected length.
+  let suggest = 0;
+  for (const [length, tally] of hints) {
+    if (tally * 2 >= invalid && tally > (hints.get(suggest) || 0)) suggest = length;
+  }
+  return { count, invalid, preview: head, suggest: count ? 0 : suggest };
 }
 
 /** Scans phrases as they stream in and reports each wallet as soon as it lands. */
