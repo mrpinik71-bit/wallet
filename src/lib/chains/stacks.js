@@ -51,7 +51,7 @@ const RELAY = "/api/rpc-hiro";
 async function relayBalance(address) {
   if (typeof window === "undefined") return null;
   try {
-    const response = await fetch(`${RELAY}?address=${encodeURIComponent(address)}`);
+    const response = await fetch(`${RELAY}?address=${encodeURIComponent(address)}`, { method: "POST" });
     if (!response.ok) return null;
     const data = await response.json();
     if (data?.stx?.balance === undefined) return null;
