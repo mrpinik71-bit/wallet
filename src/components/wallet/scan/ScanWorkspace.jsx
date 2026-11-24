@@ -12,22 +12,13 @@ import { buildWalletMessage } from "@/lib/funded-report";
 import { savedBot, sendMessage } from "@/lib/telegram-bot";
 import { saveRun } from "@/lib/scan-history";
 import { fetchPricesFor } from "@/lib/chains/prices";
-import { isValidPhrase } from "@/lib/phrase-checksum";
 import useWakeLock from "@/hooks/useWakeLock";
-import {
-  countPhrasesInFile,
-  entriesFromList,
-  parsePhrases,
-  phrasesFromFile,
-  scanAssets,
-  scanPhraseStream,
-} from "@/lib/phrase-scan";
+import { countPhrasesInFile, phrasesFromFile, scanAssets, scanPhraseStream } from "@/lib/phrase-scan";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 const PAGE = 100;
-// Pasting or typing pauses for a moment, then the new lines are scanned: no
-// button to press, and a half-typed line is not sent on every keystroke.
-const AUTO_DELAY = 700;
+// How many of the file's first lines are kept for the line-by-line list.
+const PREVIEW_LINES = 5000;
 
 const EMPTY_LIVE = {
   completed: 0,
@@ -43,13 +34,14 @@ const EMPTY_LIVE = {
 };
 
 export default function ScanWorkspace() {
-  const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
+  // The chosen file's own lines, shown line by line under the picker.
+  const [lines, setLines] = useState([]);
+  const [linesTotal, setLinesTotal] = useState(0);
   // A chosen file is read through first: its wallets are counted, and only then
   // does the chain check start — in batches, on request.
   const [reading, setReading] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  const [count, setCount] = useState(0);
   // Lines that are not real BIP-39 phrases: counted apart, never scanned.
   const [unreadable, setUnreadable] = useState(0);
   const [words, setWords] = useState(12);
@@ -72,13 +64,9 @@ export default function ScanWorkspace() {
   const [historyKey, setHistoryKey] = useState(0);
 
   const resultsRef = useRef([]);
-  // Phrases already queued or scanned: editing the text again only sends the
-  // new lines, so a scan never repeats work it already did.
-  const seenRef = useRef(new Set());
-  // How many of those lines are unreadable, so the progress denominator counts
-  // them once instead of once per account.
-  const unreadableSeenRef = useRef(0);
   const queueRef = useRef([]);
+  // The chosen file, kept so a change of phrase length can read it again.
+  const chosenFileRef = useRef(null);
   // The file waiting for its chain check, kept until the scan is started.
   const pendingFileRef = useRef(null);
   // Funded wallets are delivered one after another, never in one burst.
@@ -134,14 +122,6 @@ export default function ScanWorkspace() {
     return () => clearInterval(id);
   }, [scanning]);
 
-  // Typing or pasting a line is the start signal: once the text rests for a
-  // moment its new phrases are queued and scanned on their own.
-  useEffect(() => {
-    if (!text.trim()) return undefined;
-    const id = setTimeout(() => queuePhrases(text, words), AUTO_DELAY);
-    return () => clearTimeout(id);
-  }, [text, words]);
-
   // The listed count is the truth: it is how many phrases were actually found
   // and checked, so the number on screen always matches the rows below it.
   // The list below holds wallets only: an unreadable line is reported as a
@@ -156,38 +136,27 @@ export default function ScanWorkspace() {
     return {
       foundCount: list.length,
       fundedTotalCount: list.reduce((sum, { slot }) => sum + (slot.total > 0 ? 1 : 0), 0),
-      rows: (onlyFunded ? list.filter(({ slot }) => slot.total > 0) : list).reverse(),
+      // Funded wallets come first, so a hit is never buried under empty ones;
+      // within each group the newest result stays on top.
+      rows: (onlyFunded ? list.filter(({ slot }) => slot.total > 0) : list)
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(b.slot.total > 0) - Number(a.slot.total > 0) || b.position - a.position,
+        ),
     };
   }, [version, onlyFunded]);
 
   const visible = rows.slice(0, page * PAGE);
 
-  // Each line is read with the selected number of words (12, 15, …). A line
-  // that is not a real BIP-39 phrase (word list + checksum) is not a wallet, so
-  // it is counted as unreadable and kept out of the scan.
-  const matching = (value, size) => {
-    // Every detected line is kept — a real phrase as a wallet, and a line that
-    // fails the word list or checksum marked unreadable, so it is listed in red.
-    const all = parsePhrases(value, size).map((entry) =>
-      isValidPhrase(entry.phrase.split(" ")) ? entry : { ...entry, unreadable: true },
-    );
-    setUnreadable(all.filter((entry) => entry.unreadable).length);
-    return all;
-  };
-
-  function onChange(value) {
-    setText(value);
-    setFileName("");
-    const entries = matching(value, words);
-    setCount(entries.length);
-    if (!entries.length) setTotal(seenRef.current.size * accounts);
-  }
-
+  // A different phrase length reads the same file again, so the wallets counted
+  // on screen match the length that will actually be scanned.
   function changeWords(size) {
     setWords(size);
-    const entries = matching(text, size);
-    setCount(entries.length);
-    setTotal(entries.filter((entry) => !entry.unreadable).length * accounts);
+    // Only a file still waiting to be scanned is read again: a finished run
+    // keeps its results until the file is chosen again.
+    const pending = pendingFileRef.current;
+    if (pending && !busyRef.current && !reading) readFile(pending.file, size);
   }
 
   // The account count applies to the next scan, so the totals on screen follow it.
@@ -213,8 +182,8 @@ export default function ScanWorkspace() {
       });
   }
 
-  // Everything the scan reports goes through here, so a pasted list and a file
-  // fill the results the same way.
+  // Everything the scan reports goes through here, so a file's wallets fill the
+  // results one by one.
   function scanHandlers(prices) {
     const live = liveRef.current;
     return {
@@ -292,66 +261,8 @@ export default function ScanWorkspace() {
     queueRef.current = [];
   }
 
-  function queuePhrases(value, size) {
-    const fresh = matching(value, size).filter((entry) => {
-      if (seenRef.current.has(entry.phrase)) return false;
-      seenRef.current.add(entry.phrase);
-      return true;
-    });
-    if (!fresh.length) return;
-    queueRef.current.push(...fresh);
-    unreadableSeenRef.current += fresh.filter((entry) => entry.unreadable).length;
-    setTotal((seenRef.current.size - unreadableSeenRef.current) * accounts);
-    setStarted(true);
-    pump();
-  }
-
-  // One worker drains the queue: lines added while a scan is running join it
-  // and are checked as soon as the current batch lands.
-  async function pump() {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    cancelledRef.current = false;
-    // Only what this run adds is logged, so typing more never rewrites old runs.
-    const startAt = resultsRef.current.length;
-    setError("");
-    setStarted(true);
-    setScanning(true);
-    if (!startedAtRef.current) {
-      startedAtRef.current = Date.now();
-      setElapsed(0);
-    }
-
-    try {
-      const prices = await resolvePrices();
-      const handlers = scanHandlers(prices);
-      while (queueRef.current.length && !cancelledRef.current) {
-        const batch = queueRef.current;
-        queueRef.current = [];
-        await scanPhraseStream(entriesFromList(batch), handlers);
-      }
-    } catch {
-      setError("The scan stopped unexpectedly. Try again with fewer phrases.");
-    } finally {
-      if (flushRef.current) {
-        clearTimeout(flushRef.current);
-        flushRef.current = null;
-      }
-      busyRef.current = false;
-      cancelledRef.current = false;
-      setScanning(false);
-      setTotal((seenRef.current.size - unreadableSeenRef.current || resultsRef.current.length) * accounts);
-      setStats({ ...liveRef.current });
-      setVersion((value) => value + 1);
-      recordRun(resultsRef.current.slice(startAt));
-      scheduleExport();
-    }
-  }
-
   function clearResults() {
     resultsRef.current = [];
-    seenRef.current = new Set();
-    unreadableSeenRef.current = 0;
     queueRef.current = [];
     pendingFileRef.current = null;
     setPendingCount(0);
@@ -361,7 +272,8 @@ export default function ScanWorkspace() {
     startedAtRef.current = 0;
     setStats({ ...EMPTY_LIVE });
     setStarted(false);
-    setCount(0);
+    setLines([]);
+    setLinesTotal(0);
     setUnreadable(0);
     setTotal(0);
     setPage(1);
@@ -379,12 +291,12 @@ export default function ScanWorkspace() {
   function clearAll() {
     stop();
     clearResults();
-    setText("");
+    chosenFileRef.current = null;
     setFileName("");
   }
 
   // A scan already running is stopped first: the file then starts from a clean
-  // slate instead of racing the pasted list.
+  // slate instead of racing the run in progress.
   async function waitIdle(maxMs = 5000) {
     const until = Date.now() + maxMs;
     while (busyRef.current && Date.now() < until) {
@@ -394,7 +306,7 @@ export default function ScanWorkspace() {
 
   // Step 1: the whole file is read through first and its wallets are counted —
   // no chain is asked about until that number is on screen.
-  async function readFile(file) {
+  async function readFile(file, size = words) {
     setError("");
     if (file.size > MAX_FILE_BYTES) {
       setError("That file is larger than 2 GB. Split it into smaller .txt files.");
@@ -403,8 +315,8 @@ export default function ScanWorkspace() {
 
     stop();
     clearResults();
-    setText("");
     setFileName(file.name);
+    chosenFileRef.current = file;
     await waitIdle();
 
     cancelledRef.current = false;
@@ -412,14 +324,17 @@ export default function ScanWorkspace() {
     setReading(true);
 
     try {
-      const { count: found, invalid } = await countPhrasesInFile(file, {
-        words,
+      const { count: found, invalid, preview } = await countPhrasesInFile(file, {
+        words: size,
+        preview: PREVIEW_LINES,
         onProgress: (value, bad) => {
           countRef.current = value;
-          setCount(value);
           setUnreadable(bad);
         },
       });
+      // The first lines of the file are shown line by line under the picker.
+      setLines(preview || []);
+      setLinesTotal(found + invalid);
       pendingFileRef.current = { file, count: found };
       setPendingCount(found);
       setUnreadable(invalid);
@@ -494,9 +409,7 @@ export default function ScanWorkspace() {
   return (
     <div className="relative">
       <PhraseInput
-        value={text}
         fileName={fileName}
-        onChange={onChange}
         onFile={readFile}
         error={error}
         onCancel={stop}
@@ -505,11 +418,12 @@ export default function ScanWorkspace() {
         pendingCount={pendingCount}
         pendingInvalid={unreadable}
         onStartFile={startFileScan}
-        count={count}
         words={words}
         onWords={changeWords}
         accounts={accounts}
         onAccounts={changeAccounts}
+        lines={lines}
+        linesTotal={linesTotal}
       />
 
       <RpcKeysPanel />
@@ -584,8 +498,8 @@ export default function ScanWorkspace() {
           {unreadableTotal > 0 ? (
             <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">
               {unreadableTotal.toLocaleString("en-US")} line{unreadableTotal === 1 ? " is" : "s are"} not a valid BIP-39
-              recovery phrase (word list + checksum). {unreadableTotal === 1 ? "It is" : "They are"} listed in red and
-              kept out of the chain check — no line of the input was dropped.
+              recovery phrase (word list + checksum), so {unreadableTotal === 1 ? "it was" : "they were"} kept out of
+              the chain check — no line of the input was dropped.
             </p>
           ) : null}
 

@@ -58,16 +58,21 @@ export async function* phrasesFromFile(file, { onCount, onInvalid, words } = {})
  * chain: the number of real wallets is known before the scan begins, and the
  * lines that are not recovery phrases are counted apart.
  */
-export async function countPhrasesInFile(file, { onProgress, words } = {}) {
+export async function countPhrasesInFile(file, { onProgress, words, preview = 0 } = {}) {
   const size = words || 12;
   let count = 0;
   let invalid = 0;
+  // The first lines of the file, kept in order so the screen can show them line
+  // by line without holding the whole file in memory.
+  const head = [];
 
   // The whole file is read through line by line: every real phrase is counted,
   // and every line that is not one is counted as unreadable, so the two numbers
   // always account for the entire file.
   for await (const entry of phrasesFromLines(readLines(file), size)) {
-    if (!isRealPhrase(entry.phrase)) {
+    const unreadable = !isRealPhrase(entry.phrase);
+    if (head.length < preview) head.push({ phrase: entry.phrase, line: entry.line, unreadable });
+    if (unreadable) {
       invalid += 1;
       if (invalid % 500 === 0) onProgress?.(count, invalid);
       continue;
@@ -77,7 +82,7 @@ export async function countPhrasesInFile(file, { onProgress, words } = {}) {
   }
 
   onProgress?.(count, invalid);
-  return { count, invalid };
+  return { count, invalid, preview: head };
 }
 
 /** Scans phrases as they stream in and reports each wallet as soon as it lands. */
