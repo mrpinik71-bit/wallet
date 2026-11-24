@@ -1,5 +1,5 @@
 // TRON balance reads on this deployment: TronGrid is called with the project's
-// own TRONGRID_API_KEY. Without one, the read falls back to the app's relay.
+// own TRONGRID_API_KEY. Without one, the provider's public endpoint is read.
 import { send, tronRead } from "./_providers.js";
 
 export default async function handler(req, res) {

@@ -1,5 +1,5 @@
 // Solana reads on this deployment: Helius is called with the project's own
-// HELIUS_API_KEY. Without one, the read falls back to the app's relay.
+// HELIUS_API_KEY. Without one, the public Solana nodes are read.
 import { send, solanaRpc } from "./_providers.js";
 
 export default async function handler(req, res) {

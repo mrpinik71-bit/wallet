@@ -1,5 +1,5 @@
 // EVM reads on this deployment: dRPC is called with the project's own
-// DRPC_API_KEY. Without one, the read falls back to the app's relay.
+// DRPC_API_KEY. Without one, each network's public node is read.
 import { drpcRead, send } from "./_providers.js";
 
 export default async function handler(req, res) {
