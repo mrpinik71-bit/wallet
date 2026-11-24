@@ -383,9 +383,9 @@ export default function ScanWorkspace() {
       setUnreadable(invalid);
       setSuggest(hint || 0);
       setTotal(found * accounts);
-    } catch {
+    } catch (cause) {
       setError(
-        "That file could not be read — a very large file can run the browser out of memory. Split it into smaller .txt files and try again.",
+        `That file could not be read${cause?.message ? ` (${cause.message})` : ""} — a very large file can run the browser out of memory. Split it into smaller .txt files and try again.`,
       );
     } finally {
       setReading(false);
