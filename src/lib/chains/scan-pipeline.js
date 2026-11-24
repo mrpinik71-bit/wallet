@@ -33,8 +33,8 @@ const CHUNK = 80; // wallets per batch round
 // is what decides the burst a node sees. Too many rounds and every read waits so
 // long in its lane that the round looks stalled; this keeps the burst wide
 // enough to be fast and small enough that reads actually land.
-const INFLIGHT = 48; // batch rounds kept in flight
-const MAX_WAITING = 800; // wallets prepared and waiting across all rounds — the memory ceiling
+const INFLIGHT = 120; // batch rounds kept in flight
+const MAX_WAITING = 1600; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
 // requests at once usually stops answering instead of refusing them, which read
@@ -49,17 +49,23 @@ const JOB_TIMEOUT = 8000; // a stalled node must not hold a whole batch back
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
 const SLOW_JOB_TIMEOUT = 14000;
+// A chain that is only slow or rate-limited is asked again for this long before
+// its wallets are reported as a failed read. This is what keeps a busy node from
+// costing the run a chain: the batch lane rests a refusing chain for 45 seconds,
+// and a read that keeps trying inside this window picks it up as soon as it is
+// back instead of being written off in the meantime.
+const JOB_BUDGET = 60000;
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
 // High enough that a burst of 429s never trips it, low enough that a dead node
 // is dropped within the first few wallets instead of one try per wallet.
 const DEAD_AFTER = 20;
 
-// A whole batch must answer within this window. On a good connection a round
-// takes a second or two; on a network where a handful of nodes simply never
-// answer, the wallets are reported with what did come back instead of the round
-// waiting minutes for the rest. This is what keeps the scan visibly moving.
-const READ_DEADLINE = 25000;
+// A round only stops waiting once it has not landed a single wallet for this
+// long, so a node that is merely slow is waited out instead of having its chains
+// reported as failed. It sits above the read budget on purpose: a chain still
+// inside its retry budget has not failed yet.
+const READ_DEADLINE = 80000;
 
 // A read that never came back is still counted, so the row is honest about the
 // chains that did not answer instead of showing them as empty.
@@ -749,10 +755,17 @@ async function readBatch(batch, onWallet, deep = true) {
       // A batched job rotates over several nodes of its own, so one resting node
       // must not stop the whole chain: only single-node jobs are held back.
       if (job.host && !job.slow && hostDead(job.host)) {
-        // This node is resting; the job is asked again once its rest is over.
-        result = { job, error: new Error(`${job.host} unavailable`) };
-      } else {
-        for (let attempt = 0; attempt < 3; attempt += 1) {
+        // This node is resting: its rest is waited out (within the read budget)
+        // instead of the chain being reported as failed, then it is asked again.
+        const rest = (deadHosts.get(job.host) || 0) - Date.now();
+        await new Promise((resolve) => setTimeout(resolve, Math.max(250, Math.min(rest, JOB_BUDGET))));
+      }
+      {
+        // A chain is retried for its whole read budget, not twice: a busy node or
+        // a chain resting after a refusal answers again a few seconds later, and
+        // giving up before that is what reported a working chain as failed.
+        const until = Date.now() + JOB_BUDGET;
+        for (let attempt = 0; ; attempt += 1) {
           try {
             result = { job, values: await runOnce() };
             break;
@@ -760,17 +773,14 @@ async function readBatch(batch, onWallet, deep = true) {
             // A node that refused the wider burst keeps the next try on fewer
             // lanes instead of being marked as unavailable.
             if (isRateLimited(cause)) lowerCap(job.host);
-            // A batched job that stalls is given two tries, not three: each one
-            // costs the whole round its wait, and a node that missed the first
-            // two is not going to answer the third.
-            const tries = job.slow ? 2 : 3;
-            if (attempt === tries - 1) {
+            if (Date.now() >= until) {
               result = { job, error: cause };
               break;
             }
             // Rate-limited nodes need the burst to clear: back off, with a little
             // jitter so the retries do not all land at the same moment.
-            await new Promise((resolve) => setTimeout(resolve, 220 * 2 ** attempt + Math.random() * 160));
+            const pause = Math.min(5000, 220 * 2 ** Math.min(attempt, 4));
+            await new Promise((resolve) => setTimeout(resolve, pause + Math.random() * 200));
           }
         }
         // Single-address jobs count their own host per request inside run().

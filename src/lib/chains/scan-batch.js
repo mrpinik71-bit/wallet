@@ -214,11 +214,15 @@ async function readCalls(chainId, calls) {
   }
 
   // One call failing (a busy node, a single odd token) must not write off every
-  // wallet in the batch: those calls are asked again on their own, once.
-  if (missing.length && missing.length < calls.length) {
-    const retries = calls.filter((call) => missing.includes(call.id));
+  // wallet in the batch: the calls that came back empty are asked again on their
+  // own until they answer, so a chain only reports a failed read when these
+  // really stopped coming back.
+  let outstanding = missing;
+  for (let attempt = 0; attempt < 2 && outstanding.length && outstanding.length < calls.length; attempt += 1) {
+    const retries = calls.filter((call) => outstanding.includes(call.id));
     const again = await readCalls(chainId, retries).catch(() => new Map());
     for (const [id, value] of again) values.set(id, value);
+    outstanding = outstanding.filter((id) => !again.has(id));
   }
 
   // Nothing at all came back: the node refused the batch under load, it did not

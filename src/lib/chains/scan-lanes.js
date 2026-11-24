@@ -8,7 +8,7 @@
 // request lanes, a refusal only slows that node down, and the read is retried
 // instead of being written off.
 
-const START_LANES = 32;
+const START_LANES = 48;
 const lanes = new Map();
 const caps = new Map();
 
