@@ -1,4 +1,4 @@
-import { generateMnemonic } from "@/lib/bip39";
+import { generateMnemonic, validateMnemonic } from "@/lib/bip39";
 
 /**
  * Produces random recovery phrases for the chain-read test, one at a time and on
@@ -15,6 +15,11 @@ import { generateMnemonic } from "@/lib/bip39";
 // Every length a BIP-39 phrase can have: 12 words through 24, in steps of three.
 export const PHRASE_SIZES = [12, 15, 18, 21, 24];
 
+// Every line this device has already handed to the scanner. Only the phrase
+// text is kept, so a line is never checked a second time — not even when the
+// run is stopped and started again on this page.
+const USED = new Set();
+
 export async function* autoPhrases({
   sizes = PHRASE_SIZES,
   shouldRun = () => true,
@@ -30,7 +35,16 @@ export async function* autoPhrases({
     // instead of five phrases at once.
     const size = lengths[turn % lengths.length];
     turn += 1;
-    const phrase = await generateMnemonic(size);
+    // Fresh words every time: each phrase is drawn from new entropy, every one
+    // of its words comes from the standard BIP-39 list, and its own checksum is
+    // checked before it moves on. A line that has already been through the scan
+    // is thrown away and drawn again instead of being checked twice.
+    let phrase = await generateMnemonic(size);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (!USED.has(phrase) && (await validateMnemonic(phrase)).valid) break;
+      phrase = await generateMnemonic(size);
+    }
+    USED.add(phrase);
     line += 1;
     onPhrase?.(line, size);
     yield { phrase, words: size, line };
