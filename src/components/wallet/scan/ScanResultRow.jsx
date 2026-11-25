@@ -70,6 +70,15 @@ export default function ScanResultRow({ result, index }) {
             : "border-primary/20 bg-primary/[0.03]"
       }`}
     >
+      {/* The line's own recovery phrase sits on top of every result, so the
+          wallet and the phrase it came from are read together; the addresses
+          stay in the expanded part below. */}
+      {result.phrase ? (
+        <p className="break-words border-b border-foreground/[0.06] px-3.5 py-2 font-mono text-[10px] leading-relaxed text-foreground/85">
+          {result.phrase}
+        </p>
+      ) : null}
+
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
