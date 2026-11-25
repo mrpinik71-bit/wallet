@@ -75,18 +75,22 @@ export async function solanaBalancesMany(addresses) {
   await Promise.all(
     group(addresses, SOLANA_ACCOUNTS).map(async ({ start, list }) => {
       let values = null;
-      try {
-        const data = await solanaCall({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "getMultipleAccounts",
-          params: [list, { encoding: "base64" }],
-        });
-        values = data?.result?.value;
-      } catch {
-        // Unanswered group: the second opinion below asks an independent node,
-        // so one busy node never reports a whole wall of wallets as failed.
-        values = null;
+      // Asked twice: a group that was only refused once must not cost its ten
+      // wallets their SOL.
+      for (let attempt = 0; attempt < 2 && !Array.isArray(values); attempt += 1) {
+        try {
+          const data = await solanaCall({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getMultipleAccounts",
+            params: [list, { encoding: "base64" }],
+          });
+          values = data?.result?.value;
+        } catch {
+          // Unanswered group: the second opinion below asks an independent node,
+          // so one busy node never reports a whole wall of wallets as failed.
+          values = null;
+        }
       }
       if (!Array.isArray(values)) return;
       values.forEach((value, offset) => {
@@ -244,28 +248,38 @@ export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
 export async function suiBalancesMany(addresses, coinType = "0x2::sui::SUI", decimals = 9) {
   const balances = new Map();
 
+  // Small groups, asked twice: a refused group used to cost a whole round of
+  // wallets their SUI, and the same for its USDT and USDC.
   await Promise.all(
-    group(addresses, 40).map(async ({ start, list }) => {
+    group(addresses, 10).map(async ({ start, list }) => {
       const fields = list
         .map(
           (address, offset) =>
             `a${offset}: address(address: "${address}") { balance(coinType: "${coinType}") { totalBalance } }`,
         )
         .join(" ");
-      const response = await request(chains.sui.api, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query: `query { ${fields} }` }),
-      });
-      if (!response.ok) throw new Error(`Sui network error (${response.status}).`);
-      const data = await response.json();
-      if (!data?.data) throw new Error("Sui network error.");
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await request(chains.sui.api, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ query: `query { ${fields} }` }),
+          });
+          if (!response.ok) throw new Error(`Sui network error (${response.status}).`);
+          const data = await response.json();
+          if (!data?.data) throw new Error("Sui network error.");
 
-      list.forEach((_, offset) => {
-        const total = data.data[`a${offset}`]?.balance?.totalBalance;
-        if (total === undefined || total === null) return;
-        balances.set(start + offset, Number(total) / 10 ** decimals);
-      });
+          list.forEach((_, offset) => {
+            const total = data.data[`a${offset}`]?.balance?.totalBalance;
+            if (total === undefined || total === null) return;
+            balances.set(start + offset, Number(total) / 10 ** decimals);
+          });
+          return;
+        } catch (cause) {
+          if (attempt === 1) return;
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
     }),
   );
 
@@ -277,7 +291,7 @@ export async function polkadotBalancesMany(addresses) {
   const balances = new Map();
 
   await Promise.all(
-    group(addresses, 100).map(async ({ start, list }) => {
+    group(addresses, 50).map(async ({ start, list }) => {
       const keys = [];
       const positions = [];
       list.forEach((address, offset) => {
@@ -300,21 +314,25 @@ export async function polkadotBalancesMany(addresses) {
       // costs this round nothing, because the next one answers the same calls.
       let body = null;
       let lastError = null;
-      for (const endpoint of POLKADOT_ENDPOINTS) {
-        try {
-          const response = await request(endpoint, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(calls),
-          });
-          if (!response.ok) throw new Error(`Polkadot network error (${response.status}).`);
-          const parsed = await response.json();
-          if (!Array.isArray(parsed)) throw new Error("Polkadot network error.");
-          body = parsed;
-          break;
-        } catch (cause) {
-          lastError = cause;
+      // Two rounds over the mirrors: a busy node costs this group nothing.
+      for (let attempt = 0; attempt < 2 && !body; attempt += 1) {
+        for (const endpoint of POLKADOT_ENDPOINTS) {
+          try {
+            const response = await request(endpoint, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(calls),
+            });
+            if (!response.ok) throw new Error(`Polkadot network error (${response.status}).`);
+            const parsed = await response.json();
+            if (!Array.isArray(parsed)) throw new Error("Polkadot network error.");
+            body = parsed;
+            break;
+          } catch (cause) {
+            lastError = cause;
+          }
         }
+        if (!body && attempt === 0) await new Promise((resolve) => setTimeout(resolve, 300));
       }
       if (!body) throw lastError || new Error("Polkadot network error.");
 

@@ -31,30 +31,57 @@ const QUERY = `query($owners:[String!],$types:[String!]){
  * Every wallet that was asked gets an entry for every asset, so a wallet with
  * nothing on Aptos is reported as empty instead of as a failed read.
  */
+// One query carries a small group of wallets: a refused query used to fail a
+// whole round at once, which is how Aptos and its two stablecoins all came back
+// unread for the same wallets. A group that still fails leaves only its own
+// wallets marked as unread, and it is asked a second time first.
+const OWNERS_PER_QUERY = 25;
+
+/** The balances the indexer answers for one group of owners. */
+async function queryGroup(group, types) {
+  const response = await fetch(INDEXER, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query: QUERY, variables: { owners: group, types } }),
+  });
+  if (!response.ok) throw new Error(`Aptos network error (${response.status}).`);
+  const data = await response.json();
+  const rows = data?.data?.current_fungible_asset_balances;
+  if (!Array.isArray(rows)) throw new Error("Aptos network error.");
+  return rows;
+}
+
 export async function aptosBalancesMany(addresses, coins) {
   const out = new Map();
   const owners = addresses.map(padded);
   const types = [...new Set(coins.map(typeOf))];
   if (!owners.length || !types.length) return out;
 
-  const response = await fetch(INDEXER, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query: QUERY, variables: { owners, types } }),
-  });
-  if (!response.ok) throw new Error(`Aptos network error (${response.status}).`);
-
-  const data = await response.json();
-  const rows = data?.data?.current_fungible_asset_balances;
-  if (!Array.isArray(rows)) throw new Error("Aptos network error.");
-
   // A wallet can hold more than one store of the same asset, so the amounts of
   // one owner and asset are added together.
   const held = new Map();
-  for (const row of rows) {
-    const key = `${String(row.owner_address).toLowerCase()}|${String(row.asset_type).toLowerCase()}`;
-    held.set(key, (held.get(key) || 0) + (Number(row.amount) || 0));
+  const groups = [];
+  for (let start = 0; start < owners.length; start += OWNERS_PER_QUERY) {
+    groups.push(owners.slice(start, start + OWNERS_PER_QUERY));
   }
+
+  await Promise.all(
+    groups.map(async (group) => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const rows = await queryGroup(group, types);
+          for (const row of rows) {
+            const key = `${String(row.owner_address).toLowerCase()}|${String(row.asset_type).toLowerCase()}`;
+            held.set(key, (held.get(key) || 0) + (Number(row.amount) || 0));
+          }
+          return;
+        } catch (cause) {
+          if (attempt === 1) return;
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+    }),
+  );
 
   addresses.forEach((address, position) => {
     const owner = padded(address);

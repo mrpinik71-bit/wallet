@@ -21,12 +21,35 @@ async function dashBalance(address) {
 }
 
 async function dogecoinBalance(address) {
-  const response = await fetch(`https://sochain.com/api/v3/balance/DOGE/${address}`);
-  if (!response.ok) throw new Error(`Dogecoin network error (${response.status}).`);
-  const data = await response.json();
-  const confirmed = data?.data?.confirmed;
-  if (confirmed === undefined) throw new Error("Dogecoin network error.");
-  return Number(confirmed) || 0;
+  // Two explorers answer the same read, so a rate-limited Sochain does not turn
+  // into a wall of unread DOGE: Dogechain answers the identical balance.
+  const explorers = [
+    async () => {
+      const response = await fetch(`https://sochain.com/api/v3/balance/DOGE/${address}`);
+      if (!response.ok) throw new Error(`Dogecoin network error (${response.status}).`);
+      const data = await response.json();
+      const confirmed = data?.data?.confirmed;
+      if (confirmed === undefined) throw new Error("Dogecoin network error.");
+      return Number(confirmed) || 0;
+    },
+    async () => {
+      const response = await fetch(`https://dogechain.info/api/v1/address/balance/${address}`);
+      if (!response.ok) throw new Error(`Dogecoin explorer error (${response.status}).`);
+      const data = await response.json();
+      if (data?.success !== 1) throw new Error("Dogecoin explorer error.");
+      return Number(data.balance) || 0;
+    },
+  ];
+
+  let lastError = null;
+  for (const read of explorers) {
+    try {
+      return await read();
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+  throw lastError || new Error("Dogecoin network error.");
 }
 
 const DEDICATED_READERS = { dash: dashBalance, dogecoin: dogecoinBalance };

@@ -265,15 +265,14 @@ const isRateLimited = (error) =>
   error?.status === 429 || /\(429\)|\b429\b|too many requests|rate limit|busy/i.test(String(error?.message || error));
 function lowerCap(host) {
   if (!host) return;
-  const next = Math.max(2, Math.floor(capFor(host) / 2));
+  // A rate-limited node is busy, not gone. Its lane narrows to a floor and it
+  // keeps being asked: resting a single-host chain (Dogecoin, Aptos, Tron) for
+  // the rest of the run is exactly what reported every wallet on it as failed.
+  const next = Math.max(4, Math.floor(capFor(host) / 2));
   hostCaps.set(host, next);
   // A busy node has not gone away, so this refusal must not count towards death.
   hostFailures.delete(host);
   hostWins.delete(host);
-  // Already at its narrowest lane and still refusing: this node is out of
-  // budget for now, not merely busy, so it rests instead of being asked once
-  // per wallet for the rest of the scan.
-  if (next <= 2) deadHosts.set(host, Date.now() + DEAD_MS);
 }
 // Assets are routed by how their chain can be asked: EVM chains per network,
 // the multi-address chains together, everything else one wallet at a time.
