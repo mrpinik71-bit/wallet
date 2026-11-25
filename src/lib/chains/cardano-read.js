@@ -44,6 +44,13 @@ export async function readCardanoBalances(addresses) {
         noteRelayDown(ENDPOINT);
         throw new Error("Cardano indexer is not available on this deployment.");
       }
+      // A deployment whose rewrite swallows /api answers with the app's own page:
+      // that is a missing route, not an indexer error, so it is noted once.
+      const type = response.headers.get("content-type") || "";
+      if (type.includes("text/html") && !type.includes("json")) {
+        noteRelayDown(ENDPOINT);
+        throw new Error("Cardano indexer is not available on this deployment.");
+      }
       if (!response.ok) throw new Error(`Cardano indexer error (${response.status}).`);
       const payload = await response.json();
       const rows = payload?.balances || {};

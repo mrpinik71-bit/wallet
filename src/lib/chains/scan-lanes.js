@@ -124,10 +124,17 @@ export async function request(url, init = {}, { timeout = 15000, attempts = 3 } 
     }
 
     if (response) {
-      // A relay route this deployment does not carry answers 404: noted once, so
-      // every later read goes straight to the public node instead of asking it again.
-      if (typeof url === "string" && url.startsWith("/api/") && (response.status === 404 || response.status === 405)) {
-        noteRelayDown(url);
+      // A relay route this deployment does not run answers 404 — or, when a
+      // catch-all rewrite swallows /api, the app's own page as HTML. Either way
+      // it can never answer a read, so it is noted once and every later read goes
+      // straight to the public node instead of paying for a dead round trip.
+      if (typeof url === "string" && url.startsWith("/api/")) {
+        const type = response.headers.get("content-type") || "";
+        const page = type.includes("text/html") && !type.includes("json");
+        if (response.status === 404 || response.status === 405 || page) {
+          noteRelayDown(url);
+          throw new Error("This deployment does not relay this chain.");
+        }
       }
       if (response.status !== 429) return response;
       slowHost(host);

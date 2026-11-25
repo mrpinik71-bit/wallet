@@ -1,7 +1,7 @@
 // Balance readers for the extra networks the bulk scanner covers.
 import { chains } from "@/lib/chains/config";
 import { assetHubBalance } from "@/lib/chains/asset-hub";
-import { SOLANA_RELAY, TON_RELAY } from "@/lib/chains/keyed-relay";
+import { noteRelayDown, relayDown, SOLANA_RELAY, TON_RELAY } from "@/lib/chains/keyed-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { accountStorageKey, POLKADOT_ENDPOINTS, publicKeyFromAddress } from "@/lib/chains/polkadot";
 import { verifyTonBalance } from "@/lib/chains/scan-verify";
@@ -152,11 +152,18 @@ export async function tonBalance(address) {
   // public endpoint is kept as the fallback, so this read never depends on it.
   const encoded = encodeURIComponent(address);
   for (const target of [`${TON_RELAY}?address=${encoded}`, `${chains.ton.api}/getAddressBalance?address=${encoded}`]) {
+    const relayed = target.startsWith(TON_RELAY);
+    // A deployment that does not carry the relay is noted once instead of being
+    // asked for every wallet of the run.
+    if (relayed && relayDown(TON_RELAY)) continue;
     try {
       // The relay is asked with a POST: the dev server answers a GET on /api/...
       // with a module file instead of the route, so a GET relay never answered.
-      const response = await fetch(target, target.startsWith(TON_RELAY) ? { method: "POST" } : undefined);
-      if (!response.ok) continue;
+      const response = await fetch(target, relayed ? { method: "POST" } : undefined);
+      if (!response.ok) {
+        if (relayed) noteRelayDown(TON_RELAY);
+        continue;
+      }
       const data = await response.json();
       if (data?.ok) {
         fromToncenter = Number(data.result || 0) / 1e9;
@@ -164,6 +171,7 @@ export async function tonBalance(address) {
       }
     } catch {
       // Try the next reader.
+      if (relayed) noteRelayDown(TON_RELAY);
     }
   }
 
