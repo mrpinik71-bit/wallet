@@ -213,7 +213,9 @@ const TOKENS = [
 // Dash's explorers demand minutes-long pacing now (chainz answers 429, insight
 // sits behind a browser challenge), so every Dash read failed and every round
 // waited on it. Dash is out of the scanner until a working indexer exists.
-const OFFLINE_CHAINS = new Set(["botanix", "liquid", "dash"]);
+// STX is left out of the scanner as well: the scan checks every other chain and
+// no longer asks Stacks for a balance.
+const OFFLINE_CHAINS = new Set(["botanix", "liquid", "dash", "stacks"]);
 
 export const SCAN_ASSETS = [...Object.keys(COINGECKO).map(native), ...TOKENS].filter(
   (asset) => !OFFLINE_CHAINS.has(asset.chain),
