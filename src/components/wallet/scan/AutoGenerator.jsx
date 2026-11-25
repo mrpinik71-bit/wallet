@@ -1,16 +1,12 @@
 import { Play, Square, Zap } from "lucide-react";
 
-const SIZES = [12, 15, 18, 21, 24];
-
 /**
  * Chain-read tester: streams freshly generated random phrases into the scan a
- * second at a time, so the answer to "which chain failed to reply?" shows up on
- * its own instead of needing a file.
+ * second at a time — 12 words, then 15, 18, 21 and 24 — so the answer to "which
+ * chain failed to reply?" shows up on its own instead of needing a file.
  */
 export default function AutoGenerator({
   running,
-  sizes,
-  onSizes,
   onStart,
   onStop,
   generated = 0,
@@ -18,25 +14,12 @@ export default function AutoGenerator({
   failed = 0,
   chainFailures = [],
 }) {
-  function toggleSize(size) {
-    if (running) return;
-    const next = sizes.includes(size) ? sizes.filter((value) => value !== size) : [...sizes, size];
-    // At least one length stays selected, otherwise nothing would be generated.
-    onSizes(SIZES.filter((value) => next.includes(value)));
-  }
-
   const idle = !running && checked === 0;
 
   return (
     <section className="lux noise relative mb-3 overflow-hidden p-4">
       <div className="relative">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-muted-foreground/60">
-              Chain read tester
-            </p>
-            <p className="mt-1 font-display text-[19px] leading-none">Random wallet stream</p>
-          </div>
+        <div className="flex items-start justify-end gap-2">
           <span
             className={`mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-medium uppercase tracking-[0.14em] ${
               running
@@ -49,30 +32,6 @@ export default function AutoGenerator({
           </span>
         </div>
 
-        <p className="mt-2 text-[9.5px] leading-relaxed text-muted-foreground/60">
-          One new random phrase a second, taking the lengths in turn — 12, 15, 18, 21, 24 — then starting over with
-          fresh randomness: a full round every five seconds. Nobody holds these keys, so every wallet is empty — a
-          failed network read is the only thing left to see.
-        </p>
-
-        <div className="mt-2.5 flex gap-1.5">
-          {SIZES.map((size) => (
-            <button
-              key={size}
-              type="button"
-              onClick={() => toggleSize(size)}
-              disabled={running}
-              className={`flex-1 rounded-lg border py-1.5 text-[11px] font-medium num transition-colors disabled:opacity-60 ${
-                sizes.includes(size)
-                  ? "border-primary/50 bg-primary/15 text-primary"
-                  : "border-foreground/[0.08] bg-foreground/[0.02] text-muted-foreground"
-              }`}
-            >
-              {size}
-            </button>
-          ))}
-        </div>
-
         <button
           type="button"
           onClick={running ? onStop : onStart}
@@ -83,7 +42,7 @@ export default function AutoGenerator({
           }`}
         >
           {running ? <Square className="h-3.5 w-3.5" strokeWidth={2.4} /> : <Play className="h-3.5 w-3.5" strokeWidth={2.4} />}
-          {running ? "Stop auto test" : "Start auto test"}
+          {running ? "Stop" : "Start"}
         </button>
 
         {!idle ? (

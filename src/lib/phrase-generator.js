@@ -12,13 +12,16 @@ import { generateMnemonic } from "@/lib/bip39";
  * not answer therefore tells you exactly which chain failed to reply, never that
  * funds were missed.
  */
+// Every length a BIP-39 phrase can have: 12 words through 24, in steps of three.
+export const PHRASE_SIZES = [12, 15, 18, 21, 24];
+
 export async function* autoPhrases({
-  sizes = [12],
+  sizes = PHRASE_SIZES,
   shouldRun = () => true,
   everyMs = 1000,
   onPhrase,
 } = {}) {
-  const lengths = sizes?.length ? sizes : [12];
+  const lengths = sizes?.length ? sizes : PHRASE_SIZES;
   let line = 0;
   let turn = 0;
   while (shouldRun()) {

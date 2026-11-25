@@ -92,14 +92,7 @@ export default function PhraseInput({
               </button>
             ))}
           </div>
-          <p className="mt-1.5 text-[9.5px] leading-relaxed text-muted-foreground/55">
-            The file is read as {words}-word phrases — a line of another length is counted as unreadable.
-          </p>
         </div>
-
-        <p className="mt-2 text-[9.5px] leading-relaxed text-muted-foreground/55">
-          Every phrase is checked on accounts 1–{accounts} — the extra wallets it derives are scanned too.
-        </p>
 
         <div className="mt-2 flex items-center gap-2">
           <span className="shrink-0 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
