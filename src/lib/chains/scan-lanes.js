@@ -25,11 +25,14 @@ const isRelay = (host) => typeof host === "string" && host.startsWith(RELAY);
 // a single key's budget start narrow instead of at the shared relay width: a
 // wide burst there only spends the key's allowance and comes back as a refusal.
 const TARGET_LANES = {
-  "/api/rpc-tron:account": 6,
+  "/api/rpc-tron:account": 12,
   // TronGrid answers a burst with a credit-rate error and suspends the key for a
-  // few seconds, so the relay is paced well under the key's own budget.
-  "/api/rpc-tron:call": 5,
-  "/api/rpc-solana": 6,
+  // few seconds, so the relay is paced under the key's own budget — wide enough
+  // that a round of wallets is not held behind it, narrow enough to stay inside.
+  "/api/rpc-tron:call": 10,
+  // USDT and USDC on Solana are two batch reads per round, so this lane carries
+  // the whole stablecoin answer for a round: a narrow one reported it failed.
+  "/api/rpc-solana": 12,
 };
 
 // A whole relay route shares one provider key, so its networks are paced

@@ -13,6 +13,7 @@ import { prepare } from "@/lib/chains/scan-derive";
 import { evmChainBalancesMany, resetBatching } from "@/lib/chains/scan-batch";
 import { endpointsFor } from "@/lib/chains/mirrors";
 import { visibleTimeout } from "@/lib/scan-visibility";
+import { aptosBalancesMany } from "@/lib/chains/scan-batch-aptos";
 import {
   cardanoBalancesMany,
   polkadotAssetBalancesMany,
@@ -98,10 +99,10 @@ const HOST_CAPS = {
   "chainz.cryptoid.info": 4,
   // Sochain v3 answers a steady burst and is the only working Dogecoin reader
   // (its v2 API is retired), so its lane is kept inside what it actually serves.
-  // Measured: Sochain allows only two requests in flight without a key and
-  // refuses the rest outright ("too many requests in flight"), so its lane is
-  // the limit it publishes — a wider lane only bought a wall of failed reads.
-  "sochain.com": 2,
+  // Measured: ten parallel reads are all answered in under a tenth of a second,
+  // so the two-wide lane that used to hold every Dogecoin wallet for the whole
+  // round was the reason Doge came back failed — the lane, not the explorer.
+  "sochain.com": 16,
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
@@ -122,6 +123,10 @@ const HOST_CAPS = {
   // view call spends a chunk of it: a wider lane only earns a 429 for the whole
   // chain, so the budget is spent slowly and the second host takes the overflow.
   "fullnode.mainnet.aptoslabs.com": 4,
+  // Aptos is read in batches through its indexer now: one request answers a
+  // whole round of wallets, so this lane is wide and the per-address fullnode
+  // above is only the fallback for a single read.
+  "indexer.mainnet.aptoslabs.com": 24,
   "1rpc.io": 8,
   "liquid.network": 8,
   "xrplcluster.com": 48,
@@ -159,9 +164,12 @@ const HOST_CAPS = {
   "sei-evm-rpc.publicnode.com": 2,
   // TronGrid answers a small burst and then 429s for a while, and a refused
   // TRC-20 read is a wallet reported as having no USDT, so its lane stays narrow.
-  "api.trongrid.io": 6,
+  // Measured: the relayed TRC-20 call answers in about a second and TronGrid
+  // serves a wide burst, so the narrow lane was the reason USDT on Tron came
+  // back failed — a wallet queued behind it for the whole round.
+  "api.trongrid.io": 16,
   "tron-rpc.publicnode.com": 16,
-  "api.tronstack.io": 4,
+  "api.tronstack.io": 8,
   // The indexer is the second opinion a zero TRC-20 balance is checked against,
   // so it is paced instead of being asked once per wallet at full speed.
   "apilist.tronscanapi.com": 8,
@@ -270,7 +278,7 @@ function lowerCap(host) {
 // Assets are routed by how their chain can be asked: EVM chains per network,
 // the multi-address chains together, everything else one wallet at a time.
 const EVM_COINS = new Map();
-const MULTI = { solana: [], sui: [], polkadot: [], cardano: [] };
+const MULTI = { solana: [], sui: [], polkadot: [], cardano: [], aptos: [] };
 const SOLO = [];
 for (const coin of SCAN_ASSETS) {
   if (coin.family === "evm") {
@@ -357,11 +365,12 @@ const hostOf = (chainId) => {
 // good, and once a lane's slots were all held that way every later request
 // waited in its queue forever — the whole scan stopped without a single error.
 const lanes = new Map();
-function limit(host, run, cap = capFor(host), ms = 0) {
+function limit(host, run, cap = capFor(host), ms = 0, waitMs = 0) {
   const lane = lanes.get(host) || { active: 0, queue: [] };
   lanes.set(host, lane);
   return new Promise((resolve, reject) => {
     const start = () => {
+      if (waiting?.timer) waiting.timer.stop();
       lane.active += 1;
       let settled = false;
       let timer = null;
@@ -371,7 +380,7 @@ function limit(host, run, cap = capFor(host), ms = 0) {
         if (timer) timer.stop();
         lane.active -= 1;
         const next = lane.queue.shift();
-        if (next) next();
+        if (next) next.start();
         return true;
       };
       const task = Promise.resolve().then(run);
@@ -391,8 +400,22 @@ function limit(host, run, cap = capFor(host), ms = 0) {
         },
       );
     };
+    const waiting = { start, timer: null };
     if (lane.active < cap) start();
-    else lane.queue.push(start);
+    else {
+      // A saturated node must not hold a wallet hostage: a request that cannot
+      // get its turn in time fails that one read, so the wallet is reported with
+      // the chains that did answer and the round keeps moving instead of waiting
+      // on the slowest network.
+      if (waitMs > 0) {
+        waiting.timer = visibleTimeout(() => {
+          const at = lane.queue.indexOf(waiting);
+          if (at >= 0) lane.queue.splice(at, 1);
+          reject(new Error("This chain was too busy to answer."));
+        }, waitMs);
+      }
+      lane.queue.push(waiting);
+    }
   });
 }
 
@@ -540,6 +563,19 @@ async function readBatch(batch, onWallet, deep = true) {
     run: async () => asCoinMap(await polkadotBalancesMany(items.map((item) => item.address)), items, POLKADOT_NATIVE),
   }));
 
+  // Aptos, APT and its two stablecoins in one request for the whole round: the
+  // per-address fullnode route spent its anonymous budget on a few wallets and
+  // refused the rest, so Aptos and its USDC/USDT were always reported failed.
+  if (MULTI.aptos.length) {
+    collect("aptos", (items) => ({
+      coins: MULTI.aptos,
+      targets: items.map((item) => item.index),
+      host: "indexer.mainnet.aptoslabs.com",
+      slow: true,
+      run: async () => aptosBalancesMany(items.map((item) => item.address), MULTI.aptos),
+    }));
+  }
+
   // USDT and USDC on Sui and Polkadot are their own batched read: a coin type on
   // Sui, a pallet-assets entry on Polkadot's Asset Hub.
   for (const coin of SUI_TOKENS) {
@@ -661,6 +697,10 @@ async function readBatch(batch, onWallet, deep = true) {
                   () => readBalance(coin, item.address, endpoint),
                   undefined,
                   JOB_TIMEOUT,
+                  // Waiting its turn has its own ceiling: a node that is
+                  // saturated fails this one read instead of holding the whole
+                  // wallet (and the round behind it) for the rest of the scan.
+                  JOB_TIMEOUT * 2,
                 ).catch((error) => {
                   // Refused because the burst was too wide: narrow this node's
                   // lanes and retry on the next round rather than counting it dead.
@@ -722,8 +762,12 @@ async function readBatch(batch, onWallet, deep = true) {
         let refused = 0;
         await Promise.all(
           items.map(async (item) => {
-            const tokens = await limit(host, () =>
-              withTimeout(discoverTokens(chainId, item.address, DISCOVERY_LIMIT), JOB_TIMEOUT),
+            const tokens = await limit(
+              host,
+              () => withTimeout(discoverTokens(chainId, item.address, DISCOVERY_LIMIT), JOB_TIMEOUT),
+              undefined,
+              0,
+              JOB_TIMEOUT * 2,
             ).catch((error) => {
               if (isRateLimited(error)) refused += 1;
               return undefined;
@@ -843,7 +887,7 @@ async function readBatch(batch, onWallet, deep = true) {
       const runOnce = job.inner
         ? () => job.run()
         : job.host
-          ? () => limit(job.host, () => job.run(), job.cap, budget)
+          ? () => limit(job.host, () => job.run(), job.cap, budget, budget * 1.5)
           : () => withTimeout(job.run(), budget);
 
       {
