@@ -26,8 +26,8 @@ const isRelay = (host) => typeof host === "string" && host.startsWith(RELAY);
 // wide burst there only spends the key's allowance and comes back as a refusal.
 const TARGET_LANES = {
   "/api/rpc-tron:account": 6,
-  "/api/rpc-tron:call": 6,
-  "/api/rpc-solana": 10,
+  "/api/rpc-tron:call": 12,
+  "/api/rpc-solana": 16,
 };
 
 export const capOf = (host) => {

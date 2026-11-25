@@ -150,10 +150,18 @@ export async function trc20Balance(address, coin) {
   // result of all zeros, which used to be believed and hid every wallet holding
   // TRC-20 USDT. A positive answer is taken at once; a zero is only reported once
   // a second source has also read zero for this wallet.
-  const sources = [
-    (payload) => relayPost("/wallet/triggerconstantcontract", payload, "call"),
-    ...APIS.map((api) => (payload) => nodePost(api, "/wallet/triggerconstantcontract", payload, "call")),
-  ];
+  // The relay carries a real TronGrid key, so its answer is the node's own word —
+  // a zero included. Asking a second source for every unused wallet doubled the
+  // requests per wallet and, when the public nodes were busy, reported a wallet
+  // that simply holds no USDT as a failed read.
+  try {
+    return amountFrom(await relayPost("/wallet/triggerconstantcontract", body, "call"), coin);
+  } catch {
+    // No key saved, or the relay is busy: the public nodes and the indexer below
+    // still answer, and only a wallet none of them answers is a failed read.
+  }
+
+  const sources = APIS.map((api) => (payload) => nodePost(api, "/wallet/triggerconstantcontract", payload, "call"));
 
   let zeros = 0;
   let lastError = null;

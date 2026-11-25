@@ -98,7 +98,7 @@ const HOST_CAPS = {
   "chainz.cryptoid.info": 4,
   // Sochain v3 answers a steady burst and is the only working Dogecoin reader
   // (its v2 API is retired), so its lane is kept inside what it actually serves.
-  "sochain.com": 10,
+  "sochain.com": 24,
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
@@ -115,7 +115,7 @@ const HOST_CAPS = {
   "litecoinspace.org": 40,
   // Aptos answers one address at a time and refuses a burst quickly, so its
   // lane stays narrow — a refused read is a wallet with no APT on screen.
-  "fullnode.mainnet.aptoslabs.com": 4,
+  "fullnode.mainnet.aptoslabs.com": 16,
   "liquid.network": 8,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
@@ -146,8 +146,9 @@ const HOST_CAPS = {
   "api.koios.rest": 20,
   // NEAR's public node refuses a wide burst outright, and the free mirror beside
   // it refuses even sooner, so both are asked at a trickle.
-  "rpc.mainnet.near.org": 8,
-  "free.rpc.fastnear.com": 6,
+  "rpc.mainnet.near.org": 24,
+  "free.rpc.fastnear.com": 48,
+  "near.drpc.org": 24,
   "sei-evm-rpc.publicnode.com": 8,
   // TronGrid answers a small burst and then 429s for a while, and a refused
   // TRC-20 read is a wallet reported as having no USDT, so its lane stays narrow.
@@ -326,6 +327,12 @@ const hostOfUrl = (url) => {
 // Dogecoin and Dash are read from their own explorer rather than the node in
 // the chain config, so their requests are paced by that host's lane.
 const READER_HOSTS = { dogecoin: "sochain.com", dash: "chainz.cryptoid.info" };
+
+// Dogecoin and Dash ignore the endpoint they are handed and read from their own
+// explorer, so their requests must be paced by that explorer's lane — pacing
+// them by the node in the chain config held every Doge read to a four-wide
+// BlockCypher lane and timed the rest out as failed.
+const laneHost = (chainId, endpoint) => READER_HOSTS[chainId] || hostOfUrl(endpoint);
 
 const hostOf = (chainId) => {
   // A node the user saved carries this chain, so its lanes are that node's own.
@@ -628,11 +635,11 @@ async function readBatch(batch, onWallet, deep = true) {
           // because that one node took a break.
           const order = [base, ...fallbacks];
           const live = order.filter((endpoint) => {
-            const host = hostOfUrl(endpoint);
+            const host = laneHost(coin.chain, endpoint);
             return host && !hostDead(host);
           });
           for (const endpoint of live.length ? live : order) {
-            const host = hostOfUrl(endpoint);
+            const host = laneHost(coin.chain, endpoint);
             if (!host) continue;
             const values = new Map();
             let refused = 0;
