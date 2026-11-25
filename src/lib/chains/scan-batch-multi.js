@@ -29,8 +29,16 @@ function group(list, size) {
 // The public Solana node answers at most 10 accounts per call, and refuses the
 // whole request above that — which used to report every wallet as a failed read.
 const SOLANA_ACCOUNTS = 10;
-// Two nodes serve the same call, so a busy one is not a failed chain.
-const SOLANA_RPCS = [chains.solana.rpc, "https://api.mainnet-beta.solana.com"];
+// Two nodes serve the same call, so a busy one is not a failed chain. Solana's
+// own public node refuses requests that carry a browser origin (403), so the
+// publicnode mirror is the one that can actually answer from the page, and the
+// gateway behind it is the last resort when both are rate-limited.
+const SOLANA_RPCS = [
+  chains.solana.rpc,
+  "https://solana-rpc.publicnode.com",
+  "https://solana-mainnet.gateway.tatum.io",
+  "https://api.mainnet-beta.solana.com",
+];
 
 /** Sends one Solana call, trying the next node when this one refuses or is busy. */
 async function solanaCall(body) {
@@ -206,7 +214,10 @@ export async function solanaTokenBalancesMany(addresses, mint, decimals = 0) {
   });
 
   const queue = [...doubtful];
-  const workers = Array.from({ length: Math.min(10, queue.length) }, async () => {
+  // Four at a time: ten owner lookups per mint on top of the batched read is what
+  // tripped the node's burst limit and cost every SPL token (USDT, USDC, GRASS)
+  // its answer.
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
     for (let row = queue.shift(); row; row = queue.shift()) {
       try {
         const amount = await solanaOwnerTokenBalance(row.address, mint);

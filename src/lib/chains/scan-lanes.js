@@ -19,23 +19,31 @@ const RELAY_LANES = 64;
 const lanes = new Map();
 const caps = new Map();
 
-export const capOf = (host) => caps.get(host) ?? (host === RELAY ? RELAY_LANES : START_LANES);
+const isRelay = (host) => typeof host === "string" && host.startsWith(RELAY);
+
+export const capOf = (host) => caps.get(host) ?? (isRelay(host) ? RELAY_LANES : START_LANES);
 
 /** A node that refused the burst is busy, not gone: ask it less often. */
 export function slowHost(host) {
   if (!host) return;
   // The relay is backed by the whole key list, so a refusal there is one busy
   // key, not a spent budget: it narrows without giving up most of the lanes.
-  const floor = host === RELAY ? 32 : 1;
+  const floor = isRelay(host) ? 16 : 1;
   caps.set(host, Math.max(floor, Math.floor(capOf(host) / 2)));
 }
 
 export function hostKey(url) {
   const text = String(url || "");
-  // A relative path is served by this deployment's own functions, so every relay
-  // call shares one lane instead of one lane per query string: a hundred lanes
-  // at once is what made the deployment throttle its own functions.
-  if (text.startsWith("/")) return RELAY;
+  // A relative path is served by this deployment's own functions. Each relay
+  // target (a network, a chain, an operation) gets its own lane: one shared lane
+  // for all of them meant a wide EVM scan filled the queue, and the Solana, TRON
+  // and TON reads waiting behind it timed out and were reported as failed chains.
+  if (text.startsWith("/")) {
+    const [path, query = ""] = text.split("?");
+    const params = new URLSearchParams(query);
+    const target = params.get("network") || params.get("chain") || params.get("op") || "";
+    return `${RELAY}:${path}${target ? `:${target}` : ""}`;
+  }
   try {
     return new URL(text).host;
   } catch {

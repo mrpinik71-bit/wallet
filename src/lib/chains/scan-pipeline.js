@@ -91,16 +91,22 @@ const HOST_CAPS = {
   // Dogecoin and Dash are read from these two explorers now; both answer a
   // steady burst, so they carry the whole group instead of BlockCypher.
   "chainz.cryptoid.info": 4,
-  "sochain.com": 24,
+  // Sochain v3 answers a steady burst and is the only working Dogecoin reader
+  // (its v2 API is retired), so its lane is kept inside what it actually serves.
+  "sochain.com": 10,
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
-  "mempool.space": 64,
+  // A public Esplora node answers a modest burst and then simply stops answering
+  // instead of refusing, so a 64-wide lane hung every Bitcoin read until its
+  // timeout and the whole chain was reported as failed. Measured: twelve at a
+  // time is answered in full by every mirror, so that is the lane.
+  "mempool.space": 12,
   // Three more Esplora hosts serve the same Bitcoin read, so a wallet is asked
   // on whichever of the four is free instead of queueing behind one limit.
-  "mempool.bitaroo.net": 64,
-  "mempool.ninja": 64,
-  "mempool.emzy.de": 64,
+  "mempool.bitaroo.net": 12,
+  "mempool.ninja": 12,
+  "mempool.emzy.de": 12,
   "litecoinspace.org": 40,
   "fullnode.mainnet.aptoslabs.com": 8,
   "liquid.network": 8,
@@ -132,7 +138,14 @@ const HOST_CAPS = {
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
   "rpc.mainnet.near.org": 64,
-  "api.trongrid.io": 40,
+  // TronGrid answers a small burst and then 429s for a while, and a refused
+  // TRC-20 read is a wallet reported as having no USDT, so its lane stays narrow.
+  "api.trongrid.io": 12,
+  "tron-rpc.publicnode.com": 16,
+  "api.tronstack.io": 6,
+  // The indexer is the second opinion a zero TRC-20 balance is checked against,
+  // so it is paced instead of being asked once per wallet at full speed.
+  "apilist.tronscanapi.com": 8,
   "graphql.mainnet.sui.io": 48,
   // Gateways that serve many chains but reward a narrow burst; each widens on
   // its own while it keeps answering.
@@ -178,6 +191,9 @@ const HOST_CAPS = {
   "base.blockscout.com": 36,
   "api.binplorer.com": 20,
   "api.mainnet-beta.solana.com": 20,
+  // Solana's own public node refuses a browser burst (403/429), so the keyed
+  // relay carries the read and this mirror only backs it up.
+  "solana-rpc.publicnode.com": 16,
   // One free Etherscan key allows five calls a second, and five networks are
   // discovered through it, so its lane stays at the key's own budget.
   "etherscan.io": 4,
