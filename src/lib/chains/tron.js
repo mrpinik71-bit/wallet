@@ -4,6 +4,7 @@ import bs58 from "bs58";
 import { chains } from "@/lib/chains/config";
 import { fromHex, toHex, tronAddress, tronPrivateKey } from "@/lib/chains/derive";
 import { TRON_RELAY } from "@/lib/chains/keyed-relay";
+import { request } from "@/lib/chains/scan-lanes";
 
 // Three public hosts serve the same node API, so a busy one is not a failed
 // chain: a read falls through to the next host that answers.
@@ -46,12 +47,17 @@ function isAnswer(data, op) {
 // cut off after a few seconds: a relay that is down or still starting must never
 // hold a read until its timeout, or every TRON balance comes back missing.
 async function relayPost(path, body, op) {
-  const relayed = await fetch(`${TRON_RELAY}?op=${op}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(RELAY_MS),
-  });
+  // Paced on the relay's own lane: the key behind it answers a handful of reads
+  // a second, so a wide burst only spends its allowance and comes back refused.
+  const relayed = await request(
+    `${TRON_RELAY}?op=${op}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    { timeout: RELAY_MS, attempts: 2 },
+  );
   if (!relayed.ok) throw new Error(`TRON relay error (${relayed.status}).`);
   const data = await relayed.json();
   if (!isAnswer(data, op)) throw new Error("TRON relay error.");

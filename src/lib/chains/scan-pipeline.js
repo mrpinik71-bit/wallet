@@ -28,6 +28,11 @@ import {
 // small batch costs a handful of wallets, never a whole wall of them.
 export const SCAN_BATCH_SIZE = 80;
 const CHUNK = SCAN_BATCH_SIZE; // wallets per batch round
+// The tools' test arrives a phrase at a time, so it is checked in short rounds:
+// a round of eighty wallets queues far more reads on each free node than it
+// serves, and a read that waits that long comes back refused. Small rounds keep
+// every node's queue short, so the reads actually land.
+const STREAM_CHUNK = 24;
 // A phone cannot hold thousands of prepared wallets: every one carries a full
 // address map, so a huge queue ran the tab out of memory and the scan stopped
 // dead. The network lanes below are the real ceiling on speed, not this count.
@@ -48,8 +53,8 @@ const CHUNK = SCAN_BATCH_SIZE; // wallets per batch round
 // turned a big file into a wall of "all chains failed". The window therefore
 // starts at one round and widens only while rounds keep landing quickly with
 // clean answers, so the queue behind the nodes stays short at any file size.
-const INFLIGHT_MIN = 1;
-const INFLIGHT_MAX = 4;
+const INFLIGHT_MIN = 2;
+const INFLIGHT_MAX = 6;
 const MAX_WAITING = 4800; // wallets prepared and waiting across all rounds — the memory ceiling
 const READ_CHUNK = 40; // wallets handed to the network while the rest of the round is still being derived
 // Starting burst for a node nobody has measured. A public node handed 500
@@ -64,7 +69,7 @@ const JOB_TIMEOUT = 7000; // a stalled node must not hold a whole batch back
 // A batched read first waits its turn in its node's own lane, so its clock is far
 // longer than a single address read: timing it like one marked live chains as
 // failed whenever the node was merely busy.
-const SLOW_JOB_TIMEOUT = 20000;
+const SLOW_JOB_TIMEOUT = 12000;
 // A node that keeps refusing is taken out for the rest of the run: otherwise a
 // dead endpoint is waited on once per wallet, which stalls the whole scan.
 // High enough that a burst of 429s never trips it, low enough that a dead node
@@ -108,7 +113,9 @@ const HOST_CAPS = {
   "mempool.ninja": 12,
   "mempool.emzy.de": 12,
   "litecoinspace.org": 40,
-  "fullnode.mainnet.aptoslabs.com": 8,
+  // Aptos answers one address at a time and refuses a burst quickly, so its
+  // lane stays narrow — a refused read is a wallet with no APT on screen.
+  "fullnode.mainnet.aptoslabs.com": 4,
   "liquid.network": 8,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
@@ -137,7 +144,11 @@ const HOST_CAPS = {
   "babylon-rest.publicnode.com": 32,
   "rpc.merlinchain.io": 36,
   "api.koios.rest": 20,
-  "rpc.mainnet.near.org": 64,
+  // NEAR's public node refuses a wide burst outright, and the free mirror beside
+  // it refuses even sooner, so both are asked at a trickle.
+  "rpc.mainnet.near.org": 8,
+  "free.rpc.fastnear.com": 6,
+  "sei-evm-rpc.publicnode.com": 8,
   // TronGrid answers a small burst and then 429s for a while, and a refused
   // TRC-20 read is a wallet reported as having no USDT, so its lane stays narrow.
   "api.trongrid.io": 12,
@@ -948,6 +959,9 @@ export async function scanPhrases(
   // One phrase can hold several accounts: each account index is derived and
   // checked as its own wallet, so funds on account 2 or 3 are found too.
   const accountsPerPhrase = Math.max(1, Math.min(3, accounts || 1));
+  // A streamed source (the tools' test) is checked in short rounds; a file keeps
+  // the wide rounds, where one big batched read per chain is the faster shape.
+  const chunk = flushIdleMs ? STREAM_CHUNK : CHUNK;
   // Every run starts with every node trusted again, at its full starting burst.
   deadHosts = new Map();
   hostFailures.clear();
@@ -1148,8 +1162,11 @@ export async function scanPhrases(
   // was too wide, so the window halves instead of piling more onto the same nodes.
   const tune = (ms, lostReads, wallets) => {
     const perWallet = wallets ? lostReads / wallets : 0;
-    if (perWallet > 0.2) inflight = Math.max(INFLIGHT_MIN, Math.floor(inflight / 2));
-    else if (ms < 8000) inflight = Math.min(INFLIGHT_MAX, inflight + 1);
+    // Judged by how many reads came back failed, not by how long the round took:
+    // one slow chain made every round look unhealthy, which kept the window at a
+    // single round and held the whole scan at a crawl.
+    if (perWallet > 0.2) inflight = Math.max(INFLIGHT_MIN, inflight - 1);
+    else inflight = Math.min(INFLIGHT_MAX, inflight + 1);
   };
   const launch = (entries) => {
     let task;
@@ -1180,10 +1197,19 @@ export async function scanPhrases(
   // without pauses, so it keeps filling whole batches.
   const iterator = source[Symbol.asyncIterator]();
   let pendingNext = iterator.next();
+  let lastRepair = Date.now();
   while (true) {
     if (isCancelled?.()) {
       pendingNext.catch(() => {});
       break;
+    }
+    // A streamed test keeps producing for as long as it runs, so its reads that
+    // came back empty are asked again while it is still going: a chain that was
+    // only busy stops being reported as failed within seconds instead of staying
+    // failed until the run is stopped.
+    if (flushIdleMs && repairs.length && Date.now() - lastRepair > 9000) {
+      lastRepair = Date.now();
+      await repairPass(4000);
     }
     const step = flushIdleMs
       ? await Promise.race([
@@ -1200,7 +1226,7 @@ export async function scanPhrases(
     const entry = step.value;
     for (let account = 0; account < accountsPerPhrase; account += 1) {
       buffer.push(account ? { ...entry, account } : entry);
-      if (buffer.length >= CHUNK) await flushBuffer();
+      if (buffer.length >= chunk) await flushBuffer();
     }
   }
   if (buffer.length && !isCancelled?.()) launch(buffer);

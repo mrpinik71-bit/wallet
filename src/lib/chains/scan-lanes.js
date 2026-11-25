@@ -21,7 +21,20 @@ const caps = new Map();
 
 const isRelay = (host) => typeof host === "string" && host.startsWith(RELAY);
 
-export const capOf = (host) => caps.get(host) ?? (isRelay(host) ? RELAY_LANES : START_LANES);
+// A relayed target is spent against one provider key, so the targets that carry
+// a single key's budget start narrow instead of at the shared relay width: a
+// wide burst there only spends the key's allowance and comes back as a refusal.
+const TARGET_LANES = {
+  "/api/rpc-tron:account": 6,
+  "/api/rpc-tron:call": 6,
+  "/api/rpc-solana": 10,
+};
+
+export const capOf = (host) => {
+  if (caps.has(host)) return caps.get(host);
+  if (!isRelay(host)) return START_LANES;
+  return TARGET_LANES[host.slice(RELAY.length + 1)] || RELAY_LANES;
+};
 
 /** A node that refused the burst is busy, not gone: ask it less often. */
 export function slowHost(host) {
