@@ -496,8 +496,8 @@ export default function ScanWorkspace() {
 
   // The chain-read test: ten fresh random phrases every second — two lines of
   // each length from 12 words to 24 (12, 15, 18, 21, 24) — checked on every
-  // chain the moment they arrive. One wallet per phrase, so each phrase answers
-  // "did the chains reply?" on its own.
+  // chain the moment they arrive. Every phrase is checked on accounts 1–3, just
+  // like a file's lines, so a phrase's second and third wallet are scanned too.
   async function runAuto() {
     stop();
     clearResults();
@@ -526,7 +526,7 @@ export default function ScanWorkspace() {
         }),
         // A short idle flush: the stream arrives a phrase at a time, so what has
         // already come in is checked instead of waiting for a full batch.
-        { ...scanHandlers(prices), accounts: 1, deep, flushIdleMs: 700 },
+        { ...scanHandlers(prices), accounts, deep, flushIdleMs: 700 },
       );
     } catch (cause) {
       setError(`The test stopped unexpectedly${cause?.message ? ` (${cause.message})` : ""}.`);
@@ -540,7 +540,7 @@ export default function ScanWorkspace() {
       busyRef.current = false;
       cancelledRef.current = false;
       setScanning(false);
-      setTotal((current) => current || Math.max(countRef.current, resultsRef.current.length));
+      setTotal((current) => current || Math.max(countRef.current, resultsRef.current.length) * accounts);
       setStats({ ...liveRef.current });
       setVersion((value) => value + 1);
       scheduleExport();

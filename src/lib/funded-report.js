@@ -83,8 +83,12 @@ export function buildWalletMessage(slot) {
     `Line ${slot.line}${slot.account > 0 ? ` · account ${slot.account + 1}` : ""} · ${slot.words}-word phrase`,
     "",
   ];
+  // Every coin carries the chain it sits on, so the chat shows where the money is
+  // and not only which token it is.
   for (const item of slot.funded || []) {
-    lines.push(`${item.symbol}: ${compactAmount(item.balance)} — ${formatUsd(item.value)}`);
+    lines.push(
+      `${item.symbol} on ${item.chain}: ${compactAmount(item.balance)} — ${formatUsd(item.value)}`,
+    );
   }
   const fundedChains = new Set((slot.funded || []).map((item) => item.chain));
   const addresses = Object.entries(slot.addresses || {}).filter(([chain]) => fundedChains.has(chain));
