@@ -73,7 +73,7 @@ export default function ScanResultRow({ result, index }) {
       {/* The line's own recovery phrase sits on top of every result, so the
           wallet and the phrase it came from are read together; the addresses
           stay in the expanded part below. */}
-      {result.phrase ? (
+      {!open && result.phrase ? (
         <p className="break-words border-b border-foreground/[0.06] px-3.5 py-2 font-mono text-[10px] leading-relaxed text-foreground/85">
           {result.phrase}
         </p>
@@ -165,6 +165,29 @@ export default function ScanResultRow({ result, index }) {
               {failedChainCount} network{failedChainCount === 1 ? "" : "s"} did not answer (
               {result.failedChains.slice(0, 4).join(", ")}) — open the address on a block explorer to be sure.
             </p>
+          ) : null}
+
+          {/* The phrase sits directly above the addresses it produced, so the
+              line's seed phrase and every address under it read together. */}
+          {result.phrase ? (
+            <div className="mt-3 border-t border-foreground/[0.06] pt-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[8.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground/55">
+                  Seed phrase
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copy(result.phrase)}
+                  aria-label="Copy seed phrase"
+                  className="rounded-md p-1 text-muted-foreground/70 transition-colors hover:text-foreground"
+                >
+                  {copied === result.phrase ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+                </button>
+              </div>
+              <p className="mt-1 break-words font-mono text-[10.5px] leading-relaxed text-foreground/90">
+                {result.phrase}
+              </p>
+            </div>
           ) : null}
 
           <div className="mt-3 space-y-1.5 border-t border-foreground/[0.06] pt-2.5">
