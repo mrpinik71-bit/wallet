@@ -2,7 +2,6 @@ import { motion } from "framer-motion";
 import BrandMark from "@/components/wallet/BrandMark";
 import VaultBackdrop from "@/components/wallet/VaultBackdrop";
 import ScanWorkspace from "@/components/wallet/scan/ScanWorkspace";
-import EntryAssistant from "@/components/wallet/home/EntryAssistant";
 
 export default function WalletSetup() {
   return (
@@ -25,10 +24,6 @@ export default function WalletSetup() {
           </h1>
           <div className="mt-6">
             <ScanWorkspace />
-          </div>
-
-          <div className="mt-6">
-            <EntryAssistant />
           </div>
         </motion.div>
       </div>

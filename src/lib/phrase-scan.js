@@ -5,6 +5,7 @@ import { SCAN_ASSETS, SCAN_CHAINS } from "@/lib/chains/scan-catalog";
 import { parsePhrases, phrasesFromLines } from "@/lib/phrase-lines";
 import { isValidPhrase } from "@/lib/phrase-checksum";
 import { readLines } from "@/lib/scan-file";
+import { pageHidden } from "@/lib/scan-visibility";
 
 export const scanAssets = SCAN_ASSETS;
 export const scanChains = SCAN_CHAINS;
@@ -96,7 +97,9 @@ export async function countPhrasesInFile(file, { onProgress, onBytes, words, pre
     // then lets the screen keep painting, so the read never looks frozen.
     if (seen % 4000 === 0) {
       onProgress?.(count, invalid);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      // There is no screen to paint while the app sits in the background, so the
+      // read carries on at full speed instead of being slowed to a tick a minute.
+      if (!pageHidden()) await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
 

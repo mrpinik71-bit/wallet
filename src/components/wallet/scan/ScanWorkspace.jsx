@@ -142,6 +142,18 @@ export default function ScanWorkspace() {
   // the page's network work, so the scan would stall until it is unlocked.
   useWakeLock(scanning);
 
+  // A running scan lives in this page: a refresh or a closed tab throws the run
+  // away, so the browser asks first while one is in flight.
+  useEffect(() => {
+    if (!scanning) return undefined;
+    const guard = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [scanning]);
+
   // A batch can take seconds on a busy node: the clock keeps ticking so a slow
   // scan still shows that work is moving.
   useEffect(() => {

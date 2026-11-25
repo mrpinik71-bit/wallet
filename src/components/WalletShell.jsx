@@ -70,7 +70,7 @@ function NavLink({ item }) {
 }
 
 export default function WalletShell({ children }) {
-  const { wallet, lock } = useWallet();
+  const { wallet, lock, status } = useWallet();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   return (
@@ -118,8 +118,10 @@ export default function WalletShell({ children }) {
         </main>
       </div>
 
-      {/* The agent rides along on every page except its own full screen. */}
-      {pathname !== "/assistant" ? <AgentDock /> : null}
+      {/* The agent rides along on every page except the home page, the scanner and its own full screen. */}
+      {pathname !== "/assistant" && pathname !== "/" && !(pathname === "/wallet" && status === "none") ? (
+        <AgentDock />
+      ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(0.85rem,env(safe-area-inset-bottom))] lg:hidden">
         <div className="flex w-full max-w-[420px] items-center justify-between rounded-full border border-border/70 bg-card/95 px-3 py-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl">

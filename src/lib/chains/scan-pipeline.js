@@ -12,6 +12,7 @@ import { colorForToken, discoverTokens } from "@/lib/chains/token-discovery";
 import { prepare } from "@/lib/chains/scan-derive";
 import { evmChainBalancesMany, resetBatching } from "@/lib/chains/scan-batch";
 import { endpointsFor } from "@/lib/chains/mirrors";
+import { visibleTimeout } from "@/lib/scan-visibility";
 import {
   cardanoBalancesMany,
   polkadotAssetBalancesMany,
@@ -326,7 +327,7 @@ function limit(host, run, cap = capFor(host), ms = 0) {
       const done = () => {
         if (settled) return false;
         settled = true;
-        if (timer) clearTimeout(timer);
+        if (timer) timer.stop();
         lane.active -= 1;
         const next = lane.queue.shift();
         if (next) next();
@@ -334,7 +335,9 @@ function limit(host, run, cap = capFor(host), ms = 0) {
       };
       const task = Promise.resolve().then(run);
       if (ms > 0) {
-        timer = setTimeout(() => {
+        // Counted only while the page is on screen: a read that was waiting
+        // while the app sat in the background is not a read that failed.
+        timer = visibleTimeout(() => {
           if (done()) reject(new Error("This chain did not answer in time."));
         }, ms);
       }
@@ -393,14 +396,14 @@ function noteHost(host, ok, weight = 1) {
 
 const withTimeout = (promise, ms) =>
   new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("This chain did not answer in time.")), ms);
+    const timer = visibleTimeout(() => reject(new Error("This chain did not answer in time.")), ms);
     promise.then(
       (value) => {
-        clearTimeout(timer);
+        timer.stop();
         resolve(value);
       },
       (error) => {
-        clearTimeout(timer);
+        timer.stop();
         reject(error);
       },
     );
@@ -731,8 +734,10 @@ async function readBatch(batch, onWallet, deep = true) {
     stallResolve = resolve;
   });
   const armStall = () => {
-    if (stallTimer) clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => {
+    if (stallTimer) stallTimer.stop();
+    // The clock pauses while the page is hidden, so a run left in the
+    // background is not closed with half its reads marked as failed.
+    stallTimer = visibleTimeout(() => {
       stalled = true;
       stallResolve();
     }, READ_DEADLINE);
@@ -880,7 +885,7 @@ async function readBatch(batch, onWallet, deep = true) {
   // reported with what came back, and a read that lands after this is ignored
   // instead of holding the whole scan at a standstill.
   await Promise.race([answered, stalledRun, roundDone]);
-  if (stallTimer) clearTimeout(stallTimer);
+  if (stallTimer) stallTimer.stop();
   if (stalled) batch.forEach((wallet, index) => giveUp(index));
 
   return reads;

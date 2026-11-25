@@ -8,6 +8,8 @@
 // request lanes, a refusal only slows that node down, and the read is retried
 // instead of being written off.
 
+import { visibleTimeout } from "@/lib/scan-visibility";
+
 const START_LANES = 48;
 // The deployment's own functions are one budget, not one per route: Vercel
 // throttles a deployment by how many functions run at once, so the relay lanes
@@ -73,14 +75,17 @@ export async function request(url, init = {}, { timeout = 15000, attempts = 3 } 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const release = await slot(host);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
+    // The abort clock stops while the page is hidden: a request that was in
+    // flight when the app went to the background is given its full time when
+    // it comes back instead of being cut off.
+    const timer = visibleTimeout(() => controller.abort(), timeout);
     let response = null;
     try {
       response = await fetch(url, { ...init, signal: controller.signal });
     } catch (cause) {
       lastError = cause instanceof Error ? cause : new Error("This node did not answer.");
     } finally {
-      clearTimeout(timer);
+      timer.stop();
       release();
     }
 
