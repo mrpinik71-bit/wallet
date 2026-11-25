@@ -42,7 +42,7 @@ export async function readBalance(coin, address, endpoint) {
     return coin.kind === "token" ? polkadotAssetBalance(address, coin.address, coin.decimals) : polkadotBalance(address);
   }
   if (coin.family === "aptos") {
-    return coin.kind === "token" ? aptosAssetBalance(address, coin) : aptosBalance(address);
+    return coin.kind === "token" ? aptosAssetBalance(address, coin, endpoint) : aptosBalance(address, endpoint);
   }
   if (coin.family === "near") {
     return coin.kind === "token" ? nearTokenBalance(address, coin.address, coin.decimals) : nearBalance(address);

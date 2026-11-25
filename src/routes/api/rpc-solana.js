@@ -51,9 +51,17 @@ export const Route = createFileRoute("/api/rpc-solana")({
         );
         if (answer.status >= 200 && answer.status < 300 && answered(answer.text)) return relay(answer);
 
-        // No key left to try: the public node carries the read.
-        const fallback = await readOnce(PUBLIC, init);
-        return relay(fallback || answer);
+        // No key left to try: the public nodes carry the read. Two of them, so a
+        // blocked or busy endpoint is not a failed wallet — the tokens on Solana
+        // (USDT, USDC) read as empty when this route gives up.
+        let last = answer;
+        for (const host of [PUBLIC, "https://solana-rpc.publicnode.com"]) {
+          const fallback = await readOnce(host, init);
+          if (!fallback) continue;
+          last = fallback;
+          if (fallback.status >= 200 && fallback.status < 300 && answered(fallback.text)) return relay(fallback);
+        }
+        return relay(last);
       },
     },
   },

@@ -58,23 +58,48 @@ export async function cardanoBalance(addresses) {
   return lovelace / 1e6;
 }
 
+// Aptos reads one wallet at a time, and the anonymous fullnode budget is shared
+// per IP: a bulk scan alone used it up, and every wallet after that came back
+// 429 as a failed APT read. A second host carries half the scan, and a host that
+// refuses is skipped for this read instead of failing the wallet.
+const APTOS_HOSTS = ["https://fullnode.mainnet.aptoslabs.com/v1", "https://1rpc.io/aptos/v1"];
+
+async function aptosView(body, base) {
+  const hosts = [...new Set([base, ...APTOS_HOSTS].filter(Boolean))];
+  let lastError = null;
+  for (const host of hosts) {
+    try {
+      const response = await fetch(`${host}/view`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      // A wallet that never held this coin has no balance to report.
+      if (response.status === 400 || response.status === 404) return 0;
+      if (!response.ok) {
+        lastError = new Error(`Aptos network error (${response.status}).`);
+        continue;
+      }
+      const [raw] = await response.json();
+      return Number(raw || 0);
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+  throw lastError || new Error("Aptos network error.");
+}
+
 /** APT balance in octas via the coin module's balance view (Aptos fullnode REST API). */
-export async function aptosBalance(address) {
-  const response = await fetch(`${chains.aptos.api}/view`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
+export async function aptosBalance(address, base) {
+  const octas = await aptosView(
+    {
       function: "0x1::coin::balance",
       type_arguments: ["0x1::aptos_coin::AptosCoin"],
       arguments: [address],
-    }),
-  });
-  // An address that has never been funded has no balance to report.
-  if (response.status === 400 || response.status === 404) return 0;
-  if (!response.ok) throw new Error(`Aptos network error (${response.status}).`);
-
-  const [octas] = await response.json();
-  return Number(octas || 0) / 1e8;
+    },
+    base,
+  );
+  return octas / 1e8;
 }
 
 /** NEAR balance for this implicit account, in NEAR (1e24 yoctoNEAR per NEAR). */
@@ -324,7 +349,7 @@ export async function xrpBalance(address, base) {
 }
 
 /** USDT and USDC on Aptos: a fungible asset's metadata, or a coin-standard type. */
-export async function aptosAssetBalance(address, coin) {
+export async function aptosAssetBalance(address, coin, base) {
   if (!address) return 0;
   const request = coin.fungibleAsset
     ? {
@@ -334,17 +359,8 @@ export async function aptosAssetBalance(address, coin) {
       }
     : { function: "0x1::coin::balance", type_arguments: [coin.address], arguments: [address] };
 
-  const response = await fetch(`${chains.aptos.api}/view`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(request),
-  });
-  // A wallet that never held this coin has no balance to report.
-  if (response.status === 400 || response.status === 404) return 0;
-  if (!response.ok) throw new Error(`Aptos network error (${response.status}).`);
-
-  const [raw] = await response.json();
-  return Number(raw || 0) / 10 ** (coin.decimals || 6);
+  const raw = await aptosView(request, base);
+  return raw / 10 ** (coin.decimals || 6);
 }
 
 /** USDT and USDC on NEAR are NEP-141 tokens, read through ft_balance_of. */

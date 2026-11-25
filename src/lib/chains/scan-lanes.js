@@ -26,14 +26,23 @@ const isRelay = (host) => typeof host === "string" && host.startsWith(RELAY);
 // wide burst there only spends the key's allowance and comes back as a refusal.
 const TARGET_LANES = {
   "/api/rpc-tron:account": 6,
-  "/api/rpc-tron:call": 12,
-  "/api/rpc-solana": 16,
+  // TronGrid answers a burst with a credit-rate error and suspends the key for a
+  // few seconds, so the relay is paced well under the key's own budget.
+  "/api/rpc-tron:call": 5,
+  "/api/rpc-solana": 6,
 };
+
+// A whole relay route shares one provider key, so its networks are paced
+// together: the gateway refuses the burst for every chain at once otherwise.
+const TARGET_PREFIXES = [["/api/rpc-drpc", 16]];
 
 export const capOf = (host) => {
   if (caps.has(host)) return caps.get(host);
   if (!isRelay(host)) return START_LANES;
-  return TARGET_LANES[host.slice(RELAY.length + 1)] || RELAY_LANES;
+  const target = host.slice(RELAY.length + 1);
+  if (TARGET_LANES[target]) return TARGET_LANES[target];
+  const prefix = TARGET_PREFIXES.find(([start]) => target.startsWith(start));
+  return prefix ? prefix[1] : RELAY_LANES;
 };
 
 /** A node that refused the burst is busy, not gone: ask it less often. */

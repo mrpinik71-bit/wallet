@@ -98,7 +98,10 @@ const HOST_CAPS = {
   "chainz.cryptoid.info": 4,
   // Sochain v3 answers a steady burst and is the only working Dogecoin reader
   // (its v2 API is retired), so its lane is kept inside what it actually serves.
-  "sochain.com": 24,
+  // Measured: Sochain allows only two requests in flight without a key and
+  // refuses the rest outright ("too many requests in flight"), so its lane is
+  // the limit it publishes — a wider lane only bought a wall of failed reads.
+  "sochain.com": 2,
   // Measured on a 500-wallet run: a wider burst earns a 429 here, and a
   // refusal costs the wallet its read, so these stay at the rate the node
   // actually serves.
@@ -115,7 +118,11 @@ const HOST_CAPS = {
   "litecoinspace.org": 40,
   // Aptos answers one address at a time and refuses a burst quickly, so its
   // lane stays narrow — a refused read is a wallet with no APT on screen.
-  "fullnode.mainnet.aptoslabs.com": 16,
+  // Aptos gives an anonymous caller 25 000 compute units per 300 s, and one
+  // view call spends a chunk of it: a wider lane only earns a 429 for the whole
+  // chain, so the budget is spent slowly and the second host takes the overflow.
+  "fullnode.mainnet.aptoslabs.com": 4,
+  "1rpc.io": 8,
   "liquid.network": 8,
   "xrplcluster.com": 48,
   // XRP is served four ways; these start modest and widen while they answer.
@@ -149,12 +156,12 @@ const HOST_CAPS = {
   "rpc.mainnet.near.org": 24,
   "free.rpc.fastnear.com": 48,
   "near.drpc.org": 24,
-  "sei-evm-rpc.publicnode.com": 8,
+  "sei-evm-rpc.publicnode.com": 2,
   // TronGrid answers a small burst and then 429s for a while, and a refused
   // TRC-20 read is a wallet reported as having no USDT, so its lane stays narrow.
-  "api.trongrid.io": 12,
+  "api.trongrid.io": 6,
   "tron-rpc.publicnode.com": 16,
-  "api.tronstack.io": 6,
+  "api.tronstack.io": 4,
   // The indexer is the second opinion a zero TRC-20 balance is checked against,
   // so it is paced instead of being asked once per wallet at full speed.
   "apilist.tronscanapi.com": 8,
@@ -202,10 +209,10 @@ const HOST_CAPS = {
   "eth.blockscout.com": 36,
   "base.blockscout.com": 36,
   "api.binplorer.com": 20,
-  "api.mainnet-beta.solana.com": 20,
+  "api.mainnet-beta.solana.com": 4,
   // Solana's own public node refuses a browser burst (403/429), so the keyed
   // relay carries the read and this mirror only backs it up.
-  "solana-rpc.publicnode.com": 16,
+  "solana-rpc.publicnode.com": 4,
   // One free Etherscan key allows five calls a second, and five networks are
   // discovered through it, so its lane stays at the key's own budget.
   "etherscan.io": 4,

@@ -22,6 +22,9 @@ export const CHAIN_ENDPOINTS = {
   // Stacks: the same indexer under a second hostname, with its own request
   // budget, so a rate-limited host does not cost the chain its read.
   stacks: ["https://api.hiro.so"],
+  // Aptos: the anonymous fullnode budget is shared per IP, so a second host
+  // carries half the scan instead of every wallet queueing behind one limit.
+  aptos: ["https://1rpc.io/aptos/v1"],
   // Rippled servers, all accepting the same account_info call.
   xrp: ["https://xrplcluster.com", "https://xrpl.ws", "https://s1.ripple.com:51234", "https://s2.ripple.com:51234"],
 };
