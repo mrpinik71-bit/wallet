@@ -494,9 +494,9 @@ export default function ScanWorkspace() {
     }
   }
 
-  // The chain-read test: a fresh random phrase every second, cycling through
-  // every length from 12 words to 24 (12, 15, 18, 21, 24), checked on every
-  // chain the moment it arrives. One wallet per phrase, so each phrase answers
+  // The chain-read test: ten fresh random phrases every second — two lines of
+  // each length from 12 words to 24 (12, 15, 18, 21, 24) — checked on every
+  // chain the moment they arrive. One wallet per phrase, so each phrase answers
   // "did the chains reply?" on its own.
   async function runAuto() {
     stop();
