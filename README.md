@@ -38,3 +38,7 @@ There is no `index.html`: the HTML document is rendered on the server from `src/
 - **Sign-in and gated pages** are not wired in the starter: `src/components/auth/` holds the pages (login, register, password reset, MCP consent) and a login gate for `src/routes/_authed/`, to add when the app needs them. See **Adding Authentication** in `AGENTS.md`.
 - **AI**: TanStack AI is installed and runs on the Base44 AI gateway, with no API key and usage billed to the app's AI credits. `gatewayModel(context.getBase44())` in `src/lib/ai.server.js` builds the adapter; `AGENTS.md` has a streaming chat example (a server route plus `useChat`).
 - **Caching**: the platform caches only what a route opts into via `headers()` (`Cache-Control: public, s-maxage=…`). Everything else is served fresh.
+
+## Build stamp
+
+Last production build pushed from the builder: 2026-11-25 (scan reliability pass — relay fail-over, per-host lanes, no 45s round cut-off).
