@@ -3,7 +3,7 @@ import { SigningKey } from "ethers";
 import bs58 from "bs58";
 import { chains } from "@/lib/chains/config";
 import { fromHex, toHex, tronAddress, tronPrivateKey } from "@/lib/chains/derive";
-import { TRON_RELAY } from "@/lib/chains/keyed-relay";
+import { relayDown, TRON_RELAY } from "@/lib/chains/keyed-relay";
 import { request } from "@/lib/chains/scan-lanes";
 
 // Three public hosts serve the same node API, so a busy one is not a failed
@@ -78,7 +78,9 @@ async function post(path, body, apis = APIS) {
   // Reads go through the app's relay first: the key's own budget answers far
   // more wallets at once than a public node. No key saved, or a relay that does
   // not answer, and the public nodes below carry the read.
-  if (op) {
+  // A relay route this deployment does not carry is skipped straight away: the
+  // public nodes serve the read instead of a 404 being paid for on every wallet.
+  if (op && !relayDown(TRON_RELAY)) {
     try {
       return await relayPost(path, body, op);
     } catch (cause) {

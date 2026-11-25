@@ -38,9 +38,11 @@ export const EVM_MIRRORS = {
     "https://polygon-bor-rpc.publicnode.com", // 10
     "https://polygon.publicnode.com", // 10
   ],
+  // 1rpc.io answered a batch but sent no CORS header, so the page could never
+  // read its reply — it was a wasted attempt on every Optimism batch.
   optimism: [
     "https://optimism-rpc.publicnode.com", // 10
-    "https://1rpc.io/op", // 10
+    "https://mainnet.optimism.io", // 10
   ],
   avalanche: [
     "https://avalanche-c-chain-rpc.publicnode.com", // 10

@@ -5,6 +5,8 @@
 // why Cardano goes through here instead of fetching Koios directly. It is a
 // plain route and not a backend function: the wallet never signs in, and a
 // function call without a session is refused.
+import { noteRelayDown, relayDown } from "@/lib/chains/keyed-relay";
+
 const ENDPOINT = "/api/cardano-balances";
 
 // The indexer accepts a batch of addresses, and the function caps it there.
@@ -29,11 +31,19 @@ export async function readCardanoBalances(addresses) {
     while (next < chunks.length) {
       const chunk = chunks[next];
       next += 1;
+      // Cardano has no browser-readable indexer, so this route is its only
+      // reader: when the deployment does not carry it, the chain is reported
+      // unavailable once instead of being asked for every wallet of the run.
+      if (relayDown(ENDPOINT)) throw new Error("Cardano indexer is not available on this deployment.");
       const response = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ addresses: chunk }),
       });
+      if (response.status === 404 || response.status === 405) {
+        noteRelayDown(ENDPOINT);
+        throw new Error("Cardano indexer is not available on this deployment.");
+      }
       if (!response.ok) throw new Error(`Cardano indexer error (${response.status}).`);
       const payload = await response.json();
       const rows = payload?.balances || {};

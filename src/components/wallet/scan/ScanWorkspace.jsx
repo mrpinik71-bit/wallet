@@ -227,6 +227,24 @@ export default function ScanWorkspace() {
   // results one by one.
   function scanHandlers(prices) {
     const live = liveRef.current;
+
+    // A wallet that turns out to hold funds — after a failed read was asked
+    // again, or because a token was found late — is sent to the linked chat and
+    // the counters are refreshed. It is never sent twice.
+    function refreshFunded() {
+      const list = resultsRef.current;
+      const funded = list.filter((slot) => holdsFunds(slot));
+      live.fundedCount = funded.length;
+      live.fundedTotal = funded.reduce((sum, slot) => sum + slot.total, 0);
+      live.failed = list.reduce((sum, slot) => sum + (slot.failedChains?.length || 0), 0);
+      for (const slot of funded) {
+        if (slot.sent) continue;
+        slot.sent = true;
+        deliverFunded(slot);
+      }
+      scheduleFlush();
+    }
+
     return {
       prices,
       accounts,
@@ -268,22 +286,10 @@ export default function ScanWorkspace() {
         // that work is moving.
         scheduleFlush();
       },
-      // Reads that failed during the scan are asked again once it is quiet: a
-      // wallet that answers then is folded back into the list, and one that turns
-      // out to hold funds goes to the linked chat like any other.
-      onRepair: () => {
-        const list = resultsRef.current;
-        const funded = list.filter((slot) => holdsFunds(slot));
-        live.fundedCount = funded.length;
-        live.fundedTotal = funded.reduce((sum, slot) => sum + slot.total, 0);
-        live.failed = list.reduce((sum, slot) => sum + (slot.failedChains?.length || 0), 0);
-        for (const slot of funded) {
-          if (slot.sent) continue;
-          slot.sent = true;
-          deliverFunded(slot);
-        }
-        scheduleFlush();
-      },
+      // Reads that failed during the scan are asked again once it is quiet, and
+      // a token found after its wallet was on screen updates that same row.
+      onRepair: refreshFunded,
+      onUpdate: refreshFunded,
     };
   }
 

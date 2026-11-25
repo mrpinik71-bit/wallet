@@ -4,6 +4,7 @@
 import { chains } from "@/lib/chains/config";
 import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { drpcRelay } from "@/lib/chains/drpc-relay";
+import { relayDown } from "@/lib/chains/keyed-relay";
 import { request, resetLanes } from "@/lib/chains/scan-lanes";
 import { EVM_MIRRORS } from "@/lib/chains/scan-mirrors";
 
@@ -136,9 +137,11 @@ async function postCalls(chainId, calls) {
   // now splits a wide batch into the size the plan accepts, so it answers
   // instead of refusing. The public mirrors follow, for a chain the key does not
   // serve or a gateway that is resting.
+  const relay = drpcRelay(chainId);
   const endpoints = [
     customEndpoint(chainId),
-    drpcRelay(chainId),
+    // A relay this deployment does not serve is skipped, not asked per round.
+    relay && !relayDown(relay) ? relay : null,
     ...(EVM_MIRRORS[chainId] || []),
     chain.rpc,
     ...(chain.rpcs || []),

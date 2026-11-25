@@ -8,6 +8,7 @@
 // request lanes, a refusal only slows that node down, and the read is retried
 // instead of being written off.
 
+import { noteRelayDown } from "@/lib/chains/keyed-relay";
 import { visibleTimeout } from "@/lib/scan-visibility";
 
 const START_LANES = 48;
@@ -123,6 +124,11 @@ export async function request(url, init = {}, { timeout = 15000, attempts = 3 } 
     }
 
     if (response) {
+      // A relay route this deployment does not carry answers 404: noted once, so
+      // every later read goes straight to the public node instead of asking it again.
+      if (typeof url === "string" && url.startsWith("/api/") && (response.status === 404 || response.status === 405)) {
+        noteRelayDown(url);
+      }
       if (response.status !== 429) return response;
       slowHost(host);
       lastError = new Error("This node is busy (429).");

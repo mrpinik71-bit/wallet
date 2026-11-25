@@ -2,6 +2,8 @@
 // meme tokens that are not in this wallet's own catalog. Every source here is a
 // public, keyless endpoint read straight from the browser.
 
+import { noteRelayDown, relayDown } from "@/lib/chains/keyed-relay";
+
 // ERC-20 balances from each chain's public Blockscout indexer. Most of those
 // hosts now sit behind a Cloudflare challenge that refuses every request, so
 // only the one that still answers is read directly.
@@ -73,7 +75,14 @@ async function blockscoutTokens(chainId, address, limit) {
 
 /** ERC-20 balances through the app's Etherscan route, one network per call. */
 async function etherscanTokens(chainId, address, limit) {
+  // A deployment without the relay route cannot discover these networks at all:
+  // the chain is skipped instead of being asked for every wallet of the run.
+  if (relayDown(ETHERSCAN_RELAY)) return [];
   const response = await fetch(`${ETHERSCAN_RELAY}?chain=${chainId}&address=${address}`, { method: "POST" });
+  if (response.status === 404 || response.status === 405) {
+    noteRelayDown(ETHERSCAN_RELAY);
+    return [];
+  }
   if (!response.ok) throw new Error(`Token list unavailable (${response.status}).`);
   const data = await response.json();
   const tokens = (data?.tokens || []).map((token) => ({ ...token, logo: "" }));

@@ -12,6 +12,7 @@ import { colorForToken, discoverTokens } from "@/lib/chains/token-discovery";
 import { prepare } from "@/lib/chains/scan-derive";
 import { evmChainBalancesMany, resetBatching } from "@/lib/chains/scan-batch";
 import { endpointsFor } from "@/lib/chains/mirrors";
+import { resetRelays } from "@/lib/chains/keyed-relay";
 import { visibleTimeout } from "@/lib/scan-visibility";
 import { aptosBalancesMany } from "@/lib/chains/scan-batch-aptos";
 import {
@@ -84,7 +85,6 @@ const READ_DEADLINE = 45000;
 
 // A read that never came back is still counted, so the row is honest about the
 // chains that did not answer instead of showing them as empty.
-const UNKNOWN_COIN = { id: "unread", chain: "unread", symbol: "unread", name: "No answer", color: "#6b7280" };
 
 // Free endpoints with a published, low request budget: asking them faster only
 // earns a 429, which used to be reported as a failed chain read.
@@ -331,6 +331,7 @@ const SUI_TOKENS = MULTI.sui.filter((coin) => coin.kind === "token");
 const POLKADOT_NATIVE = MULTI.polkadot.filter((coin) => coin.kind !== "token");
 const POLKADOT_TOKENS = MULTI.polkadot.filter((coin) => coin.kind === "token");
 
+
 const hostOfUrl = (url) => {
   try {
     return new URL(url).host;
@@ -484,7 +485,7 @@ const asCoinMap = (values, items, coins) => {
 };
 
 /** Reads every asset for a batch of wallets, batching wherever a chain allows it. */
-async function readBatch(batch, onWallet, deep = true) {
+async function readBatch(batch, onWallet, deep = true, onTokens) {
   const jobs = [];
   const collect = (chainId, read) => {
     const items = [];
@@ -654,9 +655,11 @@ async function readBatch(batch, onWallet, deep = true) {
     if (!items.length) continue;
 
     const endpoints = endpointsFor(coin.chain, chains[coin.chain]?.rpc || chains[coin.chain]?.api);
-    // Two lanes per mirror: a single-address chain is asked on each of its
-    // mirrors twice as often, so a round does not queue behind one lane each.
-    const lanes = Math.min(Math.max(endpoints.length, 1) * 2, items.length);
+    // Four lanes per mirror: a single-address chain is asked on each of its
+    // mirrors several times at once, so a chain served by one host (Litecoin,
+    // Dogecoin, TON) still moves a round instead of queueing behind two lanes.
+    // The host's own request budget below is the real ceiling.
+    const lanes = Math.min(Math.max(endpoints.length, 1) * 4, items.length);
 
     for (let lane = 0; lane < lanes; lane += 1) {
       const base = endpoints[lane % endpoints.length];
@@ -785,9 +788,16 @@ async function readBatch(batch, onWallet, deep = true) {
 
   const reads = batch.map(() => []);
   const expected = batch.map(() => 0);
+  // Tokens an indexer finds arrive on their own: a wallet is finished by the
+  // assets it is scanned for, and a discovered token is folded into its row when
+  // it lands. Waiting for nine indexers before a wallet counted as read made a
+  // deep scan look broken — one free Etherscan key cannot answer a whole round
+  // of wallets inside the round's clock, so those wallets were written off as
+  // "did not answer" even though every balance had come back.
+  const extraTokens = batch.map(() => []);
   for (const job of jobs) {
-    // A discovery job answers once per wallet, however many tokens it finds.
-    for (const index of job.targets) expected[index] += job.discover ? 1 : job.coins.length;
+    if (job.discover) continue;
+    for (const index of job.targets) expected[index] += job.coins.length;
   }
 
   // Which groups are still owed for each wallet: what a wallet that has waited
@@ -829,10 +839,15 @@ async function readBatch(batch, onWallet, deep = true) {
   };
   armStall();
 
+  // The result object each wallet was reported with, so a token found after the
+  // wallet was already on screen can be folded into that same row.
+  const landed = new Map();
+
   const finish = (index) => {
     if (reported.has(index) || reads[index].length < expected[index]) return;
     reported.add(index);
-    onWallet?.(index, reads[index]);
+    const result = onWallet?.(index, reads[index], extraTokens[index]);
+    if (result) landed.set(index, result);
     // Work landed: the round is alive, so its clock starts again.
     armStall();
     if (reported.size >= batch.length) allLanded?.();
@@ -848,15 +863,15 @@ async function readBatch(batch, onWallet, deep = true) {
   const giveUp = (index) => {
     if (reported.has(index)) return;
     for (const job of owed[index]) {
-      if (job.discover) {
-        reads[index].push({ coin: UNKNOWN_COIN, balance: 0, failed: true });
-        continue;
-      }
+      // A slow indexer is not a failed chain: the wallet is reported with the
+      // balances that came back and its extra tokens are simply not listed.
+      if (job.discover) continue;
       for (const coin of job.coins) reads[index].push({ coin, balance: 0, failed: true });
     }
     owed[index].clear();
     reported.add(index);
-    onWallet?.(index, reads[index]);
+    const result = onWallet?.(index, reads[index], extraTokens[index]);
+    if (result) landed.set(index, result);
     if (reported.size >= batch.length) allLanded?.();
   };
 
@@ -932,23 +947,24 @@ async function readBatch(batch, onWallet, deep = true) {
           const listed = tokens.filter(
             (token) => token.address && !CATALOG_TOKENS.has(`${job.discover}|${String(token.address).toLowerCase()}`),
           );
-          for (const token of listed) {
-            reads[index].push({
-              coin: {
-                id: `token-${job.discover}-${token.address}`,
-                chain: job.discover,
-                symbol: token.symbol,
-                name: token.name,
-                color: colorForToken(token.symbol),
-                logo: token.logo,
-              },
-              balance: token.balance,
-              failed: false,
-            });
+          const entries = listed.map((token) => ({
+            coin: {
+              id: `token-${job.discover}-${token.address}`,
+              chain: job.discover,
+              symbol: token.symbol,
+              name: token.name,
+              color: colorForToken(token.symbol),
+              logo: token.logo,
+            },
+            balance: token.balance,
+            failed: false,
+          }));
+          if (entries.length) {
+            extraTokens[index].push(...entries);
+            // The wallet is already on screen: its row is refreshed with these.
+            const shown = landed.get(index);
+            if (shown) onTokens?.(shown, entries);
           }
-          // Discovery answers once per wallet, so an empty list still satisfies
-          // that wallet's expected reads.
-          if (!listed.length) reads[index].push({ coin: null, balance: 0, failed: false });
           finish(index);
           continue;
         }
@@ -976,8 +992,10 @@ async function readBatch(batch, onWallet, deep = true) {
   return reads;
 }
 
-function toResult(wallet, reads, prices) {
-  const funded = reads
+function toResult(wallet, reads, prices, extra = []) {
+  // Tokens an indexer had already found are part of the same answer.
+  const all = extra.length ? [...reads, ...extra] : reads;
+  const funded = all
     .filter((read) => read.balance > 0)
     .map((read) => ({
       id: read.coin.id,
@@ -991,7 +1009,7 @@ function toResult(wallet, reads, prices) {
     }))
     .sort((a, b) => b.value - a.value);
 
-  const failedReads = reads.filter((read) => read.failed);
+  const failedReads = all.filter((read) => read.failed);
 
   return {
     phrase: wallet.entry.phrase,
@@ -1009,10 +1027,29 @@ function toResult(wallet, reads, prices) {
   };
 }
 
+/** Folds tokens an indexer reported after the wallet was already on screen. */
+function mergeTokens(result, entries, prices) {
+  for (const entry of entries) {
+    if (result.funded.some((item) => item.id === entry.coin.id)) continue;
+    result.funded.push({
+      id: entry.coin.id,
+      chain: entry.coin.chain,
+      symbol: entry.coin.symbol,
+      name: entry.coin.name,
+      color: entry.coin.color,
+      logo: entry.coin.logo,
+      balance: entry.balance,
+      value: entry.balance * priceOf(prices, entry.coin),
+    });
+  }
+  result.funded.sort((a, b) => b.value - a.value);
+  result.total = result.funded.reduce((sum, item) => sum + item.value, 0);
+}
+
 /** Scans phrases as they stream in, in batches, reporting each wallet as it lands. */
 export async function scanPhrases(
   source,
-  { prices, onResult, onProgress, onRepair, isCancelled, accounts, deep = true, flushIdleMs = 0 } = {},
+  { prices, onResult, onProgress, onRepair, onUpdate, isCancelled, accounts, deep = true, flushIdleMs = 0 } = {},
 ) {
   // One phrase can hold several accounts: each account index is derived and
   // checked as its own wallet, so funds on account 2 or 3 are found too.
@@ -1027,6 +1064,9 @@ export async function scanPhrases(
   hostWins = new Map();
   // Batched reads go back to full groups and their nodes to full request lanes.
   resetBatching();
+  // Every relay route is asked again: a build that gained its routes since the
+  // last scan is picked up instead of being written off for the whole session.
+  resetRelays();
   let completed = 0;
   let started = 0;
   let batchNumber = 0;
@@ -1157,8 +1197,19 @@ export async function scanPhrases(
       reads.push(
         readBatch(
           part,
-          (index, walletReads) => report(toResult(part[index], walletReads, prices), part[index], walletReads),
+          (index, walletReads, extra) => {
+            const result = toResult(part[index], walletReads, prices, extra);
+            report(result, part[index], walletReads);
+            return result;
+          },
           deep,
+          // A token found after the wallet was already on screen is folded into
+          // that same row, and the counters are refreshed instead of the wallet
+          // being reported a second time.
+          (result, entries) => {
+            mergeTokens(result, entries, prices);
+            onUpdate?.();
+          },
         ),
       );
     };

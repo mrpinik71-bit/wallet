@@ -25,8 +25,13 @@ export const CHAIN_ENDPOINTS = {
   // Aptos: the anonymous fullnode budget is shared per IP, so a second host
   // carries half the scan instead of every wallet queueing behind one limit.
   aptos: ["https://1rpc.io/aptos/v1"],
-  // Rippled servers, all accepting the same account_info call.
-  xrp: ["https://xrplcluster.com", "https://xrpl.ws", "https://s1.ripple.com:51234", "https://s2.ripple.com:51234"],
+  // Rippled servers, all accepting the same account_info call. Ripple's own two
+  // nodes send no CORS header, so a page could never read them: only the hosts
+  // that answer a browser are listed.
+  xrp: ["https://xrplcluster.com", "https://xrpl.ws"],
+  // NEAR: the public mainnet node takes seconds per answer, so the gateway and
+  // the FastNEAR mirror carry the read instead.
+  near: ["https://near.drpc.org", "https://free.rpc.fastnear.com"],
 };
 
 /**

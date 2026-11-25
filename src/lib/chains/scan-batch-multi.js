@@ -6,7 +6,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { chains } from "@/lib/chains/config";
 import { customEndpoint } from "@/lib/chains/custom-rpc";
 import { drpcRelay } from "@/lib/chains/drpc-relay";
-import { SOLANA_RELAY } from "@/lib/chains/keyed-relay";
+import { relayDown, SOLANA_RELAY } from "@/lib/chains/keyed-relay";
 import { readCardanoBalances } from "@/lib/chains/cardano-read";
 import { assetBalancesMany } from "@/lib/chains/asset-hub";
 import { request } from "@/lib/chains/scan-lanes";
@@ -45,7 +45,11 @@ async function solanaCall(body) {
   let lastError = null;
   // The app's Helius relay first (its key is far wider than a public node),
   // then the saved endpoint, then the public nodes.
-  const endpoints = [SOLANA_RELAY, drpcRelay("solana"), customEndpoint("solana"), ...SOLANA_RPCS].filter(Boolean);
+  // A relay this deployment does not serve is left out instead of being asked
+  // on every call, which cost a failed round trip per Solana read.
+  const endpoints = [SOLANA_RELAY, drpcRelay("solana"), customEndpoint("solana"), ...SOLANA_RPCS].filter(
+    (endpoint) => endpoint && !relayDown(endpoint),
+  );
   for (const endpoint of endpoints) {
     try {
       const response = await request(endpoint, {
